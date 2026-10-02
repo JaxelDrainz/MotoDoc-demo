@@ -1,0 +1,81 @@
+# MotoDoc
+
+Responsive UI prototype based on the selected September 30, 2026, 3:57 PM reference.
+
+## Local development
+
+Start the backend API and frontend dev server:
+
+```sh
+# Terminal 1: backend API server (runs on port 4174)
+npm run dev:api
+
+# Terminal 2: frontend Vite dev server (runs on port 4173 with /api proxy)
+npm run dev
+```
+
+To create demo accounts for trying out driver and garage accounts locally:
+
+```sh
+npm run seed:demo
+```
+
+## Google Sign-In
+
+The Google option is present in the login and signup pages. To activate it, create a **Web application** OAuth client in Google Cloud, add `http://localhost:4173` to its authorized JavaScript origins, then copy `.env.example` to `.env` and set `GOOGLE_CLIENT_ID`. Restart the API server. Google sign-in works on a configured browser and creates either a driver or garage account according to the signup choice. An existing password account can connect Google from **Account** while signed in, using the Google account with the same email address. MotoDoc verifies Google's ID token on the server and uses Google's stable account ID; a matching email alone never links accounts.
+
+No Google client credentials are included in this repository. Google Sign-In cannot complete until a Google Cloud client is configured for the running origin. For deployment, register that exact HTTPS origin in Google Cloud and set `GOOGLE_CLIENT_ID` in the server environment.
+
+Run test suites:
+
+```sh
+# Backend integration tests
+npm run test:backend
+
+# Sites worker packaging tests
+npm run test:sites
+```
+
+## Production build
+
+```sh
+npm run build
+```
+
+Outputs the frontend to `dist/client` and preserves the bundled Sites-ready worker in `dist/server` and configuration in `dist/.openai`. The Sites worker is a frontend preview only. The local SQLite API requires a persistent Node host and is not deployed by the Sites bundle.
+
+## Scope
+
+- **Landing page**: selected hero, all six driver features, all six garage features, membership, how it works, closing call to action, and footer info dialogs.
+- **Authentication**: `/login`, `/signup`, `/signup?role=garage`, `/forgot-password`, and `/reset-password`. Uses the mechanic visual composition with emerald line contour.
+- **Local backend**: SQLite persistence with transaction support, scrypt password hashing, HTTP-only cookie sessions, rate limiting, and CSRF protection.
+- **Driver workflows (`/app`)**:
+  - Vehicle management: add, edit, view, and remove vehicles with mileage tracking.
+  - Garage search: browse published garages and book hourly service appointments.
+  - Service history: chronological log of completed repairs and maintenance.
+  - Memberships: browse plans and request garage membership tiers.
+  - Invoices & Reminders: view service invoices and track inspection/maintenance dates.
+- **Garage workflows (`/app`)**:
+  - Profile & services: manage garage details, service offerings, and publish status.
+  - Booking management: review appointment requests, confirm bookings, and complete services with mileage updates.
+  - Automated service records: completing a booking records service history and updates vehicle mileage atomically.
+  - Customer CRM: customer list, private garage notes, and tags.
+  - Membership plans: create tiers and approve/manage driver membership requests.
+  - Invoicing: generate invoices for completed bookings and record payments received outside the app.
+- **Design & Limitations**:
+  - External email delivery (password resets write to local outbox in development) and live card payments are deliberately not simulated.
+  - Privacy and terms dialogs explicitly indicate placeholder legal copy.
+
+## Assets and references
+
+- Hero: `public/assets/mechanic-hero.png`, generated using the built-in image tool from the selected reference. Prompt: recreate only the minimal green line drawing of a mechanic leaning over an open car bonnet holding a spanner; sparse mint fills, white background; no text, logo, UI or booking card.
+- Authentication illustration: `public/assets/mechanic-auth.png`, built-in image generation using the hero as its style reference. Minimal emerald mechanic cutout holding an invisible card edge; real HTML forms sit between the character and its fingertips.
+- Garage visit photography: `public/assets/garage-visit.png`, generated editorial image of a driver and mechanic discussing service beside a car. Used beneath the driver features while keeping the selected line-art hero.
+- Workshop photography: `public/assets/garage-work.png`, generated editorial image of a mechanic inspecting an engine. Used in the garage section.
+- Selected mockup: `qa/selected-reference.jpg`, exact image from this task's user attachment.
+- Typography: locally bundled Inter Variable, SIL Open Font License. https://github.com/rsms/inter
+- Icons: Phosphor React, MIT License. https://github.com/phosphor-icons/react
+- Brand wordmark stays editable text, as on the original public site. No invented replacement symbol.
+- Reference app: https://tidy-pixel-lab.lovable.app/
+
+Visual and interaction verification is documented in `design-qa.md`.
