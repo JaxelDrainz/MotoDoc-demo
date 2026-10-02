@@ -8,3 +8,6 @@ data/
 *.sqlite*
 qa/test-artifacts/
 qa/
+
+.vercel
+.env*
