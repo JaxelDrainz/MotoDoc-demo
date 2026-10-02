@@ -44,6 +44,17 @@ npm run build
 
 Outputs the frontend to `dist/client` and preserves the bundled Sites-ready worker in `dist/server` and configuration in `dist/.openai`. The Sites worker is a frontend preview only. The local SQLite API requires a persistent Node host and is not deployed by the Sites bundle.
 
+## Vercel deployment
+
+The repository root is this directory. Its `vercel.json` serves the Vite frontend and routes `/api/*` to the Express function. Set the project runtime to Node.js 24 (also declared in `package.json`).
+
+1. Link this directory to a Vercel project, or import `JaxelDrainz/MotoDoc-demo` with **Root Directory** set to the repository root.
+2. In the Vercel project's **Storage** tab, install/connect a Turso Cloud database. The integration supplies `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` to the project. Make sure both are available to Production and any Preview deployment you intend to test.
+3. Deploy and verify `/api/health`, signup, login, and a driver/garage workflow. The API creates its tables on first startup. Hosted accounts are separate from accounts in the local SQLite file; no local user data is automatically uploaded.
+4. To enable Google Sign-In, set `GOOGLE_CLIENT_ID` for the deployed environment and register the exact HTTPS deployment or custom-domain origin as an authorized JavaScript origin in the Google Cloud Web OAuth client. Add preview origins only if you intend to use Google Sign-In on those previews.
+
+The server refuses to start in production if hosted persistence is missing, so a public deployment cannot appear to accept accounts that later disappear. Never put the database token in a `VITE_` variable or commit it. Password-reset email and live card payments still require separate providers; the production UI reports password recovery as unavailable.
+
 ## Scope
 
 - **Landing page**: selected hero, all six driver features, all six garage features, membership, how it works, closing call to action, and footer info dialogs.

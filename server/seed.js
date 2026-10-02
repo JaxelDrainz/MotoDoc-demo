@@ -10,7 +10,7 @@ const db=openDatabase(databasePath),accounts=[];
 for(const [role,name,email] of [['driver','Demo Driver','driver@motodoc.example'],['garage','Demo Mechanic','garage@motodoc.example']]) {
   if(db.prepare('SELECT id FROM users WHERE email=?').get(email)) continue;
   const key=randomUUID(),password=randomBytes(18).toString('base64url'),encoded=await passwordHash(password);
-  transaction(db,()=>{
+  await transaction(db,()=>{
     db.prepare('INSERT INTO users(id,name,email,password_hash,role) VALUES(?,?,?,?,?)').run(key,name,email,encoded,role);
     if(role==='driver') db.prepare('INSERT INTO vehicles VALUES(?,?,?,?,?,?,?)').run(randomUUID(),key,'Toyota','Corolla',2021,'DEMO-123',28000);
     else db.prepare('INSERT INTO garages(id,owner_id,name,city,address,description,services,published) VALUES(?,?,?,?,?,?,?,1)').run(randomUUID(),key,'MotoDoc Demo Garage','Tampere','Demo address','A fictional garage for trying the local MotoDoc booking flow.',JSON.stringify(['Oil change','Tyre change','Annual service']));

@@ -2,11 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-export function openDatabase(path) {
-  if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
-  const db = new DatabaseSync(path);
-  db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;');
-  db.exec(`
+export const schemaSql = `
     CREATE TABLE IF NOT EXISTS schema_versions(version INTEGER PRIMARY KEY, applied_at TEXT DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE IF NOT EXISTS users(
       id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -53,7 +49,13 @@ export function openDatabase(path) {
       garage_id TEXT NOT NULL REFERENCES garages(id),driver_id TEXT NOT NULL REFERENCES users(id),
       notes TEXT NOT NULL DEFAULT '',tags TEXT NOT NULL DEFAULT '',PRIMARY KEY(garage_id,driver_id));
     INSERT OR IGNORE INTO schema_versions(version) VALUES(1);
-  `);
+  `;
+
+export function openDatabase(path) {
+  if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
+  const db = new DatabaseSync(path);
+  db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;');
+  db.exec(schemaSql);
   const userColumns = db.prepare("PRAGMA table_info(users)").all();
   if (!userColumns.some(c => c.name === 'google_id')) {
     db.exec('ALTER TABLE users ADD COLUMN google_id TEXT;');
@@ -62,8 +64,9 @@ export function openDatabase(path) {
   return db;
 }
 
-export function transaction(db, fn) {
+export async function transaction(db, fn) {
+  if (db.withTransaction) return db.withTransaction(fn);
   db.exec('BEGIN IMMEDIATE');
-  try { const result = fn(); db.exec('COMMIT'); return result; }
+  try { const result = await fn(); db.exec('COMMIT'); return result; }
   catch (error) { db.exec('ROLLBACK'); throw error; }
 }

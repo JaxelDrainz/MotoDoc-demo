@@ -7,7 +7,7 @@ import { createApp } from './app.js';
 
 async function fixture(t, options={}) {
   const dir=await mkdtemp(join(tmpdir(),'motodoc-test-'));
-  const {app,db}=createApp({databasePath:join(dir,'test.sqlite'),outboxPath:join(dir,'mailbox'),...options});
+  const {app,db}=await createApp({databasePath:join(dir,'test.sqlite'),outboxPath:join(dir,'mailbox'),...options});
   const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
   t.after(async()=>{await new Promise(r=>server.close(r));db.close();await rm(dir,{recursive:true,force:true});});
   const base=`http://127.0.0.1:${server.address().port}`;

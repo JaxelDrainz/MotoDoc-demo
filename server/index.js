@@ -5,7 +5,7 @@ import { databasePath, outboxPath } from './config.js';
 
 const production = process.env.NODE_ENV === 'production';
 const port = Number(process.env.API_PORT || 4174);
-const {app,db} = createApp({databasePath,outboxPath,appOrigin:process.env.APP_ORIGIN || 'http://localhost:4173',production});
+const {app,db} = await createApp({databasePath,outboxPath,appOrigin:process.env.APP_ORIGIN || 'http://localhost:4173',production});
 if(production) {
   app.use(express.static(resolve('dist/client'),{index:false}));
   app.get('/{*path}',(_req,res)=>res.sendFile(resolve('dist/client/index.html')));
