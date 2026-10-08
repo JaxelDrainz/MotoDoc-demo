@@ -6,6 +6,7 @@
   },
   "scripts": {
     "dev": "node dev.mjs",
+    "build": "npm run build --prefix landing && npm run build --prefix dashboard-next && node -e \"require('fs').cpSync('dashboard-next/out','landing/dist/client/dashboard',{recursive:true})\"",
     "test": "npm --prefix landing run test:backend && npm --prefix dashboard-next run typecheck"
   }
 }
