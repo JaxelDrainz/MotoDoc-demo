@@ -1,0 +1,39 @@
+/* MotoDoc motion: precise arrivals, measured gauges, and the existing pixel-fill signature. */
+@keyframes motor-enter{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes motor-vehicle{from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:translateX(0)}}
+@keyframes motor-gauge{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes motor-dialog{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes motor-fade{from{opacity:0}to{opacity:1}}
+@keyframes motor-check{from{transform:rotate(-20deg) scale(.75)}to{transform:rotate(0) scale(1)}}
+@media(prefers-reduced-motion:no-preference){
+  @view-transition{navigation:auto}
+  ::view-transition-old(root){animation: motor-fade .18s ease reverse both}
+  ::view-transition-new(root){animation: motor-fade .28s ease both}
+  .md-brand-link{view-transition-name:motodoc-brand}
+  .md-connected main{animation:motor-enter .65s cubic-bezier(.16,1,.3,1) both}
+  .md-vehicle-art{animation:motor-vehicle .9s .1s cubic-bezier(.16,1,.3,1) both}
+  .md-reading-fill{transform-origin:left;animation:motor-gauge 1.1s .15s cubic-bezier(.16,1,.3,1) both;transition:width .7s cubic-bezier(.16,1,.3,1)}
+  .md-reading:nth-child(2) .md-reading-fill{animation-delay:.23s}
+  .md-reading:nth-child(3) .md-reading-fill{animation-delay:.31s}
+  .md-connected [role=tabpanel]{animation:motor-enter .4s cubic-bezier(.16,1,.3,1) both}
+  .md-service-card{animation:motor-enter .6s cubic-bezier(.16,1,.3,1) backwards;transition:border-color .25s,box-shadow .35s}
+  .md-service-card:nth-child(2){animation-delay:.09s}
+  .md-service-card:hover{border-color:#9dbdac;box-shadow:0 8px 22px #133d2a08}
+  .md-connected [role=tab]{position:relative;transition:color .25s}
+  .md-connected [role=tab]:after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;border-radius:2px;background:#087658;transform:scaleX(0);transform-origin:left;transition:transform .32s cubic-bezier(.16,1,.3,1)}
+  .md-connected [role=tab][aria-selected=true]:after{transform:scaleX(1)}
+  .md-action{transition:transform .25s cubic-bezier(.16,1,.3,1),background-color .25s,border-color .25s}
+  .md-action:active:not(:disabled){transform:scale(.97)}
+  .md-action svg{transition:transform .35s cubic-bezier(.16,1,.3,1)}
+  .md-action:hover:not(:disabled) svg{transform:translateY(-2px)}
+  .md-connected input,.md-connected textarea,.md-connected select{transition:border-color .2s,box-shadow .2s}
+  .md-connected dialog[open]{animation:motor-dialog .3s cubic-bezier(.16,1,.3,1) both}
+  .md-connected dialog[open]::backdrop{animation:motor-fade .25s ease both}
+  .md-toast{animation:motor-enter .4s cubic-bezier(.16,1,.3,1) both}
+  .md-toast>svg{animation:motor-check .5s cubic-bezier(.16,1,.3,1) both}
+  .md-chat-entry{animation:motor-enter .3s cubic-bezier(.16,1,.3,1) both}
+}
+@media(prefers-reduced-motion:reduce){
+  @view-transition{navigation:none}
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}

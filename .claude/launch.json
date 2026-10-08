@@ -1,0 +1,38 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "motodoc-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "landing",
+        "run",
+        "dev:api"
+      ],
+      "port": 4174
+    },
+    {
+      "name": "motodoc-dashboard",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "dashboard-next",
+        "run",
+        "dev"
+      ],
+      "port": 4180
+    },
+    {
+      "name": "motodoc",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "landing",
+        "run",
+        "dev"
+      ],
+      "port": 4173
+    }
+  ]
+}
