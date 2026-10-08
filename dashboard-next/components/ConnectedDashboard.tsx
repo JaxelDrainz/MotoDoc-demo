@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { BASE_PATH } from '../lib/paths';
+import Splash from './Splash';
 import MotoDocDashboard, { type Booking, type BookingStatus, type Condition, type Message, type ServiceRecord, type Vehicle } from './MotoDocDashboard';
 
 interface ApiUser { id: string; name: string; email: string; role: 'driver' | 'garage' }
@@ -15,6 +16,7 @@ interface Data { account: ApiUser; vehicles: Vehicle[]; bookings: Booking[]; ser
 /** The MotoDoc account area served by the landing app on the same origin. */
 const APP_HREF = '/app';
 const LOGIN_HREF = '/login';
+const SPLASH_MS = 1000;
 // The studio shot in public/images where one exists, otherwise the model's photo found by the API, otherwise its body-type drawing.
 const studioImage = (v: ApiVehicle) => /volvo/i.test(v.make) && /xc60/i.test(v.model) ? `${BASE_PATH}/images/volvo-xc60.png` : undefined;
 const vehicleImage = (v: ApiVehicle) => studioImage(v) ?? v.image_url ?? `/api/catalog/art/${v.body ?? 'car'}.svg`;
@@ -54,14 +56,15 @@ export default function ConnectedDashboard() {
     });
   }, [load]);
   useEffect(open, [open]);
+  // Keep the opening screen up long enough for its logo animation to play once.
+  const [opening, setOpening] = useState(true);
+  useEffect(() => { const timer = window.setTimeout(() => setOpening(false), SPLASH_MS); return () => window.clearTimeout(timer); }, []);
 
   const save = async (path: string, method: string, body: unknown) => { await api(path, { method, body }); await load(); };
 
-  if (!data) return <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-5 text-center">
-    <p className="text-[24px] font-semibold tracking-[-0.05em]">MotoDoc</p>
-    <p role="status" className="text-slate-600">{error || 'Opening your MotoDoc…'}</p>
-    {error && <div className="flex gap-4 text-sm font-medium text-[#087658]"><button className="underline-offset-4 hover:underline" onClick={() => { setError(''); open(); }}>Try again</button><a className="underline-offset-4 hover:underline" href={LOGIN_HREF}>Return to login</a></div>}
-  </main>;
+  if (!data || opening) return <Splash message={error || 'Opening your MotoDoc…'}>
+    {error && <div className="flex gap-4"><button onClick={() => { setError(''); open(); }}>Try again</button><a href={LOGIN_HREF}>Return to login</a></div>}
+  </Splash>;
 
   return <MotoDocDashboard
     {...data}
