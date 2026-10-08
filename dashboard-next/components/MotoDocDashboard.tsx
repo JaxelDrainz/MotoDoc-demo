@@ -93,7 +93,7 @@ export interface MotoDocDashboardProps {
 const tabs = ['Overview', 'Service History', 'Bookings'] as const;
 type Tab = typeof tabs[number];
 type DialogKind = 'manage' | 'message' | 'call' | 'profile' | 'condition' | null;
-const outlineButton = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[#087658] px-3.5 py-2 text-sm font-medium text-[#087658] transition-colors hover:bg-[#eaf6f0] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#087658] disabled:cursor-wait disabled:opacity-60';
+const outlineButton = 'md-action inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[#087658] px-3.5 py-2 text-sm font-medium text-[#087658] transition-colors hover:bg-[#eaf6f0] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#087658] disabled:cursor-wait disabled:opacity-60';
 const field = 'mt-2 w-full rounded-lg border border-slate-300 p-3 font-normal focus:outline-[#087658]';
 const number = new Intl.NumberFormat('en-GB');
 const statusLabel: Record<BookingStatus, string> = { pending: 'Awaiting garage confirmation', confirmed: 'Confirmed', completed: 'Completed', cancelled: 'Cancelled' };
@@ -142,17 +142,17 @@ function downloadCalendar(booking: Booking): void {
 
 function Metric({ label, value, progress }: { label: string; value: string; progress: number | null }) {
   const percentage = Math.round(Math.max(0, Math.min(100, progress ?? 0)));
-  return <div>
+  return <div className="md-reading">
     <div className="mb-1 flex items-center justify-between gap-4 text-[16px] leading-6"><span>{label}</span><span className={progress === null ? 'text-[#626a72]' : 'tabular-nums'}>{value}</span></div>
     <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percentage} aria-valuetext={value} className="h-[5px] overflow-hidden rounded-full bg-[#dcece5]">
-      <div className="h-full rounded-full bg-[#0b7b5b]" style={{ width: `${percentage}%` }} />
+      <div className="md-reading-fill h-full rounded-full bg-[#0b7b5b]" style={{ width: `${percentage}%` }} />
     </div>
   </div>;
 }
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   const pixels = usePixelFill();
-  return <section {...pixels.handlers} className="relative min-w-0 overflow-hidden rounded-xl border border-[#d7dce0] bg-white p-6 sm:p-[30px]">
+  return <section {...pixels.handlers} className="md-service-card relative min-w-0 overflow-hidden rounded-xl border border-[#d7dce0] bg-white p-6 sm:p-[30px]">
     <PixelFill active={pixels.active} />
     <div className="relative flex min-w-0 flex-col">
       <h2 className="mb-3.5 text-[23px] font-semibold leading-8 tracking-[-0.035em]">{title}</h2>{children}
@@ -246,10 +246,10 @@ export default function MotoDocDashboard({
   const bookService = <a className={outlineButton} href={`${appHref}#garages`}><CalendarPlus size={17} aria-hidden="true" />Book a service</a>;
   const motValue = vehicle?.motDays == null ? 'Not recorded' : vehicle.motDays < 0 ? 'Overdue' : `${vehicle.motDays} ${vehicle.motDays === 1 ? 'day' : 'days'}`;
 
-  return <div className="min-h-screen bg-[#f4f8fa] text-[#111827]">
+  return <div className="md-connected min-h-screen bg-[#f4f8fa] text-[#111827]">
     <header className="sticky top-0 z-30 border-b border-[#dce1e5] bg-white">
       <div className="mx-auto flex min-h-[90px] max-w-[1116px] flex-wrap items-center gap-x-8 gap-y-4 px-5 py-5 min-[1180px]:px-0">
-        <a href="/" aria-label="MotoDoc home" className="mr-auto flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#087658]">
+        <a href="/" aria-label="MotoDoc home" className="md-brand-link mr-auto flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#087658]">
           <Image src={logoSrc} alt="" width={42} height={32} className="h-8 w-[42px] object-contain" priority />
           <span className="text-[24px] font-semibold tracking-[-0.05em]">MotoDoc</span>
         </a>
@@ -272,7 +272,7 @@ export default function MotoDocDashboard({
     </header>
 
     <main className="mx-auto max-w-[1104px] px-5 pb-12 pt-7 sm:pt-[44px] min-[1180px]:px-0">
-      {vehicle ? <section aria-label="Vehicle health" {...heroPixels.handlers} className="relative grid min-h-[354px] overflow-hidden rounded-3xl border border-[#d7dcd6] bg-white md:grid-cols-[1fr_1.12fr]">
+      {vehicle ? <section key={vehicle.id} aria-label="Vehicle health" {...heroPixels.handlers} className="md-health-card relative grid min-h-[354px] overflow-hidden rounded-3xl border border-[#d7dcd6] bg-white md:grid-cols-[1fr_1.12fr]">
         <PixelFill active={heroPixels.active} corner />
         <div className="relative z-10 px-7 pb-6 pt-8 sm:px-12 md:py-[59px] lg:pl-[101px] lg:pr-0">
           <h1 className="text-[27px] font-semibold leading-tight tracking-[-0.04em] sm:text-[30px]">{vehicle.name}</h1>
@@ -284,7 +284,7 @@ export default function MotoDocDashboard({
           </div>
           <button className={`${outlineButton} mt-5`} onClick={() => openDialog('condition')}><Gauge size={17} aria-hidden="true" />Update readings</button>
         </div>
-        <div className="relative min-h-[240px] md:min-h-[352px]">
+        <div className="md-vehicle-art relative min-h-[240px] md:min-h-[352px]">
           {vehicle.imageSrc && vehicle.imageCredit
             ? <>
               {/* eslint-disable-next-line @next/next/no-img-element -- remote Wikimedia photo, already sized by the API */}
@@ -304,7 +304,7 @@ export default function MotoDocDashboard({
         <a className={`${outlineButton} mt-5`} href={`${appHref}#vehicles`}><CarFront size={17} aria-hidden="true" />Add your first vehicle</a>
       </section>}
 
-      {vehicle && <div role="tabpanel" id={`${tabId}-panel`} aria-labelledby={`${tabId}-${tabs.indexOf(tab)}`} tabIndex={0} className="mt-6 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[#087658]">
+      {vehicle && <div key={`${tab}-${vehicle.id}`} role="tabpanel" id={`${tabId}-panel`} aria-labelledby={`${tabId}-${tabs.indexOf(tab)}`} tabIndex={0} className="mt-6 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[#087658]">
         {tab === 'Service History' && <Card title="Service History">
           {records.length ? <ul className="divide-y divide-slate-100">{records.map(record => <li key={record.id} className="flex flex-wrap justify-between gap-3 py-4"><div><h3 className="font-medium">{record.title}</h3><p className="mt-1 text-sm text-slate-600">{record.workshopName} · {number.format(record.mileage)} km</p><p className="mt-1 text-sm leading-6">{record.summary}</p><div role="group" aria-label={`Rate ${record.title}`} className="mt-2 flex items-center gap-0.5">{[1, 2, 3, 4, 5].map(value => <button key={value} disabled={busy} aria-label={`${value} ${value === 1 ? 'star' : 'stars'}`} aria-pressed={record.rating === value} onClick={() => void run(() => onRateService(record.bookingId, value), 'Thanks. Your rating counts towards this garage’s verified reviews.', true)} className="rounded p-1 focus-visible:outline-2 focus-visible:outline-[#087658]"><Star size={18} aria-hidden="true" className={value <= (record.rating ?? 0) ? 'fill-[#efb460] text-[#efb460]' : 'text-slate-300 hover:text-[#efb460]'} /></button>)}<span className="ml-2 text-xs text-slate-500">{record.rating ? 'Your rating' : 'Rate this service'}</span></div></div><time dateTime={record.date} className="text-sm text-slate-600">{new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' }).format(new Date(record.date))}</time></li>)}</ul>
             : <Empty icon={<History aria-hidden="true" className="h-6 w-6" />} title="No completed services recorded">Completed service records for {vehicle.registration} will appear here.</Empty>}
@@ -350,7 +350,7 @@ export default function MotoDocDashboard({
     </main>
 
     <div aria-live="polite" aria-atomic="true" className="fixed bottom-5 left-1/2 z-40 w-[calc(100%-2.5rem)] max-w-md -translate-x-1/2">
-      {notice && <div className="flex items-center gap-3 rounded-xl border border-[#cde3d8] bg-white px-4 py-3 text-sm shadow-lg"><Check className="h-5 w-5 shrink-0 text-[#087658]" aria-hidden="true" /><span className="flex-1">{notice}</span><button aria-label="Dismiss notification" onClick={() => setNotice('')} className="rounded p-1 focus-visible:outline-2"><X size={16} /></button></div>}
+      {notice && <div className="md-toast flex items-center gap-3 rounded-xl border border-[#cde3d8] bg-white px-4 py-3 text-sm shadow-lg"><Check className="h-5 w-5 shrink-0 text-[#087658]" aria-hidden="true" /><span className="flex-1">{notice}</span><button aria-label="Dismiss notification" onClick={() => setNotice('')} className="rounded p-1 focus-visible:outline-2"><X size={16} /></button></div>}
     </div>
 
     <dialog ref={dialog} aria-labelledby={dialogTitle} onCancel={() => setDialogKind(null)} className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-[#111827] shadow-xl">
@@ -368,7 +368,7 @@ export default function MotoDocDashboard({
 
       {dialogKind === 'message' && target && <form onSubmit={saveMessage} className="space-y-4">
         <p className="text-sm text-slate-600">{target.title} · {bookingDate(target.startsAt)}</p>
-        {thread.length ? <ul aria-label="Conversation" className="max-h-56 space-y-2 overflow-y-auto">{thread.map(item => <li key={item.id} className={`max-w-[85%] rounded-xl px-3 py-2 text-sm leading-5 ${item.mine ? 'ml-auto bg-[#eaf6f0]' : 'bg-slate-100'}`}><p className="whitespace-pre-wrap break-words">{item.body}</p><p className="mt-1 text-xs text-slate-500">{item.mine ? 'You' : item.senderName} · {new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(item.sentAt))}</p></li>)}</ul> : <p className="text-sm text-slate-600">No messages about this booking yet.</p>}
+        {thread.length ? <ul aria-label="Conversation" className="max-h-56 space-y-2 overflow-y-auto">{thread.map(item => <li key={item.id} className={`md-chat-entry max-w-[85%] rounded-xl px-3 py-2 text-sm leading-5 ${item.mine ? 'ml-auto bg-[#eaf6f0]' : 'bg-slate-100'}`}><p className="whitespace-pre-wrap break-words">{item.body}</p><p className="mt-1 text-xs text-slate-500">{item.mine ? 'You' : item.senderName} · {new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(item.sentAt))}</p></li>)}</ul> : <p className="text-sm text-slate-600">No messages about this booking yet.</p>}
         <label className="block text-sm font-medium">Your message<textarea required maxLength={2000} rows={4} value={message} onChange={event => setMessage(event.target.value)} className={`${field} resize-y`} /></label>
         <button disabled={busy || !message.trim()} className={`${outlineButton} w-full`}>{busy ? 'Sending…' : 'Send message'}</button>
       </form>}
