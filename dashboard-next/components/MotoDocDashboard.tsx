@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import PixelFill, { usePixelFill } from './PixelFill';
 import { CalendarDays, CalendarPlus, CarFront, Check, ChevronDown, Clock3, Gauge, History, LogOut, MapPin, MessageSquare, Phone, Settings, Star, Store, X } from 'lucide-react';
 
 export interface Vehicle {
@@ -139,16 +140,6 @@ function downloadCalendar(booking: Booking): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** Explicitly requested code-native stepped pixel motif. */
-function PixelTriangle() {
-  const colors = ['#064E3B', '#226B55', '#478A72', '#6BA98F', '#8AC9AC', '#A7F3D0'];
-  return <svg aria-hidden="true" viewBox="0 0 96 96" className="pointer-events-none absolute bottom-0 left-0 h-24 w-24">
-    {colors.flatMap((_, row) => Array.from({ length: row + 1 }, (_, col) => (
-      <rect key={`${row}-${col}`} x={col * 16} y={row * 16} width="16" height="16" fill={colors[Math.min(5, 5 - row + col)]} opacity={0.35 + row * 0.13} />
-    )))}
-  </svg>;
-}
-
 function Metric({ label, value, progress }: { label: string; value: string; progress: number | null }) {
   const percentage = Math.round(Math.max(0, Math.min(100, progress ?? 0)));
   return <div>
@@ -160,8 +151,12 @@ function Metric({ label, value, progress }: { label: string; value: string; prog
 }
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
-  return <section className="flex min-w-0 flex-col rounded-xl border border-[#d7dce0] bg-white p-6 sm:p-[30px]">
-    <h2 className="mb-3.5 text-[23px] font-semibold leading-8 tracking-[-0.035em]">{title}</h2>{children}
+  const pixels = usePixelFill();
+  return <section {...pixels.handlers} className="relative min-w-0 overflow-hidden rounded-xl border border-[#d7dce0] bg-white p-6 sm:p-[30px]">
+    <PixelFill active={pixels.active} />
+    <div className="relative flex min-w-0 flex-col">
+      <h2 className="mb-3.5 text-[23px] font-semibold leading-8 tracking-[-0.035em]">{title}</h2>{children}
+    </div>
   </section>;
 }
 
@@ -189,6 +184,7 @@ export default function MotoDocDashboard({
   const [error, setError] = useState('');
   const [openedAt] = useState(() => Date.now());
   const dialog = useRef<HTMLDialogElement>(null);
+  const heroPixels = usePixelFill();
   const dialogTitle = useId();
   const tabId = useId();
 
@@ -276,8 +272,8 @@ export default function MotoDocDashboard({
     </header>
 
     <main className="mx-auto max-w-[1104px] px-5 pb-12 pt-7 sm:pt-[44px] min-[1180px]:px-0">
-      {vehicle ? <section aria-label="Vehicle health" className="relative grid min-h-[354px] overflow-hidden rounded-3xl border border-[#d7dcd6] bg-white md:grid-cols-[1fr_1.12fr]">
-        <PixelTriangle />
+      {vehicle ? <section aria-label="Vehicle health" {...heroPixels.handlers} className="relative grid min-h-[354px] overflow-hidden rounded-3xl border border-[#d7dcd6] bg-white md:grid-cols-[1fr_1.12fr]">
+        <PixelFill active={heroPixels.active} corner />
         <div className="relative z-10 px-7 pb-6 pt-8 sm:px-12 md:py-[59px] lg:pl-[101px] lg:pr-0">
           <h1 className="text-[27px] font-semibold leading-tight tracking-[-0.04em] sm:text-[30px]">{vehicle.name}</h1>
           <p className="mt-1 text-[18px] leading-7 text-[#626a72]">{vehicle.registration} · {number.format(vehicle.mileage)} km</p>
