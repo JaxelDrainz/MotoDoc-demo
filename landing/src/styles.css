@@ -183,3 +183,8 @@ h3{font-weight:600}
 .site-footer{background:#fff;border-top:1px solid #dce1e5}
 @media(max-width:700px){.brand,.brand-footer{font-size:22px}.brand img{width:37px;height:28px}.header-inner{height:74px}.header-actions .button{border-radius:999px}.mobile-nav{background:#fff}.feature{padding:18px}}
 @media(max-width:374px){.brand{font-size:20px;gap:7px}.brand img{width:32px;height:24px}}
+
+/* Pixel fill (PixelCards.jsx): a canvas added to a card on hover, focus or tap, sitting behind the card's content. */
+.pixel-fill{position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;border-radius:inherit}
+.feature,.appointment-card,.auth-card,.dash-page-header,.dash-stats article,.dash-tile,.dash-list,.dash-empty,.dash-overview-note{isolation:isolate}
+.feature,.dash-stats article,.dash-list,.dash-empty,.dash-overview-note{position:relative}
