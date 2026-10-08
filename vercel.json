@@ -1,11 +1,25 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "npm install --prefix landing",
-  "buildCommand": "npm run build --prefix landing",
+  "installCommand": "npm install --prefix landing && npm install --prefix dashboard-next",
+  "buildCommand": "npm run build",
   "outputDirectory": "landing/dist/client",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/index?path=:path*" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index?path=:path*"
+    },
+    {
+      "source": "/dashboard",
+      "destination": "/dashboard/index.html"
+    },
+    {
+      "source": "/dashboard/(.*)",
+      "destination": "/dashboard/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }

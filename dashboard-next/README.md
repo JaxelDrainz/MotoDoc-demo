@@ -7,7 +7,7 @@ Next.js App Router, TypeScript, Tailwind CSS 4, and Lucide React. This is the dr
 The dashboard is served under `/dashboard` (`basePath` in `next.config.ts`) on the same origin as the landing app, so it shares the `motodoc_session` cookie and calls the Express API at `/api` directly:
 
 - Development: Vite (`../landing`, port 4173) proxies `/dashboard` to this dev server (port 4180) and `/api` to the API (port 4174). Open `http://localhost:4173/dashboard`. Opening port 4180 directly redirects there.
-- Production: `../landing/server/index.js` proxies `/dashboard` to `DASHBOARD_URL` (for example `http://127.0.0.1:4180` running `npm run start`). On Vercel, deploy this directory as its own project and add a `/dashboard/:path*` rewrite to it in `../vercel.json`, before the catch-all.
+- Production: `next build` exports the dashboard as static files (`out/`). The root `npm run build` copies them into `../landing/dist/client/dashboard`, so the landing app's host serves them at `/dashboard`: on Vercel through the top-level `vercel.json`, and on a Node host through `../landing/server/index.js`.
 
 Signed-out visitors are sent to `/login`; garage accounts are sent to `/app`.
 
@@ -17,7 +17,7 @@ Only what the API stores is shown. Oil life, brake wear, and MOT date are entere
 
 Calendar export downloads an ICS file for the booking's UTC start and a one-hour duration.
 
-Commands: `npm run dev` (port 4180), `npm run build`, `npm run start`, `npm run typecheck`.
+Commands: `npm run dev` (port 4180), `npm run build`, `npm run typecheck`.
 
 ## Assets
 

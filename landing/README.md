@@ -17,7 +17,7 @@ npm run dev
 npm run dev
 ```
 
-Open `http://localhost:4173`. The driver car dashboard is at `/dashboard` on that same origin, linked from **Car dashboard** in a driver account; see `../dashboard-next/README.md`. In production, set `DASHBOARD_URL` to the running dashboard server so the API host serves it at `/dashboard`.
+Open `http://localhost:4173`. The driver car dashboard is at `/dashboard` on that same origin, linked from **Car dashboard** in a driver account; see `../dashboard-next/README.md`. In production it is built to static files and served from this app's output at `/dashboard`; build both with `npm run build` at the repository root.
 
 To create demo accounts for trying out driver and garage accounts locally:
 
