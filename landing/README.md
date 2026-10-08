@@ -51,9 +51,9 @@ Outputs the frontend to `dist/client` and preserves the bundled Sites-ready work
 
 ## Vercel deployment
 
-This app lives in the `landing` directory of the repository, so the Vercel project's **Root Directory** must be `landing`. Its `vercel.json` serves the Vite frontend and routes `/api/*` to the Express function. Set the project runtime to Node.js 24 (also declared in `package.json`).
+The Vercel project's **Root Directory** stays at the top of the repository. The `vercel.json` there builds this `landing` directory, serves the Vite frontend and routes `/api/*` to the Express function. Set the project runtime to Node.js 24 (also declared in `package.json`).
 
-1. Link this directory to a Vercel project, or import `JaxelDrainz/MotoDoc-demo` with **Root Directory** set to `landing`.
+1. Link this directory to a Vercel project, or import `JaxelDrainz/MotoDoc-demo` leaving **Root Directory** at the repository root.
 2. In the Vercel project's **Storage** tab, install/connect a Turso Cloud database. The integration supplies `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` to the project. Make sure both are available to Production and any Preview deployment you intend to test.
 3. Deploy and verify `/api/health`, signup, login, and a driver/garage workflow. The API creates its tables on first startup. Hosted accounts are separate from accounts in the local SQLite file; no local user data is automatically uploaded.
 4. To enable Google Sign-In, set `GOOGLE_CLIENT_ID` for the deployed environment and register the exact HTTPS deployment or custom-domain origin as an authorized JavaScript origin in the Google Cloud Web OAuth client. Add preview origins only if you intend to use Google Sign-In on those previews.
