@@ -7,7 +7,7 @@ Next.js App Router, TypeScript, Tailwind CSS 4, and Lucide React. This is the dr
 The dashboard is served under `/dashboard` (`basePath` in `next.config.ts`) on the same origin as the landing app, so it shares the `motodoc_session` cookie and calls the Express API at `/api` directly:
 
 - Development: Vite (`../landing`, port 4173) proxies `/dashboard` to this dev server (port 4180) and `/api` to the API (port 4174). Open `http://localhost:4173/dashboard`. Opening port 4180 directly redirects there.
-- Production: `../landing/server/index.js` proxies `/dashboard` to `DASHBOARD_URL` (for example `http://127.0.0.1:4180` running `npm run start`). On Vercel, deploy this directory as its own project and add a `/dashboard/:path*` rewrite to it in `../landing/vercel.json`, before the catch-all.
+- Production: `../landing/server/index.js` proxies `/dashboard` to `DASHBOARD_URL` (for example `http://127.0.0.1:4180` running `npm run start`). On Vercel, deploy this directory as its own project and add a `/dashboard/:path*` rewrite to it in `../vercel.json`, before the catch-all.
 
 Signed-out visitors are sent to `/login`; garage accounts are sent to `/app`.
 
