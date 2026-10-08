@@ -1,13 +1,8 @@
 node_modules/
 dist/
+.next/
 .vercel/
-.env
-.env.*
-!.env.example
-data/
-*.sqlite*
-qa/test-artifacts/
-qa/
-
-.vercel
 .env*
+!.env.example
+*.sqlite*
+*.tsbuildinfo

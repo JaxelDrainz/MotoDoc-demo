@@ -1,0 +1,8 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@theme { --font-sans: 'Inter Variable', Inter, sans-serif; }
+body { margin: 0; background: #f4f8fa; color: #111827; }
+button, select, a { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), select { cursor: pointer; }
+dialog::backdrop { background: rgb(15 23 42 / 35%); backdrop-filter: blur(3px); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
