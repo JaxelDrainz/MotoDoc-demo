@@ -1,4 +1,4 @@
-.auth-page{min-height:100dvh;background:#f7faf8;display:flex;flex-direction:column;overflow-x:clip}
+.auth-page{min-height:100dvh;background:#f4f8fa;display:flex;flex-direction:column;overflow-x:clip}
 .auth-header{width:min(1240px,calc(100% - 96px));margin:auto;min-height:100px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e1e8e3;gap:20px}
 .auth-home{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:#5c6862;min-height:44px}
 .auth-home:hover{color:var(--green)}
@@ -22,7 +22,7 @@
 .auth-field label,.auth-roles legend{font-size:12px;font-weight:550;color:#303f37;display:block;margin-bottom:9px}
 .auth-field input{width:100%;min-height:48px;padding:12px 13px;background:#fcfdfc;border:1px solid #dce4df;border-radius:7px;font-size:14px;color:var(--ink);outline:none;transition:border-color .15s,box-shadow .15s}
 .auth-field input::placeholder{color:#849088;font-size:13px}
-.auth-field input:focus{border-color:var(--green);box-shadow:0 0 0 3px #087f5b13}
+.auth-field input:focus{border-color:var(--green);box-shadow:0 0 0 3px #08765813}
 .auth-field input[aria-invalid=true]{border-color:#b8463b}
 .auth-label-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 .auth-label-row a{font-size:11px;color:var(--green);font-weight:500}
@@ -51,7 +51,7 @@
 .auth-roles label{position:relative;display:flex;align-items:center;gap:8px;min-height:49px;padding:10px 11px;border:1px solid #dce4df;border-radius:7px;font-size:11px;color:#6a746e;cursor:pointer}
 .auth-roles input{position:absolute;width:1px;height:1px;opacity:0}
 .auth-roles label:has(input:focus-visible){outline:3px solid #4da58b;outline-offset:3px}
-.auth-roles label.selected{border-color:#087f5b;background:#f0f8f3;color:#076747}
+.auth-roles label.selected{border-color:#087658;background:#f0f8f3;color:#076747}
 .auth-roles label>svg:last-child:not(:first-child){margin-left:auto}
 .auth-roles label>svg{flex-shrink:0}
 .auth-feedback{background:#f0f7f2;border:1px solid #cfe2d6;border-radius:8px;padding:16px;margin-top:18px;font-size:12px;line-height:1.7;color:#4a6455}
@@ -82,3 +82,18 @@
 .auth-card .auth-submit{font-size:15px;justify-content:center;gap:12px;min-height:50px;padding:13px 17px}
 @media(max-width:620px){.auth-field input{font-size:16px}.auth-description{font-size:13px}.auth-roles label{font-size:11px}.auth-preview-note{font-size:9px}}
 @media(max-width:620px){.auth-mechanic{top:18px;clip-path:none;z-index:1}}
+
+/* Shared MotoDoc design system (see styles.css). */
+.auth-header{min-height:90px;border-bottom-color:#dce1e5}
+.auth-header .brand{font-size:24px}
+.auth-card{border-color:var(--line);border-radius:16px}
+.auth-card h1,.auth-story h2{font-weight:600;letter-spacing:-.035em}
+.auth-description,.auth-story p,.auth-home{color:var(--muted)}
+.auth-field input{background:#fff;border-color:#cbd5e1;border-radius:8px}
+.auth-card .auth-submit,.auth-google-button{border-radius:999px}
+.auth-card-mark{background:var(--mint);border-radius:999px}
+.auth-roles label{border-color:var(--line);border-radius:12px}
+.auth-roles label.selected{background:var(--mint);border-color:var(--green);color:var(--green)}
+.auth-feedback{background:var(--mint);border-color:#cde3d8;border-radius:12px}
+.auth-footer{border-top-color:#dce1e5}
+@media(max-width:620px){.auth-header .brand{font-size:22px}}

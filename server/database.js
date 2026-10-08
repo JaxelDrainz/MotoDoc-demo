@@ -48,6 +48,28 @@ export const schemaSql = `
     CREATE TABLE IF NOT EXISTS customer_notes(
       garage_id TEXT NOT NULL REFERENCES garages(id),driver_id TEXT NOT NULL REFERENCES users(id),
       notes TEXT NOT NULL DEFAULT '',tags TEXT NOT NULL DEFAULT '',PRIMARY KEY(garage_id,driver_id));
+    CREATE TABLE IF NOT EXISTS vehicle_condition(
+      vehicle_id TEXT PRIMARY KEY REFERENCES vehicles(id) ON DELETE CASCADE,
+      oil_life INTEGER CHECK(oil_life BETWEEN 0 AND 100),
+      brake_wear INTEGER CHECK(brake_wear BETWEEN 0 AND 100),
+      mot_due TEXT, updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS garage_contact(
+      garage_id TEXT PRIMARY KEY REFERENCES garages(id) ON DELETE CASCADE,
+      phone TEXT NOT NULL DEFAULT '',opening_hours TEXT NOT NULL DEFAULT '',
+      mechanic_name TEXT NOT NULL DEFAULT '');
+    CREATE TABLE IF NOT EXISTS messages(
+      id TEXT PRIMARY KEY,booking_id TEXT NOT NULL REFERENCES bookings(id),
+      sender_id TEXT NOT NULL REFERENCES users(id),body TEXT NOT NULL,
+      created_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS booking_messages ON messages(booking_id,created_at);
+    CREATE TABLE IF NOT EXISTS reviews(
+      booking_id TEXT PRIMARY KEY REFERENCES bookings(id),garage_id TEXT NOT NULL REFERENCES garages(id),
+      driver_id TEXT NOT NULL REFERENCES users(id),rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+      created_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS garage_reviews ON reviews(garage_id);
+    CREATE TABLE IF NOT EXISTS vehicle_images(
+      key TEXT PRIMARY KEY,image_url TEXT,image_source TEXT,image_credit TEXT,image_license TEXT,
+      fetched_at TEXT NOT NULL);
     INSERT OR IGNORE INTO schema_versions(version) VALUES(1);
   `;
 

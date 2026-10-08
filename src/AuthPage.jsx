@@ -1,3 +1,4 @@
+import { Brand } from './Brand.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeftIcon, ArrowRightIcon, ArrowUpRightIcon, CarIcon, CheckCircleIcon, EyeIcon, EyeSlashIcon, LockKeyIcon, StorefrontIcon } from '@phosphor-icons/react';
 import './auth.css';
@@ -120,7 +121,7 @@ export function AuthPage({ mode }) {
   return <div className={`auth-page auth-${mode}`}>
     <a className="skip-link" href="#auth-form">Skip to form</a>
     <header className="auth-header">
-      <a href="/#top" className="brand" aria-label="MotoDoc home">MotoDoc</a>
+      <Brand href="/#top" />
       <a className="auth-home" href="/#top"><ArrowLeftIcon size={17} aria-hidden="true" /> Back to home</a>
     </header>
     <main className="auth-stage">

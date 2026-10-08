@@ -10,9 +10,14 @@ Start the backend API and frontend dev server:
 # Terminal 1: backend API server (runs on port 4174)
 npm run dev:api
 
-# Terminal 2: frontend Vite dev server (runs on port 4173 with /api proxy)
+# Terminal 2: frontend Vite dev server (runs on port 4173 with /api and /dashboard proxies)
+npm run dev
+
+# Terminal 3: driver car dashboard (Next.js, port 4180), from ../dashboard-next
 npm run dev
 ```
+
+Open `http://localhost:4173`. The driver car dashboard is at `/dashboard` on that same origin, linked from **Car dashboard** in a driver account; see `../dashboard-next/README.md`. In production, set `DASHBOARD_URL` to the running dashboard server so the API host serves it at `/dashboard`.
 
 To create demo accounts for trying out driver and garage accounts locally:
 
@@ -61,16 +66,18 @@ The server refuses to start in production if hosted persistence is missing, so a
 - **Authentication**: `/login`, `/signup`, `/signup?role=garage`, `/forgot-password`, and `/reset-password`. Uses the mechanic visual composition with emerald line contour.
 - **Local backend**: SQLite persistence with transaction support, scrypt password hashing, HTTP-only cookie sessions, rate limiting, and CSRF protection.
 - **Driver workflows (`/app`)**:
-  - Vehicle management: add, edit, view, and remove vehicles with mileage tracking.
+  - Vehicle management: add, edit, view, and remove vehicles with mileage tracking. Make and model fields search the vehicle catalogue (`server/catalog.js`: bundled makes and models by body type, with the public NHTSA vPIC database as a fallback for anything not listed). Each vehicle shows a photo of that model: the lead image of its Wikipedia article (`server/vehicle-images.js`), looked up once per make and model, cached in the `vehicle_images` table, and credited to its author and licence beside the photo. When no photo is found, the drawing for its body type from `server/vehicle-art.js` (`/api/catalog/art/<body>.svg`) is used instead.
   - Garage search: browse published garages and book hourly service appointments.
   - Service history: chronological log of completed repairs and maintenance.
   - Memberships: browse plans and request garage membership tiers.
   - Invoices & Reminders: view service invoices and track inspection/maintenance dates.
+  - Car dashboard (`/dashboard`): vehicle readings, upcoming service, rescheduling, and messages with the garage.
 - **Garage workflows (`/app`)**:
   - Profile & services: manage garage details, service offerings, and publish status.
   - Booking management: review appointment requests, confirm bookings, and complete services with mileage updates.
   - Automated service records: completing a booking records service history and updates vehicle mileage atomically.
   - Customer CRM: customer list, private garage notes, and tags.
+  - Contact details & messages: phone, opening hours, and mechanic name shown to booked drivers; per-booking message threads.
   - Membership plans: create tiers and approve/manage driver membership requests.
   - Invoicing: generate invoices for completed bookings and record payments received outside the app.
 - **Design & Limitations**:
@@ -86,7 +93,7 @@ The server refuses to start in production if hosted persistence is missing, so a
 - Selected mockup: `qa/selected-reference.jpg`, exact image from this task's user attachment.
 - Typography: locally bundled Inter Variable, SIL Open Font License. https://github.com/rsms/inter
 - Icons: Phosphor React, MIT License. https://github.com/phosphor-icons/react
-- Brand wordmark stays editable text, as on the original public site. No invented replacement symbol.
+- Logo: `public/assets/motodoc-logo.png` and `public/favicon.png`, resized from the user-supplied original. The wordmark beside it stays editable text.
 - Reference app: https://tidy-pixel-lab.lovable.app/
 
 Visual and interaction verification is documented in `design-qa.md`.

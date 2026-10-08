@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AuthPage } from './AuthPage.jsx';
 import { Dashboard } from './Dashboard.jsx';
+import { Brand } from './Brand.jsx';
 import {
   ArrowRightIcon, ArrowUpRightIcon, BellIcon, CalendarBlankIcon,
   CarIcon, ChartLineUpIcon, CheckCircleIcon,
@@ -35,10 +36,6 @@ const steps = [
   { icon: WrenchIcon, title: 'Choose your mechanic', text: 'Find trusted garages near you and connect with the right one.' },
   { icon: CalendarBlankIcon, title: 'Book & unlock benefits', text: 'Book services, track your history, and activate your perks.' },
 ];
-
-function Brand({ footer = false }) {
-  return <a href="#top" className={`brand${footer ? ' brand-footer' : ''}`} aria-label="MotoDoc home">MotoDoc</a>;
-}
 
 function Feature({ feature, compact = false }) {
   const Icon = feature.icon;
@@ -83,7 +80,7 @@ function LandingPage() {
     <a className="skip-link" href="#main">Skip to content</a>
     <header className="site-header" id="top">
       <div className="container header-inner">
-        <Brand />
+        <Brand href="#top" />
         <nav className="desktop-nav" aria-label="Main navigation">
           <a href="#features">Features</a><a href="#membership">Membership</a><a href="#how-it-works">How it works</a>
         </nav>
@@ -150,7 +147,7 @@ function LandingPage() {
       <section className="closing-section" aria-labelledby="closing-heading"><div className="container closing-inner"><div><span className="eyebrow">CAR CARE MADE EASY</span><h2 id="closing-heading">Your mechanic.<br />Your service. Your MotoDoc.</h2><p>Find a garage you can trust. Book services, track maintenance, and unlock member benefits — all in one app.</p></div><div className="closing-actions"><button className="button button-white" onClick={() => openStart('driver')}>Get early access <ArrowRightIcon size={20} aria-hidden="true" /></button><button className="text-link" onClick={() => openStart('garage')}>Register your garage <ArrowRightIcon size={20} aria-hidden="true" /></button></div></div></section>
     </main>
 
-    <footer className="site-footer"><div className="container"><div className="footer-main"><div className="footer-brand"><Brand footer /><p>The platform that connects drivers and garages. Digital car care, simplified.</p><a href="mailto:info@motodoc.app">info@motodoc.app</a></div>
+    <footer className="site-footer"><div className="container"><div className="footer-main"><div className="footer-brand"><Brand href="#top" className="brand-footer" /><p>The platform that connects drivers and garages. Digital car care, simplified.</p><a href="mailto:info@motodoc.app">info@motodoc.app</a></div>
       <nav aria-label="Driver links"><h3>For drivers</h3><a href="#drivers">Vehicle management</a><a href="#drivers">Service booking</a><a href="#drivers">Service history</a><a href="#drivers">Reminders</a></nav>
       <nav aria-label="Garage links"><h3>For garages</h3><a href="#garages">Customer CRM</a><a href="#garages">Booking management</a><a href="#membership">Memberships</a><a href="#garages">Analytics</a></nav>
       <nav aria-label="Company links"><h3>Company</h3><button onClick={() => setInfo('About MotoDoc')}>About</button><a href="mailto:info@motodoc.app">Contact</a><button onClick={() => setInfo('Privacy policy')}>Privacy policy</button><button onClick={() => setInfo('Terms of service')}>Terms of service</button></nav>

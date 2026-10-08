@@ -7,6 +7,9 @@ import { resolve, join } from 'node:path';
 import { openDatabase, transaction } from './database.js';
 import { openRemoteDatabase } from './remote-database.js';
 import { OAuth2Client } from 'google-auth-library';
+import { bodyOf, catalogModel, key as catalogKey, nhtsaLookup, searchMakes, searchModels } from './catalog.js';
+import { wikimediaImages } from './vehicle-images.js';
+import { vehicleArt } from './vehicle-art.js';
 
 const scrypt = promisify(scryptCallback);
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -18,6 +21,8 @@ const passwordSchema = z.string().min(8, 'Use at least 8 characters.').max(128);
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v => !isNaN(Date.parse(v)) && new Date(v).toISOString().slice(0,10) === v, 'Use a valid date.');
 const money = z.number().int().min(0).max(100000000);
 const userView = u => ({ id:u.id, name:u.name, email:u.email, role:u.role, googleLinked:!!u.google_id });
+// Reviews can only be left on a completed booking, so every one counted here is verified.
+const ratingColumns = `(SELECT ROUND(AVG(rating),1) FROM reviews WHERE garage_id=g.id) rating,(SELECT COUNT(*) FROM reviews WHERE garage_id=g.id) review_count`;
 const garageView = g => ({ ...g, services: JSON.parse(g.services), published:!!g.published });
 const fail = (status, message) => Object.assign(new Error(message), { status });
 
@@ -50,7 +55,7 @@ async function defaultVerifyGoogleToken(token, expectedClientId) {
   };
 }
 
-export async function createApp({ databasePath = resolve('data/motodoc.sqlite'), database, outboxPath = resolve('data/mailbox'), appOrigin = 'http://localhost:4173', production = false, clock = Date.now, googleClientId = process.env.GOOGLE_CLIENT_ID, verifyGoogleToken } = {}) {
+export async function createApp({ databasePath = resolve('data/motodoc.sqlite'), database, outboxPath = resolve('data/mailbox'), appOrigin = 'http://localhost:4173', production = false, clock = Date.now, googleClientId = process.env.GOOGLE_CLIENT_ID, verifyGoogleToken, vehicleLookup = nhtsaLookup(), imageLookup = wikimediaImages() } = {}) {
   if (production && !database && !process.env.TURSO_DATABASE_URL) throw new Error('Hosted database is not configured. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN.');
   const db = database || (process.env.TURSO_DATABASE_URL ? await openRemoteDatabase() : openDatabase(databasePath));
   const app = express();
@@ -95,6 +100,11 @@ export async function createApp({ databasePath = resolve('data/motodoc.sqlite'),
     next();
   },express.json({ limit:'24kb' }));
   app.get('/api/health',async (_req,res)=>res.json({ok:true}));
+  app.get('/api/catalog/art/:file',(req,res)=>{
+    const svg=vehicleArt(req.params.file.replace(/\.svg$/,''));
+    if(!svg) throw fail(404,'Illustration not found.');
+    res.set('Cache-Control','public, max-age=86400').type('image/svg+xml').send(svg);
+  });
   app.get('/api/config',async (_req,res)=>res.json({local:!production,recoveryDelivery:production?'unavailable':'local-mailbox',googleClientId:googleClientId||null}));
   app.post('/api/auth/google',async(req,res)=>{
     await rateLimit(req,'google-auth',20);
@@ -199,7 +209,44 @@ export async function createApp({ databasePath = resolve('data/motodoc.sqlite'),
   });
   app.post('/api/auth/logout',async (req,res)=>{await run('DELETE FROM sessions WHERE token_hash=?',hash(sessionToken(req)));res.clearCookie('motodoc_session',{...cookieOptions,maxAge:undefined});res.json({ok:true});});
 
-  app.get('/api/vehicles',async (req,res)=>{driverOnly(req.user);res.json(await all('SELECT * FROM vehicles WHERE owner_id=? ORDER BY make,model',req.user.id));});
+  // The bundled catalogue answers first; the public NHTSA database only fills gaps, and its failures are not errors.
+  const term=value=>String(value||'').trim().slice(0,60);
+  const fallback=async lookup=>{try{return [...new Set(await lookup)].sort((a,b)=>a.localeCompare(b,'en',{numeric:true}));}catch{return [];}};
+  app.get('/api/catalog/makes',async(req,res)=>{
+    const q=term(req.query.q),found=searchMakes(q);
+    res.json((found.length || q.length<2 ? found : await fallback(vehicleLookup.makes(q))).slice(0,80));
+  });
+  app.get('/api/catalog/models',async(req,res)=>{
+    const make=term(req.query.make),q=term(req.query.q);
+    if(!make) return res.json([]);
+    const found=searchModels(make,q);
+    res.json((found.length ? found : await fallback(vehicleLookup.models(make,q))).slice(0,80));
+  });
+  // One photo per make and model, looked up once and then served from the database, including "none found".
+  const vehicleImage=async(make,model)=>{
+    const name=catalogModel(make,model)?.name || model,cacheKey=`${catalogKey(make)}|${catalogKey(name)}`;
+    let row=await one('SELECT image_url,image_source,image_credit,image_license FROM vehicle_images WHERE key=?',cacheKey);
+    if(!row) {
+      try{row=await imageLookup(make,name) || {image_url:null,image_source:null,image_credit:null,image_license:null};}
+      catch{return {image_url:null};}
+      await run('INSERT INTO vehicle_images(key,image_url,image_source,image_credit,image_license,fetched_at) VALUES(?,?,?,?,?,?) ON CONFLICT(key) DO NOTHING',cacheKey,row.image_url,row.image_source,row.image_credit,row.image_license,new Date(clock()).toISOString());
+    }
+    return row;
+  };
+  app.get('/api/catalog/image',async(req,res)=>{
+    await rateLimit(req,'catalog-image',120);
+    const make=term(req.query.make),model=term(req.query.model);
+    if(!make || !model) throw fail(400,'Choose a make and model.');
+    res.json({...await vehicleImage(make,model),body:bodyOf(make,model)});
+  });
+  app.get('/api/vehicles',async (req,res)=>{driverOnly(req.user);res.json(await Promise.all((await all('SELECT v.*,c.oil_life,c.brake_wear,c.mot_due,c.updated_at condition_updated_at FROM vehicles v LEFT JOIN vehicle_condition c ON c.vehicle_id=v.id WHERE v.owner_id=? ORDER BY v.make,v.model',req.user.id)).map(async v=>({...v,body:bodyOf(v.make,v.model),...await vehicleImage(v.make,v.model)}))));});
+  app.put('/api/vehicles/:id/condition',async(req,res)=>{
+    driverOnly(req.user);
+    if(!await one('SELECT id FROM vehicles WHERE id=? AND owner_id=?',req.params.id,req.user.id)) throw fail(404,'Vehicle not found.');
+    const d=parse(z.object({oil_life:z.number().int().min(0).max(100).nullable(),brake_wear:z.number().int().min(0).max(100).nullable(),mot_due:dateSchema.nullable()}),req);
+    await run('INSERT INTO vehicle_condition(vehicle_id,oil_life,brake_wear,mot_due,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(vehicle_id) DO UPDATE SET oil_life=excluded.oil_life,brake_wear=excluded.brake_wear,mot_due=excluded.mot_due,updated_at=excluded.updated_at',req.params.id,d.oil_life,d.brake_wear,d.mot_due,new Date(clock()).toISOString());
+    res.json({ok:true});
+  });
   const vehicleSchema = z.object({make:text(60),model:text(60),year:z.number().int().min(1900).max(new Date().getFullYear()+1),registration:text(24).transform(v=>v.toUpperCase()),mileage:z.number().int().min(0).max(5000000)});
   app.post('/api/vehicles',async (req,res)=>{
     driverOnly(req.user);const d=parse(vehicleSchema,req),key=id();
@@ -214,21 +261,63 @@ export async function createApp({ databasePath = resolve('data/motodoc.sqlite'),
     if(await one('SELECT id FROM bookings WHERE vehicle_id=?',req.params.id)) throw fail(409,'Vehicles with bookings or service history cannot be deleted.');
     await run('DELETE FROM vehicles WHERE id=?',req.params.id);res.json({ok:true});
   });
-  app.get('/api/garages',async (req,res)=>res.json((await all('SELECT id,name,city,address,description,services,published FROM garages WHERE published=1 ORDER BY name')).map(garageView)));
-  app.get('/api/garage/profile',async (req,res)=>res.json(garageView(await ownGarage(req.user))));
+  app.get('/api/garages',async (req,res)=>res.json((await all(`SELECT g.id,g.name,g.city,g.address,g.description,g.services,g.published,${ratingColumns} FROM garages g WHERE g.published=1 ORDER BY g.name`)).map(garageView)));
+  app.get('/api/garage/profile',async (req,res)=>{
+    const g=await ownGarage(req.user);
+    res.json({...garageView(g),phone:'',opening_hours:'',mechanic_name:'',...await one('SELECT phone,opening_hours,mechanic_name FROM garage_contact WHERE garage_id=?',g.id)});
+  });
+  app.put('/api/garage/contact',async(req,res)=>{
+    const g=await ownGarage(req.user);
+    const d=parse(z.object({phone:z.string().trim().max(30).regex(/^[+\d\s().-]*$/),opening_hours:optional(200),mechanic_name:optional(100)}),req);
+    await run('INSERT INTO garage_contact(garage_id,phone,opening_hours,mechanic_name) VALUES(?,?,?,?) ON CONFLICT(garage_id) DO UPDATE SET phone=excluded.phone,opening_hours=excluded.opening_hours,mechanic_name=excluded.mechanic_name',g.id,d.phone,d.opening_hours,d.mechanic_name);
+    res.json({ok:true});
+  });
   app.put('/api/garage/profile',async (req,res)=>{
     const garage=await ownGarage(req.user);
     const d=parse(z.object({name:text(100),city:text(100),address:text(200),description:optional(1500),services:z.array(text(80)).min(1).max(20),published:z.boolean()}),req);
     await run('UPDATE garages SET name=?,city=?,address=?,description=?,services=?,published=? WHERE id=?',d.name,d.city,d.address,d.description,JSON.stringify([...new Set(d.services)]),Number(d.published),garage.id);res.json({ok:true});
   });
-  const bookingSelect = `SELECT b.*,g.name garage_name,u.name driver_name,v.make,v.model,v.registration FROM bookings b JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=b.driver_id JOIN vehicles v ON v.id=b.vehicle_id`;
+  const bookingSelect = `SELECT b.*,g.name garage_name,g.address garage_address,g.city garage_city,c.phone,c.opening_hours,c.mechanic_name,${ratingColumns},u.name driver_name,v.make,v.model,v.registration FROM bookings b JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=b.driver_id JOIN vehicles v ON v.id=b.vehicle_id LEFT JOIN garage_contact c ON c.garage_id=g.id`;
   const scopedBookings = async user => user.role==='driver' ? await all(`${bookingSelect} WHERE b.driver_id=? ORDER BY b.starts_at DESC`,user.id) : await all(`${bookingSelect} WHERE g.owner_id=? ORDER BY b.starts_at DESC`,user.id);
   app.get('/api/bookings',async (req,res)=>res.json(await scopedBookings(req.user)));
+  app.get('/api/messages',async(req,res)=>{
+    const column=req.user.role==='driver'?'b.driver_id':'g.owner_id';
+    res.json(await all(`SELECT m.*,u.name sender_name FROM messages m JOIN bookings b ON b.id=m.booking_id JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=m.sender_id WHERE ${column}=? ORDER BY m.created_at,m.id`,req.user.id));
+  });
+  app.post('/api/bookings/:id/messages',async(req,res)=>{
+    const d=parse(z.object({body:text(2000)}),req);
+    if(!(await scopedBookings(req.user)).some(b=>b.id===req.params.id)) throw fail(404,'Booking not found.');
+    const key=id();
+    await run('INSERT INTO messages(id,booking_id,sender_id,body,created_at) VALUES(?,?,?,?,?)',key,req.params.id,req.user.id,d.body,new Date(clock()).toISOString());
+    res.status(201).json({id:key});
+  });
+  const appointment = startsAt => {
+    const date=new Date(startsAt),time=date.getTime();
+    if(time<=clock() || time>clock()+366*86400000 || date.getUTCMinutes() || date.getUTCSeconds() || date.getUTCMilliseconds()) throw fail(400,'Choose a future hourly appointment within the next year.');
+    return date;
+  };
+  app.put('/api/bookings/:id/schedule',async(req,res)=>{
+    driverOnly(req.user);
+    const date=appointment(parse(z.object({starts_at:z.iso.datetime()}),req).starts_at);
+    const b=await one('SELECT status FROM bookings WHERE id=? AND driver_id=?',req.params.id,req.user.id);
+    if(!b) throw fail(404,'Booking not found.');
+    if(!['pending','confirmed'].includes(b.status)) throw fail(409,'Only upcoming bookings can be rescheduled.');
+    // A new time needs the garage's confirmation again.
+    await run("UPDATE bookings SET starts_at=?,status='pending' WHERE id=?",date.toISOString(),req.params.id);
+    res.json({ok:true});
+  });
+  app.put('/api/bookings/:id/review',async(req,res)=>{
+    driverOnly(req.user);
+    const {rating}=parse(z.object({rating:z.number().int().min(1).max(5)}),req);
+    const b=await one("SELECT garage_id FROM bookings WHERE id=? AND driver_id=? AND status='completed'",req.params.id,req.user.id);
+    if(!b) throw fail(404,'Only your completed services can be reviewed.');
+    await run('INSERT INTO reviews(booking_id,garage_id,driver_id,rating,created_at) VALUES(?,?,?,?,?) ON CONFLICT(booking_id) DO UPDATE SET rating=excluded.rating',req.params.id,b.garage_id,req.user.id,rating,new Date(clock()).toISOString());
+    res.json({ok:true});
+  });
   app.post('/api/bookings',async (req,res)=>{
     driverOnly(req.user);
     const d=parse(z.object({garage_id:z.uuid(),vehicle_id:z.uuid(),service:text(80),starts_at:z.iso.datetime(),notes:optional(1000)}),req);
-    const date=new Date(d.starts_at),time=date.getTime();
-    if(time<=clock() || time>clock()+366*86400000 || date.getUTCMinutes() || date.getUTCSeconds() || date.getUTCMilliseconds()) throw fail(400,'Choose a future hourly appointment within the next year.');
+    const date=appointment(d.starts_at);
     if(!await one('SELECT id FROM vehicles WHERE id=? AND owner_id=?',d.vehicle_id,req.user.id)) throw fail(404,'Vehicle not found.');
     const garage=await one('SELECT * FROM garages WHERE id=? AND published=1',d.garage_id);
     if(!garage || !JSON.parse(garage.services).includes(d.service)) throw fail(400,'Select a service offered by this garage.');
@@ -254,7 +343,7 @@ export async function createApp({ databasePath = resolve('data/motodoc.sqlite'),
   });
   app.get('/api/service-history',async (req,res)=>{
     const column=req.user.role==='driver'?'r.driver_id':'g.owner_id';
-    res.json(await all(`SELECT r.*,g.name garage_name,v.registration,b.service FROM service_records r JOIN garages g ON r.garage_id=g.id JOIN vehicles v ON v.id=r.vehicle_id JOIN bookings b ON b.id=r.booking_id WHERE ${column}=? ORDER BY r.performed_at DESC`,req.user.id));
+    res.json(await all(`SELECT r.*,g.name garage_name,v.registration,b.service,(SELECT rating FROM reviews WHERE booking_id=r.booking_id) rating FROM service_records r JOIN garages g ON r.garage_id=g.id JOIN vehicles v ON v.id=r.vehicle_id JOIN bookings b ON b.id=r.booking_id WHERE ${column}=? ORDER BY r.performed_at DESC`,req.user.id));
   });
   app.get('/api/plans',async (req,res)=>res.json(req.user.role==='garage'?await all('SELECT * FROM plans WHERE garage_id=?',(await ownGarage(req.user)).id):await all('SELECT p.*,g.name garage_name FROM plans p JOIN garages g ON g.id=p.garage_id WHERE p.active=1 AND g.published=1')));
   app.post('/api/plans',async (req,res)=>{
