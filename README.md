@@ -16,3 +16,7 @@ npm run dev
 This starts the API (4174), the dashboard (4180), and the landing app (4173). Open `http://localhost:4173`.
 
 `npm test` runs the backend tests and the dashboard typecheck.
+
+## Code style
+
+Run `npm ci` in the repository root to install the pinned formatter. Use `npm run format` to format source files and `npm run format:check` to check them before submitting changes. Generated files and dependency lockfiles are excluded from formatting.
