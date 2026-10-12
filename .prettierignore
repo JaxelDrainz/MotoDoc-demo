@@ -1,0 +1,11 @@
+**/node_modules/**
+**/.next/**
+**/out/**
+**/dist/**
+**/package-lock.json
+**/next-env.d.ts
+**/skills-lock.json
+**/qa/**
+**/data/**
+**/.vercel/**
+**/.agents/**

@@ -7,6 +7,11 @@
   "scripts": {
     "dev": "node dev.mjs",
     "build": "npm run build --prefix landing && npm run build --prefix dashboard-next && node -e \"require('fs').cpSync('dashboard-next/out','landing/dist/client/dashboard',{recursive:true})\"",
-    "test": "npm --prefix landing run test:backend && npm --prefix dashboard-next run typecheck"
+    "test": "npm --prefix landing run test:backend && npm --prefix dashboard-next run typecheck",
+    "format": "prettier --write \"{api,dashboard-next,landing}/**/*.{js,jsx,mjs,ts,tsx,css,html}\" dev.mjs package.json vercel.json .prettierrc.json",
+    "format:check": "prettier --check \"{api,dashboard-next,landing}/**/*.{js,jsx,mjs,ts,tsx,css,html}\" dev.mjs package.json vercel.json .prettierrc.json"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
   }
 }

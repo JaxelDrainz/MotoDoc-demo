@@ -78,10 +78,12 @@ export function openDatabase(path) {
   const db = new DatabaseSync(path);
   db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;');
   db.exec(schemaSql);
-  const userColumns = db.prepare("PRAGMA table_info(users)").all();
-  if (!userColumns.some(c => c.name === 'google_id')) {
+  const userColumns = db.prepare('PRAGMA table_info(users)').all();
+  if (!userColumns.some((c) => c.name === 'google_id')) {
     db.exec('ALTER TABLE users ADD COLUMN google_id TEXT;');
-    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL;');
+    db.exec(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL;',
+    );
   }
   return db;
 }
@@ -89,6 +91,12 @@ export function openDatabase(path) {
 export async function transaction(db, fn) {
   if (db.withTransaction) return db.withTransaction(fn);
   db.exec('BEGIN IMMEDIATE');
-  try { const result = await fn(); db.exec('COMMIT'); return result; }
-  catch (error) { db.exec('ROLLBACK'); throw error; }
+  try {
+    const result = await fn();
+    db.exec('COMMIT');
+    return result;
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
