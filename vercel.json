@@ -6,6 +6,17 @@
   "outputDirectory": "landing/dist/client",
   "redirects": [
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "moto-doc-demo.vercel.app"
+        }
+      ],
+      "destination": "https://motodoc-demo.vercel.app",
+      "permanent": false
+    },
+    {
       "source": "/:path*",
       "has": [
         {
