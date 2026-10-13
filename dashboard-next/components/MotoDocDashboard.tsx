@@ -1,10 +1,19 @@
 'use client';
 
 import Image from 'next/image';
-import { useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import PixelFill, { usePixelFill } from './PixelFill';
 import { Bell, MileageTrend, SlotPicker, StatusBadge, ThemeToggle } from './DashParts';
 import {
+  CircleAlert,
   CalendarDays,
   CalendarPlus,
   CarFront,
@@ -302,6 +311,26 @@ export default function MotoDocDashboard({
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [noticeKind, setNoticeKind] = useState<'success' | 'error'>('success');
+  const say = (message: string, kind: 'success' | 'error' = 'success') => {
+    setNoticeKind(kind);
+    setNotice(message);
+  };
+  useEffect(() => {
+    try {
+      const pending = window.sessionStorage.getItem('motodoc-flash');
+      if (!pending) return;
+      window.sessionStorage.removeItem('motodoc-flash');
+      const { message, kind } = JSON.parse(pending);
+      setNoticeKind(kind === 'error' ? 'error' : 'success');
+      setNotice(String(message));
+    } catch {}
+  }, []);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(''), noticeKind === 'error' ? 7000 : 4500);
+    return () => window.clearTimeout(timer);
+  }, [notice, noticeKind]);
   const [error, setError] = useState('');
   const [openedAt] = useState(() => Date.now());
   const dialog = useRef<HTMLDialogElement>(null);
@@ -353,9 +382,12 @@ export default function MotoDocDashboard({
     try {
       await action();
       if (!keepOpen) closeDialog();
-      setNotice(done);
+      if (done) say(done);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Something went wrong. Please try again.');
+      const message =
+        cause instanceof Error ? cause.message : 'Something went wrong. Please try again.';
+      setError(message);
+      say(message, 'error');
     } finally {
       setBusy(false);
     }
@@ -405,7 +437,7 @@ export default function MotoDocDashboard({
         className={outlineButton}
         onClick={() => {
           downloadCalendar(booking);
-          setNotice('Calendar file downloaded. Open it to add your service.');
+          say('Calendar file downloaded. Open it to add your service.');
         }}
       >
         <CalendarDays size={17} aria-hidden="true" />
@@ -880,8 +912,15 @@ export default function MotoDocDashboard({
         className="fixed bottom-5 left-1/2 z-40 w-[calc(100%-2.5rem)] max-w-md -translate-x-1/2"
       >
         {notice && (
-          <div className="md-toast flex items-center gap-3 rounded-xl border border-[#cde3d8] bg-white px-4 py-3 text-sm shadow-lg">
-            <Check className="h-5 w-5 shrink-0 text-[#087658]" aria-hidden="true" />
+          <div
+            role={noticeKind === 'error' ? 'alert' : 'status'}
+            className={`md-toast flex items-center gap-3 rounded-xl border bg-white px-4 py-3 text-sm shadow-lg ${noticeKind === 'error' ? 'border-[#f1c4bf]' : 'border-[#cde3d8]'}`}
+          >
+            {noticeKind === 'error' ? (
+              <CircleAlert className="h-5 w-5 shrink-0 text-red-700" aria-hidden="true" />
+            ) : (
+              <Check className="h-5 w-5 shrink-0 text-[#087658]" aria-hidden="true" />
+            )}
             <span className="flex-1">{notice}</span>
             <button
               aria-label="Dismiss notification"

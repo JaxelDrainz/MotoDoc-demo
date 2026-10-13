@@ -1,0 +1,87 @@
+.toasts {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 100;
+  display: grid;
+  gap: 10px;
+  width: min(440px, calc(100% - 32px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 12px 13px 16px;
+  border: 1px solid #cde3d8;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 14px 40px #10251c24;
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.45;
+  pointer-events: auto;
+  animation: toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.toast > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #087658;
+}
+.toast > span {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.toast > button {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: -3px 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: #626a72;
+}
+.toast > button:hover {
+  background: #f1f4f3;
+}
+.toast-error {
+  border-color: #f1c4bf;
+}
+.toast-error > svg {
+  color: #b3261e;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+:root[data-theme='dark']:has(.dashboard) .toast {
+  border-color: #26332d;
+  background: #1a2520;
+  color: #e7efe9;
+}
+:root[data-theme='dark']:has(.dashboard) .toast > svg {
+  color: #34d399;
+}
+:root[data-theme='dark']:has(.dashboard) .toast-error > svg {
+  color: #f59a92;
+}
+:root[data-theme='dark']:has(.dashboard) .toast > button {
+  color: #9aa9a1;
+}
+@media (max-width: 760px) {
+  body:has(.dash-bottom-nav) .toasts {
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}
