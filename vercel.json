@@ -4,6 +4,19 @@
   "installCommand": "npm install --prefix landing && npm install --prefix dashboard-next",
   "buildCommand": "npm run build",
   "outputDirectory": "landing/dist/client",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "moto-doc-demo.vercel.app"
+        }
+      ],
+      "destination": "https://motodoc-demo.vercel.app/:path*",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",
