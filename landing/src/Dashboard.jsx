@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowRightIcon,
+  DotsThreeIcon,
+  WarningCircleIcon,
   BellIcon,
   ChatCircleIcon,
   GaugeIcon,
@@ -22,6 +24,7 @@ import {
 } from '@phosphor-icons/react';
 import { api } from './api.js';
 import { Brand } from './Brand.jsx';
+import { Bell, SlotPicker, Status, ThemeToggle } from './DashParts.jsx';
 import './dashboard.css';
 
 const euro = (cents) =>
@@ -176,55 +179,63 @@ function FormDialog({ config, onClose, onSave }) {
         onBlur={showCar}
         onChange={showCar}
       >
-        {(config.fields || []).map((f) => (
-          <label className="dash-field" key={f.name}>
-            {f.label}
-            {f.required && <span className="required"> *</span>}
-            {f.options ? (
-              <select
-                name={f.name}
-                required={f.required}
-                defaultValue={config.values?.[f.name] || ''}
-              >
-                <option value="">Choose…</option>
-                {f.options.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            ) : f.type === 'textarea' ? (
-              <textarea
-                name={f.name}
-                required={f.required}
-                maxLength={f.maxLength || 2000}
-                defaultValue={config.values?.[f.name] || ''}
-                rows={3}
-              />
-            ) : (
-              <input
-                name={f.name}
-                type={f.type || 'text'}
-                required={f.required}
-                min={f.min}
-                max={f.max}
-                step={f.step}
-                maxLength={f.maxLength}
-                placeholder={f.placeholder}
-                autoComplete={f.suggest ? 'off' : undefined}
-                list={f.suggest ? `dash-${f.name}-options` : undefined}
-                defaultValue={config.values?.[f.name] ?? ''}
-              />
-            )}
-            {f.suggest && (
-              <datalist id={`dash-${f.name}-options`}>
-                {(suggestions[f.name] || []).map((o) => (
-                  <option key={o} value={o} />
-                ))}
-              </datalist>
-            )}
-          </label>
-        ))}
+        {(config.fields || []).map((f) =>
+          f.type === 'slots' ? (
+            <div className="dash-field" key={f.name}>
+              {f.label}
+              <span className="required"> *</span>
+              <SlotPicker garageId={f.garageId} name={f.name} />
+            </div>
+          ) : (
+            <label className="dash-field" key={f.name}>
+              {f.label}
+              {f.required && <span className="required"> *</span>}
+              {f.options ? (
+                <select
+                  name={f.name}
+                  required={f.required}
+                  defaultValue={config.values?.[f.name] || ''}
+                >
+                  <option value="">Choose…</option>
+                  {f.options.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              ) : f.type === 'textarea' ? (
+                <textarea
+                  name={f.name}
+                  required={f.required}
+                  maxLength={f.maxLength || 2000}
+                  defaultValue={config.values?.[f.name] || ''}
+                  rows={3}
+                />
+              ) : (
+                <input
+                  name={f.name}
+                  type={f.type || 'text'}
+                  required={f.required}
+                  min={f.min}
+                  max={f.max}
+                  step={f.step}
+                  maxLength={f.maxLength}
+                  placeholder={f.placeholder}
+                  autoComplete={f.suggest ? 'off' : undefined}
+                  list={f.suggest ? `dash-${f.name}-options` : undefined}
+                  defaultValue={config.values?.[f.name] ?? ''}
+                />
+              )}
+              {f.suggest && (
+                <datalist id={`dash-${f.name}-options`}>
+                  {(suggestions[f.name] || []).map((o) => (
+                    <option key={o} value={o} />
+                  ))}
+                </datalist>
+              )}
+            </label>
+          ),
+        )}
         {preview && <CarPicture vehicle={preview} className="dash-preview" />}
         {error && (
           <p role="alert" className="dash-error">
@@ -244,20 +255,13 @@ function FormDialog({ config, onClose, onSave }) {
   );
 }
 function CarPicture({ vehicle, className = '' }) {
+  const photo = vehicle.image_url;
   return (
     <figure className={`dash-car ${className}`.trim()}>
-      {vehicle.image_url ? (
-        <img className="dash-car-photo" src={vehicle.image_url} alt="" loading="lazy" />
-      ) : (
-        <img
-          className="dash-vehicle-art"
-          src={`/api/catalog/art/${vehicle.body || 'car'}.svg`}
-          alt=""
-          width="160"
-          height="68"
-        />
-      )}
-      {vehicle.image_url && (
+      <div className={`dash-car-frame ${photo ? 'photo' : 'art'}`}>
+        <img src={photo || `/api/catalog/art/${vehicle.body || 'car'}.svg`} alt="" loading="lazy" />
+      </div>
+      {photo && (
         <figcaption>
           <a href={vehicle.image_source} target="_blank" rel="noreferrer">
             Photo: {vehicle.image_credit}
@@ -268,18 +272,147 @@ function CarPicture({ vehicle, className = '' }) {
     </figure>
   );
 }
+function Avatar({ name, photo, className = '' }) {
+  return photo ? (
+    <img className={`dash-avatar ${className}`.trim()} src={photo} alt="" />
+  ) : (
+    <span className={`dash-avatar ${className}`.trim()}>{name.slice(0, 1).toUpperCase()}</span>
+  );
+}
+function PhotoUpload({ user, onChange }) {
+  const input = useRef(null),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  async function save(work, message) {
+    setBusy(true);
+    setError('');
+    try {
+      await work();
+      await onChange(message);
+    } catch (e) {
+      setError(e.status ? e.message : 'That image could not be used. Try a JPG or PNG.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  function choose(event) {
+    const file = event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+    save(async () => {
+      const bitmap = await createImageBitmap(file),
+        side = Math.min(bitmap.width, bitmap.height),
+        canvas = document.createElement('canvas'),
+        context = canvas.getContext('2d');
+      canvas.width = canvas.height = 160;
+      context.fillStyle = '#fff';
+      context.fillRect(0, 0, 160, 160);
+      context.drawImage(
+        bitmap,
+        (bitmap.width - side) / 2,
+        (bitmap.height - side) / 2,
+        side,
+        side,
+        0,
+        0,
+        160,
+        160,
+      );
+      await api('/account/photo', {
+        method: 'PUT',
+        body: { image: canvas.toDataURL('image/jpeg', 0.82) },
+      });
+    }, 'Photo updated.');
+  }
+  return (
+    <div className="dash-photo">
+      <Avatar name={user.name} photo={user.photo} className="large" />
+      <div>
+        <div className="dash-tile-actions">
+          <button className="dash-secondary" disabled={busy} onClick={() => input.current.click()}>
+            {busy ? 'Saving…' : user.photo ? 'Change photo' : 'Upload a photo'}
+          </button>
+          {user.photo && (
+            <button
+              className="dash-text-button muted"
+              disabled={busy}
+              onClick={() =>
+                save(() => api('/account/photo', { method: 'DELETE', body: {} }), 'Photo removed.')
+              }
+            >
+              Remove
+            </button>
+          )}
+        </div>
+        <input
+          ref={input}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          hidden
+          onChange={choose}
+        />
+        {error && (
+          <p role="alert" className="dash-error">
+            {error}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 function Empty({ icon: Icon = WrenchIcon, title, children, action }) {
   return (
     <div className="dash-empty">
-      <Icon size={34} weight="regular" />
+      <span className="dash-empty-art" aria-hidden="true">
+        <Icon size={34} weight="regular" />
+      </span>
       <h3>{title}</h3>
       <p>{children}</p>
       {action}
     </div>
   );
 }
-function Status({ children }) {
-  return <span className={`dash-status status-${children}`}>{children}</span>;
+function Skeleton() {
+  return (
+    <div className="dashboard" aria-busy="true">
+      <aside className="dash-sidebar">
+        <Brand />
+      </aside>
+      <main className="dash-main">
+        <p role="status" className="dash-visually-hidden">
+          Loading your MotoDoc…
+        </p>
+        <div className="dash-skeleton header" />
+        <div className="dash-stats">
+          <div className="dash-skeleton stat" />
+          <div className="dash-skeleton stat" />
+          <div className="dash-skeleton stat" />
+        </div>
+        <div className="dash-skeleton list" />
+      </main>
+    </div>
+  );
+}
+function MoreSheet({ children, onClose }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const sheet = ref.current;
+    sheet.showModal();
+    return () => sheet.close();
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className="dash-more"
+      aria-label="More sections"
+      onCancel={onClose}
+      onClick={(event) => {
+        if (event.target === ref.current || event.target.closest('a')) onClose();
+      }}
+    >
+      {children}
+    </dialog>
+  );
 }
 
 function ConnectGoogle({ onLinked }) {
@@ -348,11 +481,24 @@ export function Dashboard() {
     document.title = 'Your account — MotoDoc';
   }, []);
 
-  const [opening, setOpening] = useState(true);
+  const [opening, setOpening] = useState(() => {
+    try {
+      return !sessionStorage.getItem('motodoc-opened');
+    } catch {
+      return true;
+    }
+  });
   useEffect(() => {
-    const timer = setTimeout(() => setOpening(false), 1000);
+    if (!opening) return;
+    const timer = setTimeout(() => {
+      setOpening(false);
+      try {
+        sessionStorage.setItem('motodoc-opened', '1');
+      } catch {}
+    }, 700);
     return () => clearTimeout(timer);
-  }, []);
+  }, [opening]);
+  const [more, setMore] = useState(false);
   const [user, setUser] = useState(null),
     [data, setData] = useState(null),
     [error, setError] = useState(''),
@@ -426,6 +572,22 @@ export function Dashboard() {
     ['account', LockKeyIcon, 'Account'],
   ];
   const selected = nav.some((n) => n[0] === view) ? view : 'overview';
+  const quick = isGarage
+    ? { overview: 'Overview', bookings: 'Bookings', customers: 'Customers', profile: 'Profile' }
+    : { overview: 'Overview', vehicles: 'Vehicles', garages: 'Garages', bookings: 'Bookings' };
+  const go = (target, label) => (
+    <button className="button button-small" onClick={() => navigate(target)}>
+      {label} <ArrowRightIcon size={16} />
+    </button>
+  );
+  const logout = async () => {
+    try {
+      await api('/auth/logout', { method: 'POST', body: {} });
+      location.assign('/login');
+    } catch (e) {
+      setError(e.message);
+    }
+  };
   const act = (path, body, method = 'POST') => api(path, { method, body });
   function changeVehicle(v) {
     open({
@@ -447,8 +609,8 @@ export function Dashboard() {
     }
     open({
       title: `Book ${g.name}`,
-      note: 'Choose an hourly appointment in your local time. The garage will confirm your request.',
-      values: { starts_at: tomorrow(), vehicle_id: data.vehicles[0].id, service: g.services[0] },
+      note: 'Pick a free hour in your local time. The garage will confirm your request.',
+      values: { vehicle_id: data.vehicles[0].id, service: g.services[0] },
       fields: [
         {
           name: 'vehicle_id',
@@ -468,9 +630,8 @@ export function Dashboard() {
         {
           name: 'starts_at',
           label: 'Appointment',
-          type: 'datetime-local',
-          step: 3600,
-          required: true,
+          type: 'slots',
+          garageId: g.id,
         },
         {
           name: 'notes',
@@ -480,8 +641,10 @@ export function Dashboard() {
         },
       ],
       submit: 'Request booking',
-      save: (d) =>
-        act('/bookings', { ...d, garage_id: g.id, starts_at: new Date(d.starts_at).toISOString() }),
+      save: (d) => {
+        if (!d.starts_at) throw new Error('Choose an appointment time.');
+        return act('/bookings', { ...d, garage_id: g.id });
+      },
     });
   }
   function bookingAction(b, status) {
@@ -580,6 +743,7 @@ export function Dashboard() {
         <ul className="dash-thread">
           {thread.map((m) => (
             <li key={m.id} className={m.sender_id === user.id ? 'mine' : ''}>
+              <Avatar name={m.sender_name} photo={m.sender_photo} className="small" />
               <p>{m.body}</p>
               <small>
                 {m.sender_id === user.id ? 'You' : m.sender_name} · {time(m.created_at)}
@@ -643,9 +807,11 @@ export function Dashboard() {
       <div className="dash-list">
         {bookings.map((b) => (
           <article className="dash-row" key={b.id}>
-            <div className="dash-row-icon">
-              <WrenchIcon size={23} />
-            </div>
+            <Avatar
+              name={isGarage ? b.driver_name : b.garage_name}
+              photo={isGarage ? b.driver_photo : b.garage_photo}
+              className="row"
+            />
             <div className="dash-row-body">
               <div className="dash-row-title">
                 <h3>{b.service}</h3>
@@ -690,11 +856,31 @@ export function Dashboard() {
     );
   }
 
-  if (!user || !data || opening)
+  if (!user || !data) {
+    if (error || !loading)
+      return (
+        <main className="dash-fault">
+          <Empty
+            icon={WarningCircleIcon}
+            title="MotoDoc could not open"
+            action={
+              <button className="button button-small" onClick={() => location.reload()}>
+                Try again
+              </button>
+            }
+          >
+            {error || 'Your account could not be loaded.'}
+          </Empty>
+          <a href="/login">Return to login</a>
+        </main>
+      );
+    if (!opening) return <Skeleton />;
+  }
+  if (opening)
     return (
       <main className="md-splash">
         <div className="md-splash-logo">
-          <img src="/assets/motodoc-logo.png" alt="" />
+          <img src="/assets/motodoc-logo.svg" alt="" />
         </div>
         <p className="md-splash-name">MotoDoc</p>
         <div className="md-splash-pixels" aria-hidden="true">
@@ -705,9 +891,8 @@ export function Dashboard() {
           <span />
         </div>
         <p role="status" className="md-splash-status">
-          {error || 'Opening your MotoDoc…'}
+          Opening your MotoDoc…
         </p>
-        {!loading && (!user || !data) && <a href="/login">Return to login</a>}
       </main>
     );
   return (
@@ -735,7 +920,9 @@ export function Dashboard() {
           )}
         </nav>
         <div className="dash-account">
-          <span className="dash-avatar">{user.name.slice(0, 1).toUpperCase()}</span>
+          <Bell />
+          <Avatar name={user.name} photo={user.photo} />
+          <ThemeToggle />
           <div>
             <strong>{user.name}</strong>
             <small>{user.email}</small>
@@ -929,7 +1116,15 @@ export function Dashboard() {
                 ))}
               </div>
             ) : (
-              <Empty icon={CarIcon} title="Your garage starts here">
+              <Empty
+                icon={CarIcon}
+                title="Your garage starts here"
+                action={
+                  <button className="button button-small" onClick={() => changeVehicle()}>
+                    Add your first vehicle <ArrowRightIcon size={16} />
+                  </button>
+                }
+              >
                 Add your first car to keep its details and service records together.
               </Empty>
             )}
@@ -990,6 +1185,13 @@ export function Dashboard() {
               <Empty
                 icon={StorefrontIcon}
                 title={search ? 'No matching garages' : 'No garages listed yet'}
+                action={
+                  search && (
+                    <button className="button button-small" onClick={() => setSearch('')}>
+                      Show all garages
+                    </button>
+                  )
+                }
               >
                 {search
                   ? 'Try a different name or service.'
@@ -1056,7 +1258,15 @@ export function Dashboard() {
             {data.bookings.length ? (
               rows(data.bookings)
             ) : (
-              <Empty icon={CalendarBlankIcon} title="No bookings yet">
+              <Empty
+                icon={CalendarBlankIcon}
+                title="No bookings yet"
+                action={
+                  isGarage
+                    ? go('profile', 'Check your public profile')
+                    : go('garages', 'Find a garage')
+                }
+              >
                 Your service requests and confirmations will appear here.
               </Empty>
             )}
@@ -1083,7 +1293,11 @@ export function Dashboard() {
               ))}
             </div>
           ) : (
-            <Empty icon={ClockCounterClockwiseIcon} title="Every service tells a story">
+            <Empty
+              icon={ClockCounterClockwiseIcon}
+              title="Every service tells a story"
+              action={isGarage ? go('bookings', 'View bookings') : go('garages', 'Book a service')}
+            >
               When a garage completes a booking, its service record appears here automatically.
             </Empty>
           ))}
@@ -1093,7 +1307,7 @@ export function Dashboard() {
             <div className="dash-list">
               {data.customers.map((c) => (
                 <article className="dash-row" key={c.id}>
-                  <span className="dash-avatar">{c.name[0]}</span>
+                  <Avatar name={c.name} photo={c.photo} className="row" />
                   <div className="dash-row-body">
                     <h3>{c.name}</h3>
                     <p>
@@ -1128,7 +1342,11 @@ export function Dashboard() {
               ))}
             </div>
           ) : (
-            <Empty icon={UsersIcon} title="Your customers, connected">
+            <Empty
+              icon={UsersIcon}
+              title="Your customers, connected"
+              action={go('profile', 'Check your public profile')}
+            >
               Drivers who book with your garage will appear here.
             </Empty>
           ))}
@@ -1211,7 +1429,11 @@ export function Dashboard() {
                 ))}
               </div>
             ) : (
-              <Empty icon={GiftIcon} title="No plans yet">
+              <Empty
+                icon={GiftIcon}
+                title="No plans yet"
+                action={!isGarage && go('garages', 'Find a garage')}
+              >
                 Membership offers from listed garages will appear here.
               </Empty>
             )}
@@ -1352,7 +1574,11 @@ export function Dashboard() {
                 ))}
               </div>
             ) : (
-              <Empty icon={ReceiptIcon} title="No invoices yet">
+              <Empty
+                icon={ReceiptIcon}
+                title="No invoices yet"
+                action={go('bookings', 'View bookings')}
+              >
                 Invoices can be created after a booking has been completed.
               </Empty>
             )}
@@ -1433,6 +1659,21 @@ export function Dashboard() {
             <p>
               {user.name} · {user.email}
             </p>
+            <h3>{isGarage ? 'Garage photo or logo' : 'Profile photo'}</h3>
+            <p>
+              {isGarage
+                ? 'Shown to drivers on their workshop card and in messages.'
+                : 'Shown to garages you book with and in messages.'}
+            </p>
+            <PhotoUpload
+              user={user}
+              onChange={async (message) => {
+                const result = await api('/auth/me');
+                setUser(result.user);
+                await load(result.user);
+                setNotice(message);
+              }}
+            />
             <h3>Google Sign-In</h3>
             {user.googleLinked ? (
               <p>Connected. You can use Google to sign in to this account.</p>
@@ -1454,6 +1695,46 @@ export function Dashboard() {
           </article>
         )}
       </main>
+      <nav className="dash-bottom-nav" aria-label="Quick navigation">
+        {nav
+          .filter(([key]) => quick[key])
+          .map(([key, Icon]) => (
+            <a href={`#${key}`} aria-current={selected === key ? 'page' : undefined} key={key}>
+              <Icon size={22} />
+              <span>{quick[key]}</span>
+            </a>
+          ))}
+        <button
+          aria-haspopup="dialog"
+          aria-current={quick[selected] ? undefined : 'page'}
+          onClick={() => setMore(true)}
+        >
+          <DotsThreeIcon size={22} weight="bold" />
+          <span>More</span>
+        </button>
+      </nav>
+      {more && (
+        <MoreSheet onClose={() => setMore(false)}>
+          {nav
+            .filter(([key]) => !quick[key])
+            .map(([key, Icon, label]) => (
+              <a href={`#${key}`} aria-current={selected === key ? 'page' : undefined} key={key}>
+                <Icon size={21} />
+                {label}
+              </a>
+            ))}
+          {!isGarage && (
+            <a href="/dashboard">
+              <GaugeIcon size={21} />
+              Car dashboard
+            </a>
+          )}
+          <button onClick={logout}>
+            <SignOutIcon size={21} />
+            Log out
+          </button>
+        </MoreSheet>
+      )}
       {dialog && (
         <FormDialog
           config={dialog}

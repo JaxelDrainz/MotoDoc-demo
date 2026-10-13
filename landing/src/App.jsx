@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AuthPage } from './AuthPage.jsx';
 import { Dashboard } from './Dashboard.jsx';
 import { Brand } from './Brand.jsx';
+import { InfoPage, Proof } from './Pages.jsx';
 import {
   ArrowRightIcon,
   ArrowUpRightIcon,
@@ -462,6 +463,7 @@ function LandingPage() {
           </div>
         </section>
 
+        <Proof />
         <section className="closing-section" aria-labelledby="closing-heading">
           <div className="container closing-inner">
             <div>
@@ -513,9 +515,9 @@ function LandingPage() {
             <nav aria-label="Company links">
               <h3>Company</h3>
               <button onClick={() => setInfo('About MotoDoc')}>About</button>
-              <a href="mailto:info@motodoc.app">Contact</a>
-              <button onClick={() => setInfo('Privacy policy')}>Privacy policy</button>
-              <button onClick={() => setInfo('Terms of service')}>Terms of service</button>
+              <a href="/contact">Contact</a>
+              <a href="/privacy">Privacy policy</a>
+              <a href="/terms">Terms of service</a>
             </nav>
           </div>
           <div className="footer-bottom">
@@ -532,6 +534,7 @@ function LandingPage() {
 export function App() {
   const path = window.location.pathname.replace(/\/$/, '');
   if (path === '/app') return <Dashboard />;
+  if (['/privacy', '/terms', '/contact'].includes(path)) return <InfoPage kind={path.slice(1)} />;
   if (path === '/reset-password') return <AuthPage mode="reset" />;
   if (path === '/login' || path === '/auth') return <AuthPage mode="login" />;
   if (path === '/signup') return <AuthPage mode="signup" />;

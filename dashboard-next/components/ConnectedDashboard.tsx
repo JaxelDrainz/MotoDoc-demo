@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { CircleAlert } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
 import { BASE_PATH } from '../lib/paths';
 import Splash from './Splash';
@@ -18,6 +19,7 @@ interface ApiUser {
   name: string;
   email: string;
   role: 'driver' | 'garage';
+  photo: string | null;
 }
 interface ApiVehicle {
   id: string;
@@ -37,6 +39,7 @@ interface ApiVehicle {
 interface ApiBooking {
   id: string;
   vehicle_id: string;
+  garage_id: string;
   service: string;
   starts_at: string;
   status: BookingStatus;
@@ -46,6 +49,7 @@ interface ApiBooking {
   phone: string | null;
   opening_hours: string | null;
   mechanic_name: string | null;
+  garage_photo: string | null;
   rating: number | null;
   review_count: number;
 }
@@ -65,6 +69,7 @@ interface ApiMessage {
   booking_id: string;
   sender_id: string;
   sender_name: string;
+  sender_photo: string | null;
   body: string;
   created_at: string;
 }
@@ -78,14 +83,12 @@ interface Data {
 
 const APP_HREF = '/app';
 const LOGIN_HREF = '/login';
-const SPLASH_MS = 1000;
+const SPLASH_MS = 700;
+const OPENED_KEY = 'motodoc-opened';
 
-const studioImage = (v: ApiVehicle) =>
-  /volvo/i.test(v.make) && /xc60/i.test(v.model) ? `${BASE_PATH}/images/volvo-xc60.png` : undefined;
-const vehicleImage = (v: ApiVehicle) =>
-  studioImage(v) ?? v.image_url ?? `/api/catalog/art/${v.body ?? 'car'}.svg`;
+const vehicleImage = (v: ApiVehicle) => v.image_url ?? `/api/catalog/art/${v.body ?? 'car'}.svg`;
 const imageCredit = (v: ApiVehicle) =>
-  !studioImage(v) && v.image_url && v.image_source
+  v.image_url && v.image_source
     ? { label: [v.image_credit, v.image_license].filter(Boolean).join(' · '), href: v.image_source }
     : undefined;
 const daysUntil = (day: string) =>
@@ -124,6 +127,7 @@ export default function ConnectedDashboard() {
       bookings: bookings.map((b) => ({
         id: b.id,
         vehicleId: b.vehicle_id,
+        garageId: b.garage_id,
         title: b.service,
         startsAt: b.starts_at,
         durationMinutes: 60,
@@ -132,6 +136,7 @@ export default function ConnectedDashboard() {
           name: b.garage_name,
           address: [b.garage_address, b.garage_city].filter(Boolean).join(', '),
           mechanicName: b.mechanic_name ?? '',
+          photo: b.garage_photo,
           openingHours: b.opening_hours ?? '',
           phoneNumber: b.phone ?? '',
           rating: b.rating,
@@ -153,6 +158,7 @@ export default function ConnectedDashboard() {
         id: m.id,
         bookingId: m.booking_id,
         senderName: m.sender_name,
+        senderPhoto: m.sender_photo,
         mine: m.sender_id === user.id,
         body: m.body,
         sentAt: m.created_at,
@@ -171,7 +177,12 @@ export default function ConnectedDashboard() {
 
   const [opening, setOpening] = useState(true);
   useEffect(() => {
-    const timer = window.setTimeout(() => setOpening(false), SPLASH_MS);
+    let seen = false;
+    try {
+      seen = !!window.sessionStorage.getItem(OPENED_KEY);
+      window.sessionStorage.setItem(OPENED_KEY, '1');
+    } catch {}
+    const timer = window.setTimeout(() => setOpening(false), seen ? 0 : SPLASH_MS);
     return () => window.clearTimeout(timer);
   }, []);
 
@@ -180,29 +191,56 @@ export default function ConnectedDashboard() {
     await load();
   };
 
-  if (!data || opening)
+  if (error && !data)
     return (
-      <Splash message={error || 'Opening your MotoDoc…'}>
-        {error && (
-          <div className="flex gap-4">
-            <button
-              onClick={() => {
-                setError('');
-                open();
-              }}
-            >
-              Try again
-            </button>
-            <a href={LOGIN_HREF}>Return to login</a>
+      <main className="flex min-h-screen flex-col items-center justify-center gap-5 px-5 text-center">
+        <span className="md-empty-art relative flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-[20px] bg-[#eaf6f0] text-[#087658]">
+          <CircleAlert size={34} aria-hidden="true" />
+        </span>
+        <div>
+          <h1 className="text-[19px] font-medium">MotoDoc could not open</h1>
+          <p role="alert" className="mt-2 max-w-sm text-[15px] leading-6 text-[#626a72]">
+            {error}
+          </p>
+        </div>
+        <div className="flex items-center gap-5 text-sm font-medium text-[#087658]">
+          <button
+            className="inline-flex min-h-10 items-center rounded-full border border-[#087658] px-4 hover:bg-[#eaf6f0]"
+            onClick={() => {
+              setError('');
+              open();
+            }}
+          >
+            Try again
+          </button>
+          <a className="underline-offset-4 hover:underline" href={LOGIN_HREF}>
+            Return to login
+          </a>
+        </div>
+      </main>
+    );
+  if (opening) return <Splash message="Opening your MotoDoc…" />;
+  if (!data)
+    return (
+      <div aria-busy="true" className="min-h-screen bg-[#f4f8fa]">
+        <p role="status" className="sr-only">
+          Loading your MotoDoc…
+        </p>
+        <div className="h-[90px] border-b border-[#dce1e5] bg-white" />
+        <div className="mx-auto max-w-[1104px] px-5 pt-7 sm:pt-[44px] min-[1180px]:px-0">
+          <div className="md-skeleton h-[354px] rounded-3xl" />
+          <div className="mt-6 grid gap-7 md:grid-cols-2">
+            <div className="md-skeleton h-[250px] rounded-xl" />
+            <div className="md-skeleton h-[250px] rounded-xl" />
           </div>
-        )}
-      </Splash>
+        </div>
+      </div>
     );
 
   return (
     <MotoDocDashboard
       {...data}
-      logoSrc={`${BASE_PATH}/images/motodoc-logo.png`}
+      logoSrc={`${BASE_PATH}/images/motodoc-logo.svg`}
       appHref={APP_HREF}
       onReschedule={(id, startsAt) =>
         save(`/bookings/${id}/schedule`, 'PUT', { starts_at: startsAt })

@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-const CARDS =
-  '.feature,.appointment-card,.auth-card,.dash-page-header,.dash-stats article,.dash-tile,.dash-list,.dash-empty,.dash-overview-note';
+const CARDS = '.feature,.dash-page-header,.dash-stats article,.dash-tile';
 const CELL = 16;
 const DURATION_MS = 450;
 const GREENS = ['#8AC9AC', '#A7F3D0'];
