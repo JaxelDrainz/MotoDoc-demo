@@ -25,6 +25,7 @@ import {
 import { api } from './api.js';
 import { Brand } from './Brand.jsx';
 import { Bell, SlotPicker, Status, ThemeToggle } from './DashParts.jsx';
+import { flash, toast } from './Toasts.jsx';
 import './dashboard.css';
 
 const euro = (cents) =>
@@ -145,6 +146,7 @@ function FormDialog({ config, onClose, onSave }) {
       onClose();
     } catch (err) {
       setError(err.message);
+      toast(err.message, 'error');
     } finally {
       setBusy(false);
     }
@@ -290,7 +292,9 @@ function PhotoUpload({ user, onChange }) {
       await work();
       await onChange(message);
     } catch (e) {
-      setError(e.status ? e.message : 'That image could not be used. Try a JPG or PNG.');
+      const message = e.status ? e.message : 'That image could not be used. Try a JPG or PNG.';
+      setError(message);
+      toast(message, 'error');
     } finally {
       setBusy(false);
     }
@@ -495,10 +499,15 @@ export function Dashboard() {
       try {
         sessionStorage.setItem('motodoc-opened', '1');
       } catch {}
-    }, 700);
+    }, 400);
     return () => clearTimeout(timer);
   }, [opening]);
   const [more, setMore] = useState(false);
+  useEffect(() => {
+    if (!notice) return;
+    toast(notice);
+    setNotice('');
+  }, [notice]);
   const [user, setUser] = useState(null),
     [data, setData] = useState(null),
     [error, setError] = useState(''),
@@ -583,6 +592,7 @@ export function Dashboard() {
   const logout = async () => {
     try {
       await api('/auth/logout', { method: 'POST', body: {} });
+      flash('You have been signed out.');
       location.assign('/login');
     } catch (e) {
       setError(e.message);
@@ -933,6 +943,7 @@ export function Dashboard() {
             onClick={async () => {
               try {
                 await act('/auth/logout', {});
+                flash('You have been signed out.');
                 location.assign('/login');
               } catch (e) {
                 setError(e.message);
@@ -972,19 +983,6 @@ export function Dashboard() {
             <span /> Connected
           </span>
         </header>
-        {notice && (
-          <div role="status" className="dash-notice">
-            <CheckCircleIcon size={18} />
-            {notice}
-            <button
-              className="icon-button"
-              aria-label="Dismiss notification"
-              onClick={() => setNotice('')}
-            >
-              <XIcon size={17} />
-            </button>
-          </div>
-        )}
         {error && (
           <div role="alert" className="dash-error">
             {error}

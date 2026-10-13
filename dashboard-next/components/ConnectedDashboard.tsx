@@ -83,7 +83,7 @@ interface Data {
 
 const APP_HREF = '/app';
 const LOGIN_HREF = '/login';
-const SPLASH_MS = 700;
+const SPLASH_MS = 400;
 const OPENED_KEY = 'motodoc-opened';
 
 const vehicleImage = (v: ApiVehicle) => v.image_url ?? `/api/catalog/art/${v.body ?? 'car'}.svg`;
@@ -257,6 +257,12 @@ export default function ConnectedDashboard() {
       onRateService={(id, rating) => save(`/bookings/${id}/review`, 'PUT', { rating })}
       onLogOut={async () => {
         await api('/auth/logout', { method: 'POST', body: {} });
+        try {
+          window.sessionStorage.setItem(
+            'motodoc-flash',
+            JSON.stringify({ message: 'You have been signed out.', kind: 'success' }),
+          );
+        } catch {}
         window.location.assign(LOGIN_HREF);
       }}
     />

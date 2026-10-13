@@ -1,3 +1,4 @@
+import { flash, toast } from './Toasts.jsx';
 import { Brand } from './Brand.jsx';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -97,9 +98,11 @@ export function AuthPage({ mode }) {
                 method: 'POST',
                 body: { credential: response.credential, role },
               });
+              flash('Signed in with Google. Welcome to MotoDoc.');
               window.location.assign('/app');
             } catch (err) {
               setServerError(err.message);
+              toast(err.message, 'error');
             } finally {
               setBusy(false);
             }
@@ -168,13 +171,17 @@ export function AuthPage({ mode }) {
       const result = await api(path, { method: 'POST', body });
       setValues((current) => ({ ...current, password: '' }));
       setShowPassword(false);
-      if (signup || (!recovery && !reset)) window.location.assign('/app');
-      else {
+      if (signup || (!recovery && !reset)) {
+        flash(signup ? 'Account created. Welcome to MotoDoc.' : 'Signed in. Welcome back.');
+        window.location.assign('/app');
+      } else {
         setMessage(result.message);
+        toast(result.message);
         setSubmitted(true);
       }
     } catch (error) {
       setServerError(error.message);
+      toast(error.message, 'error');
     } finally {
       setBusy(false);
     }

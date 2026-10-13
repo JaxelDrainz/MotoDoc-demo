@@ -5,11 +5,13 @@ import './styles.css';
 import '@fontsource-variable/inter';
 import { MotionEffects } from './MotionEffects.jsx';
 import { PixelCards } from './PixelCards.jsx';
+import { Toasts } from './Toasts.jsx';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />
     <MotionEffects />
     <PixelCards />
+    <Toasts />
   </React.StrictMode>,
 );
