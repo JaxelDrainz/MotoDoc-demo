@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import PixelFill, { usePixelFill } from './PixelFill';
+import { Bell, MileageTrend, SlotPicker, StatusBadge, ThemeToggle } from './DashParts';
 import {
   CalendarDays,
   CalendarPlus,
@@ -42,6 +43,7 @@ export interface Workshop {
   name: string;
   address: string;
   mechanicName: string;
+  photo?: string | null;
   openingHours: string;
   phoneNumber: string;
 
@@ -54,6 +56,7 @@ export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
 export interface Booking {
   id: string;
   vehicleId: string;
+  garageId: string;
   title: string;
 
   startsAt: string;
@@ -79,6 +82,7 @@ export interface Message {
   id: string;
   bookingId: string;
   senderName: string;
+  senderPhoto?: string | null;
   mine: boolean;
   body: string;
   sentAt: string;
@@ -91,7 +95,7 @@ export interface Condition {
 }
 
 export interface MotoDocDashboardProps {
-  account: { name: string; email: string };
+  account: { name: string; email: string; photo?: string | null };
   vehicles: readonly Vehicle[];
   bookings: readonly Booking[];
   serviceHistory: readonly ServiceRecord[];
@@ -183,17 +187,27 @@ function Metric({
   label,
   value,
   progress,
+  tone = 'ok',
 }: {
   label: string;
   value: string;
   progress: number | null;
+  tone?: 'ok' | 'warn' | 'bad';
 }) {
   const percentage = Math.round(Math.max(0, Math.min(100, progress ?? 0)));
   return (
     <div className="md-reading">
       <div className="mb-1 flex items-center justify-between gap-4 text-[16px] leading-6">
         <span>{label}</span>
-        <span className={progress === null ? 'text-[#626a72]' : 'tabular-nums'}>{value}</span>
+        <span
+          className={
+            progress === null
+              ? 'text-[#626a72]'
+              : `tabular-nums ${tone === 'bad' ? 'md-tone-bad font-medium' : tone === 'warn' ? 'md-tone-warn font-medium' : ''}`
+          }
+        >
+          {value}
+        </span>
       </div>
       <div
         role="progressbar"
@@ -205,7 +219,7 @@ function Metric({
         className="h-[5px] overflow-hidden rounded-full bg-[#dcece5]"
       >
         <div
-          className="md-reading-fill h-full rounded-full bg-[#0b7b5b]"
+          className={`md-reading-fill h-full rounded-full ${tone === 'bad' ? 'bg-[#c2362b]' : tone === 'warn' ? 'bg-[#d08a00]' : 'bg-[#0b7b5b]'}`}
           style={{ width: `${percentage}%` }}
         />
       </div>
@@ -229,7 +243,16 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Initial({ name, size }: { name: string; size: number }) {
+function Initial({ name, size, photo }: { name: string; size: number; photo?: string | null }) {
+  if (photo)
+    return (
+      <img
+        src={photo}
+        alt=""
+        style={{ width: size, height: size }}
+        className="shrink-0 rounded-full object-cover"
+      />
+    );
   return (
     <span
       aria-hidden="true"
@@ -244,7 +267,9 @@ function Initial({ name, size }: { name: string; size: number }) {
 function Empty({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
   return (
     <div className="flex items-start gap-4 py-2">
-      <span className="mt-1 text-[#087658]">{icon}</span>
+      <span className="md-empty-art relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#eaf6f0] text-[#087658]">
+        {icon}
+      </span>
       <div>
         <p className="font-medium">{title}</p>
         <div className="mt-1 text-sm leading-6 text-slate-600">{children}</div>
@@ -302,7 +327,7 @@ export default function MotoDocDashboard({
     setConfirmingCancel(false);
     if (booking) {
       setTargetId(booking.id);
-      setDraftDate(localInput(booking.startsAt));
+      setDraftDate('');
     }
     setDialogKind(kind);
     dialog.current?.showModal();
@@ -469,12 +494,16 @@ export default function MotoDocDashboard({
               ))}
             </div>
           </nav>
+          <div className="flex shrink-0 items-center gap-1">
+            <Bell onSelect={() => setTab('Bookings')} />
+            <ThemeToggle />
+          </div>
           <button
             onClick={() => openDialog('profile')}
             aria-label="Open your account"
             className="shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#087658]"
           >
-            <Initial name={account.name} size={34} />
+            <Initial name={account.name} size={34} photo={account.photo} />
           </button>
         </div>
       </header>
@@ -500,16 +529,37 @@ export default function MotoDocDashboard({
                   label="Oil Life"
                   value={vehicle.oilLife === null ? 'Not recorded' : `${vehicle.oilLife}%`}
                   progress={vehicle.oilLife}
+                  tone={
+                    vehicle.oilLife === null || vehicle.oilLife >= 30
+                      ? 'ok'
+                      : vehicle.oilLife < 15
+                        ? 'bad'
+                        : 'warn'
+                  }
                 />
                 <Metric
                   label="Brake Wear"
                   value={vehicle.brakeWear === null ? 'Not recorded' : `${vehicle.brakeWear}%`}
                   progress={vehicle.brakeWear}
+                  tone={
+                    vehicle.brakeWear === null || vehicle.brakeWear < 70
+                      ? 'ok'
+                      : vehicle.brakeWear >= 85
+                        ? 'bad'
+                        : 'warn'
+                  }
                 />
                 <Metric
                   label="MOT Countdown"
                   value={motValue}
                   progress={vehicle.motDays === null ? null : (vehicle.motDays / 365) * 100}
+                  tone={
+                    vehicle.motDays === null || vehicle.motDays > 30
+                      ? 'ok'
+                      : vehicle.motDays <= 7
+                        ? 'bad'
+                        : 'warn'
+                  }
                 />
               </div>
               <button className={`${outlineButton} mt-5`} onClick={() => openDialog('condition')}>
@@ -517,18 +567,13 @@ export default function MotoDocDashboard({
                 Update readings
               </button>
             </div>
-            <div className="md-vehicle-art relative min-h-[240px] md:min-h-[352px]">
+            <div className="md-vehicle-art relative m-4 min-h-[220px] overflow-hidden rounded-2xl border border-[#e3e8e6] bg-[#eef3f1] md:m-6 md:min-h-[304px]">
               {vehicle.imageSrc && vehicle.imageCredit ? (
                 <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={vehicle.imageSrc}
                     alt={vehicle.name}
                     className="absolute inset-0 h-full w-full object-cover"
-                  />
-                  <div
-                    aria-hidden="true"
-                    className="absolute inset-y-0 left-0 hidden w-14 bg-gradient-to-r from-white to-transparent md:block"
                   />
                   <a
                     href={vehicle.imageCredit.href}
@@ -540,25 +585,14 @@ export default function MotoDocDashboard({
                   </a>
                 </>
               ) : vehicle.imageSrc ? (
-                vehicle.imageSrc.endsWith('.svg') ? (
-                  <Image
-                    src={vehicle.imageSrc}
-                    alt=""
-                    fill
-                    unoptimized
-                    priority
-                    className="object-contain px-10 pb-8 md:px-14 md:py-10"
-                  />
-                ) : (
-                  <Image
-                    src={vehicle.imageSrc}
-                    alt={`${vehicle.name}, front three-quarter view`}
-                    fill
-                    priority
-                    sizes="(max-width: 767px) 90vw, 560px"
-                    className="object-contain px-4 pb-5 md:py-6 md:pl-4 md:pr-7"
-                  />
-                )
+                <Image
+                  src={vehicle.imageSrc}
+                  alt=""
+                  fill
+                  unoptimized
+                  priority
+                  className="object-contain p-8 md:p-12"
+                />
               ) : (
                 <div className="flex h-full min-h-[240px] items-center justify-center text-[#cfe3da]">
                   <CarFront aria-hidden="true" size={168} strokeWidth={0.75} />
@@ -588,10 +622,23 @@ export default function MotoDocDashboard({
           >
             {tab === 'Service History' && (
               <Card title="Service History">
+                <MileageTrend
+                  points={[
+                    ...[...records]
+                      .reverse()
+                      .map((record) => ({ date: record.date, km: record.mileage })),
+                    ...(records.length && vehicle.mileage > records[0].mileage
+                      ? [{ date: new Date(openedAt).toISOString(), km: vehicle.mileage }]
+                      : []),
+                  ]}
+                />
                 {records.length ? (
-                  <ul className="divide-y divide-slate-100">
+                  <ul className="md-timeline">
                     {records.map((record) => (
-                      <li key={record.id} className="flex flex-wrap justify-between gap-3 py-4">
+                      <li
+                        key={record.id}
+                        className="md-timeline-item relative flex flex-wrap justify-between gap-3 pb-6 pl-7"
+                      >
                         <div>
                           <h3 className="font-medium">{record.title}</h3>
                           <p className="mt-1 text-sm text-slate-600">
@@ -667,10 +714,8 @@ export default function MotoDocDashboard({
                           <p className="mt-1 text-sm text-slate-600">
                             {item.workshop.name} · {bookingDate(item.startsAt)}
                           </p>
-                          <p
-                            className={`mt-1 text-sm ${item.status === 'confirmed' ? 'text-[#087658]' : 'text-slate-600'}`}
-                          >
-                            {statusLabel[item.status]}
+                          <p className="mt-2">
+                            <StatusBadge kind={item.status}>{statusLabel[item.status]}</StatusBadge>
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-2.5">
@@ -718,23 +763,11 @@ export default function MotoDocDashboard({
                           .join(' · ')}
                       </p>
                       <p className="mt-3 text-[19px] leading-7">{bookingDate(upcoming.startsAt)}</p>
-                      {upcoming.status === 'confirmed' ? (
-                        <p className="mt-0.5 flex items-center gap-1.5 text-[15px] text-[#087658]">
-                          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#087658]">
-                            <Check
-                              aria-hidden="true"
-                              className="h-3 w-3 text-white"
-                              strokeWidth={2.5}
-                            />
-                          </span>
-                          Confirmed
-                        </p>
-                      ) : (
-                        <p className="mt-0.5 flex items-center gap-1.5 text-[15px] text-[#626a72]">
-                          <Clock3 aria-hidden="true" className="h-4 w-4" />
-                          {statusLabel.pending}
-                        </p>
-                      )}
+                      <p className="mt-2">
+                        <StatusBadge kind={upcoming.status}>
+                          {statusLabel[upcoming.status]}
+                        </StatusBadge>
+                      </p>
                       <div className="mt-6">{bookingActions(upcoming)}</div>
                     </>
                   ) : (
@@ -779,7 +812,11 @@ export default function MotoDocDashboard({
                       )}
                       {workshopBooking.workshop.mechanicName && (
                         <div className="mt-5 flex items-center gap-2">
-                          <Initial name={workshopBooking.workshop.mechanicName} size={25} />
+                          <Initial
+                            name={workshopBooking.workshop.mechanicName}
+                            size={25}
+                            photo={workshopBooking.workshop.photo}
+                          />
                           <p className="text-[15px]">
                             {workshopBooking.workshop.mechanicName}{' '}
                             <span className="text-[#626a72]">· Your mechanic</span>
@@ -889,22 +926,15 @@ export default function MotoDocDashboard({
             <p className="text-sm text-slate-600">
               {target.title} · {target.workshop.name}
             </p>
-            <label className="block text-sm font-medium">
-              Appointment date and time
-              <input
-                type="datetime-local"
-                required
-                step={3600}
-                value={draftDate}
-                onChange={(event) => setDraftDate(event.target.value)}
-                className={field}
-              />
-            </label>
+            <div className="text-sm font-medium">
+              <p className="mb-2">Choose a new time</p>
+              <SlotPicker garageId={target.garageId} value={draftDate} onChange={setDraftDate} />
+            </div>
             <p className="text-xs leading-5 text-slate-500">
               Appointments start on the hour, in your local time. Your garage confirms any new time.
             </p>
             <button
-              disabled={busy || draftDate === localInput(target.startsAt)}
+              disabled={busy || !draftDate || draftDate === target.startsAt}
               className={`${outlineButton} w-full`}
             >
               {busy ? 'Saving…' : 'Save new time'}
@@ -954,7 +984,12 @@ export default function MotoDocDashboard({
                     className={`md-chat-entry max-w-[85%] rounded-xl px-3 py-2 text-sm leading-5 ${item.mine ? 'ml-auto bg-[#eaf6f0]' : 'bg-slate-100'}`}
                   >
                     <p className="whitespace-pre-wrap break-words">{item.body}</p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                      <Initial
+                        name={item.mine ? account.name : item.senderName}
+                        size={18}
+                        photo={item.mine ? account.photo : item.senderPhoto}
+                      />
                       {item.mine ? 'You' : item.senderName} ·{' '}
                       {new Intl.DateTimeFormat('en-GB', {
                         dateStyle: 'medium',
@@ -1050,7 +1085,7 @@ export default function MotoDocDashboard({
         {dialogKind === 'profile' && (
           <div className="space-y-5">
             <div className="flex items-center gap-4">
-              <Initial name={account.name} size={56} />
+              <Initial name={account.name} size={56} photo={account.photo} />
               <div className="min-w-0">
                 <p className="font-medium">{account.name}</p>
                 <p className="mt-1 truncate text-sm text-slate-600">{account.email}</p>

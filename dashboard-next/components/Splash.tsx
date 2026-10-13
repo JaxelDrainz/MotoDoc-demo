@@ -5,8 +5,7 @@ export default function Splash({ message, children }: { message: string; childre
   return (
     <main className="md-splash">
       <div className="md-splash-logo">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`${BASE_PATH}/images/motodoc-logo.png`} alt="" />
+        <img src={`${BASE_PATH}/images/motodoc-logo.svg`} alt="" />
       </div>
       <p className="md-splash-name">MotoDoc</p>
       <div className="md-splash-pixels" aria-hidden="true">

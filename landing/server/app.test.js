@@ -720,3 +720,94 @@ test('vehicle catalogue searches bundled data first, falls back to the lookup, a
   assert.match(await art.text(), /^<svg /);
   assert.equal((await fetch(`${base}/api/catalog/art/spaceship.svg`)).status, 404);
 });
+test('profile photos are validated, versioned and shown to the other side of a booking', async (t) => {
+  const { client } = await fixture(t),
+    d = client(),
+    g = client();
+  await signup(d, 'd@example.test');
+  const profile = await garage(g);
+  const pixel =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  assert.equal((await d('/api/auth/me')).data.user.photo, null);
+  assert.equal(
+    (await d('/api/account/photo', { image: 'data:image/svg+xml;base64,AAAA' }, 'PUT')).status,
+    400,
+  );
+  assert.equal(
+    (await d('/api/account/photo', { image: `${pixel}${'A'.repeat(23000)}` }, 'PUT')).status,
+    400,
+  );
+  assert.equal((await g('/api/account/photo', { image: pixel }, 'PUT')).status, 200);
+  const url = (await g('/api/auth/me')).data.user.photo;
+  assert.match(url, /^\/api\/photos\/[0-9a-f-]+\?v=\d+$/);
+  const v = (await vehicle(d)).data;
+  await d('/api/bookings', {
+    garage_id: profile.id,
+    vehicle_id: v.id,
+    service: 'Oil change',
+    starts_at: future(),
+    notes: '',
+  });
+  const booked = (await d('/api/bookings')).data[0];
+  assert.deepEqual([booked.garage_photo, booked.driver_photo], [url, null]);
+  await g(`/api/bookings/${booked.id}/messages`, { body: 'Hello' });
+  assert.equal((await d('/api/messages')).data[0].sender_photo, url);
+  assert.equal((await d('/api/account/photo', { image: pixel }, 'PUT')).status, 200);
+  const customer = (await g('/api/customers')).data[0];
+  assert.match(customer.photo, /^\/api\/photos\//);
+  assert.equal((await g('/api/bookings')).data[0].driver_photo, customer.photo);
+  assert.equal((await g('/api/account/photo', {}, 'DELETE')).status, 200);
+  assert.equal((await g('/api/auth/me')).data.user.photo, null);
+});
+test('free slots and notifications follow bookings, messages and reminders', async (t) => {
+  const { client } = await fixture(t),
+    d = client(),
+    g = client(),
+    other = client();
+  await signup(d, 'd@example.test');
+  await signup(other, 'o@example.test');
+  const profile = await garage(g);
+  const v = (await vehicle(d)).data,
+    start = future();
+  const key = (
+    await d('/api/bookings', {
+      garage_id: profile.id,
+      vehicle_id: v.id,
+      service: 'Oil change',
+      starts_at: start,
+      notes: '',
+    })
+  ).data.id;
+  const day = new Date(start);
+  day.setUTCHours(0, 0, 0, 0);
+  const range = `from=${day.toISOString()}&to=${new Date(day.getTime() + 86400000).toISOString()}`;
+  assert.deepEqual((await other(`/api/garages/${profile.id}/busy?${range}`)).data, [start]);
+  assert.equal((await other(`/api/garages/${profile.id}/busy?from=x&to=y`)).status, 400);
+
+  assert.equal((await d('/api/notifications')).data.unread, 0);
+  const forGarage = (await g('/api/notifications')).data;
+  assert.deepEqual([forGarage.unread, forGarage.items[0].type], [1, 'requested']);
+  await g(`/api/bookings/${key}`, { status: 'confirmed' }, 'PATCH');
+  await g(`/api/bookings/${key}/messages`, { body: 'See you then' });
+  await d('/api/reminders', {
+    title: 'Renew insurance',
+    due_date: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
+  });
+  await d('/api/reminders', {
+    title: 'Far away',
+    due_date: new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10),
+  });
+  const forDriver = (await d('/api/notifications')).data;
+  assert.equal(forDriver.unread, 3);
+  assert.deepEqual(forDriver.items.map((item) => item.type).sort(), [
+    'confirmed',
+    'message',
+    'reminder',
+  ]);
+  assert.equal((await other('/api/notifications')).data.items.length, 0);
+  assert.equal((await d('/api/notifications/seen', {})).status, 200);
+  assert.equal((await d('/api/notifications')).data.unread, 0);
+  await d(`/api/bookings/${key}`, { status: 'cancelled' }, 'PATCH');
+  assert.deepEqual((await other(`/api/garages/${profile.id}/busy?${range}`)).data, []);
+  assert.equal((await g('/api/notifications')).data.items[0].type, 'cancelled');
+});

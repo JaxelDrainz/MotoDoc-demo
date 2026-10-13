@@ -70,6 +70,15 @@ export const schemaSql = `
     CREATE TABLE IF NOT EXISTS vehicle_images(
       key TEXT PRIMARY KEY,image_url TEXT,image_source TEXT,image_credit TEXT,image_license TEXT,
       fetched_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS photos(
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      mime TEXT NOT NULL,data TEXT NOT NULL,updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS booking_events(
+      id TEXT PRIMARY KEY,booking_id TEXT NOT NULL REFERENCES bookings(id),
+      actor_id TEXT NOT NULL REFERENCES users(id),kind TEXT NOT NULL,at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS booking_event_times ON booking_events(booking_id,at);
+    CREATE TABLE IF NOT EXISTS notification_reads(
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,seen_at TEXT NOT NULL);
     INSERT OR IGNORE INTO schema_versions(version) VALUES(1);
   `;
 

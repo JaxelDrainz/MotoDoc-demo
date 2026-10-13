@@ -45,7 +45,10 @@ const userView = (u) => ({
   email: u.email,
   role: u.role,
   googleLinked: !!u.google_id,
+  photo: u.photo || null,
 });
+const photoOf = (column) =>
+  `(SELECT '/api/photos/'||user_id||'?v='||updated_at FROM photos WHERE user_id=${column})`;
 
 const ratingColumns = `(SELECT ROUND(AVG(rating),1) FROM reviews WHERE garage_id=g.id) rating,(SELECT COUNT(*) FROM reviews WHERE garage_id=g.id) review_count`;
 const garageView = (g) => ({ ...g, services: JSON.parse(g.services), published: !!g.published });
@@ -376,7 +379,7 @@ export async function createApp({
     req.user =
       token &&
       (await one(
-        'SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>?',
+        `SELECT u.*,${photoOf('u.id')} photo FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>?`,
         hash(token),
         clock(),
       ));
@@ -403,6 +406,39 @@ export async function createApp({
       throw fail(409, 'This Google account is already connected to another MotoDoc account.');
     await run('UPDATE users SET google_id=? WHERE id=?', googleUser.googleId, req.user.id);
     res.json({ ok: true });
+  });
+  app.put('/api/account/photo', async (req, res) => {
+    await rateLimit(req, 'photo', 30, req.user.id);
+    const { image } = parse(
+      z.object({
+        image: z
+          .string()
+          .max(22000)
+          .regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/),
+      }),
+      req,
+    );
+    const [, mime, data] = image.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+    await run(
+      'INSERT INTO photos(user_id,mime,data,updated_at) VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET mime=excluded.mime,data=excluded.data,updated_at=excluded.updated_at',
+      req.user.id,
+      mime,
+      data,
+      String(clock()),
+    );
+    res.json({ ok: true });
+  });
+  app.delete('/api/account/photo', async (req, res) => {
+    await run('DELETE FROM photos WHERE user_id=?', req.user.id);
+    res.json({ ok: true });
+  });
+  app.get('/api/photos/:id', async (req, res) => {
+    const photo = await one('SELECT mime,data FROM photos WHERE user_id=?', req.params.id);
+    if (!photo) throw fail(404, 'Photo not found.');
+    res
+      .set('Cache-Control', 'private, max-age=31536000, immutable')
+      .type(photo.mime)
+      .send(Buffer.from(photo.data, 'base64'));
   });
   app.post('/api/auth/logout', async (req, res) => {
     await run('DELETE FROM sessions WHERE token_hash=?', hash(sessionToken(req)));
@@ -642,17 +678,108 @@ export async function createApp({
     );
     res.json({ ok: true });
   });
-  const bookingSelect = `SELECT b.*,g.name garage_name,g.address garage_address,g.city garage_city,c.phone,c.opening_hours,c.mechanic_name,${ratingColumns},u.name driver_name,v.make,v.model,v.registration FROM bookings b JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=b.driver_id JOIN vehicles v ON v.id=b.vehicle_id LEFT JOIN garage_contact c ON c.garage_id=g.id`;
+  const bookingSelect = `SELECT b.*,g.name garage_name,g.address garage_address,g.city garage_city,c.phone,c.opening_hours,c.mechanic_name,${photoOf('g.owner_id')} garage_photo,${photoOf('b.driver_id')} driver_photo,${ratingColumns},u.name driver_name,v.make,v.model,v.registration FROM bookings b JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=b.driver_id JOIN vehicles v ON v.id=b.vehicle_id LEFT JOIN garage_contact c ON c.garage_id=g.id`;
   const scopedBookings = async (user) =>
     user.role === 'driver'
       ? await all(`${bookingSelect} WHERE b.driver_id=? ORDER BY b.starts_at DESC`, user.id)
       : await all(`${bookingSelect} WHERE g.owner_id=? ORDER BY b.starts_at DESC`, user.id);
   app.get('/api/bookings', async (req, res) => res.json(await scopedBookings(req.user)));
+  const bookingEvent = (bookingId, actorId, kind) =>
+    run(
+      'INSERT INTO booking_events(id,booking_id,actor_id,kind,at) VALUES(?,?,?,?,?)',
+      id(),
+      bookingId,
+      actorId,
+      kind,
+      new Date(clock()).toISOString(),
+    );
+  app.get('/api/garages/:id/busy', async (req, res) => {
+    const range = z.object({ from: z.iso.datetime(), to: z.iso.datetime() }).parse(req.query);
+    res.json(
+      (
+        await all(
+          "SELECT starts_at FROM bookings WHERE garage_id=? AND status IN ('pending','confirmed') AND starts_at>=? AND starts_at<? ORDER BY starts_at",
+          req.params.id,
+          new Date(range.from).toISOString(),
+          new Date(range.to).toISOString(),
+        )
+      ).map((row) => row.starts_at),
+    );
+  });
+  const eventTitles = {
+    requested: 'New booking request',
+    confirmed: 'Booking confirmed',
+    cancelled: 'Booking cancelled',
+    completed: 'Service completed',
+    rescheduled: 'Booking moved to a new time',
+  };
+  app.get('/api/notifications', async (req, res) => {
+    const isDriver = req.user.role === 'driver',
+      column = isDriver ? 'b.driver_id' : 'g.owner_id',
+      now = new Date(clock()).toISOString();
+    const seen =
+      (await one('SELECT seen_at FROM notification_reads WHERE user_id=?', req.user.id))?.seen_at ||
+      '';
+    const messages = await all(
+      `SELECT m.id,m.body,m.created_at at,m.booking_id,u.name sender_name FROM messages m JOIN bookings b ON b.id=m.booking_id JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=m.sender_id WHERE ${column}=? AND m.sender_id<>? ORDER BY m.created_at DESC LIMIT 20`,
+      req.user.id,
+      req.user.id,
+    );
+    const events = await all(
+      `SELECT e.id,e.kind,e.at,e.booking_id,b.service,g.name garage_name,u.name driver_name FROM booking_events e JOIN bookings b ON b.id=e.booking_id JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=b.driver_id WHERE ${column}=? AND e.actor_id<>? ORDER BY e.at DESC LIMIT 20`,
+      req.user.id,
+      req.user.id,
+    );
+    const soon = new Date(clock() + 7 * 86400000).toISOString().slice(0, 10);
+    const reminders = await all(
+      'SELECT id,title,due_date FROM reminders WHERE user_id=? AND done=0 AND due_date<=? ORDER BY due_date LIMIT 20',
+      req.user.id,
+      soon,
+    );
+    const items = [
+      ...messages.map((m) => ({
+        id: `message:${m.id}`,
+        type: 'message',
+        title: `Message from ${m.sender_name}`,
+        body: m.body.slice(0, 140),
+        at: m.at,
+        booking_id: m.booking_id,
+      })),
+      ...events.map((e) => ({
+        id: `booking:${e.id}`,
+        type: e.kind,
+        title: eventTitles[e.kind] || 'Booking updated',
+        body: `${e.service} · ${isDriver ? e.garage_name : e.driver_name}`,
+        at: e.at,
+        booking_id: e.booking_id,
+      })),
+      ...reminders.map((r) => ({
+        id: `reminder:${r.id}`,
+        type: r.due_date < now.slice(0, 10) ? 'overdue' : 'reminder',
+        title: r.due_date < now.slice(0, 10) ? 'Reminder overdue' : 'Reminder due soon',
+        body: r.title,
+        at: new Date(Date.parse(`${r.due_date}T00:00:00Z`) - 7 * 86400000).toISOString(),
+        due_date: r.due_date,
+      })),
+    ]
+      .filter((item) => item.at <= now)
+      .sort((a, b) => (a.at < b.at ? 1 : -1))
+      .slice(0, 30);
+    res.json({ items, unread: items.filter((item) => item.at > seen).length, seen_at: seen });
+  });
+  app.post('/api/notifications/seen', async (req, res) => {
+    await run(
+      'INSERT INTO notification_reads(user_id,seen_at) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET seen_at=excluded.seen_at',
+      req.user.id,
+      new Date(clock()).toISOString(),
+    );
+    res.json({ ok: true });
+  });
   app.get('/api/messages', async (req, res) => {
     const column = req.user.role === 'driver' ? 'b.driver_id' : 'g.owner_id';
     res.json(
       await all(
-        `SELECT m.*,u.name sender_name FROM messages m JOIN bookings b ON b.id=m.booking_id JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=m.sender_id WHERE ${column}=? ORDER BY m.created_at,m.id`,
+        `SELECT m.*,u.name sender_name,${photoOf('m.sender_id')} sender_photo FROM messages m JOIN bookings b ON b.id=m.booking_id JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=m.sender_id WHERE ${column}=? ORDER BY m.created_at,m.id`,
         req.user.id,
       ),
     );
@@ -702,6 +829,7 @@ export async function createApp({
       date.toISOString(),
       req.params.id,
     );
+    await bookingEvent(req.params.id, req.user.id, 'rescheduled');
     res.json({ ok: true });
   });
   app.put('/api/bookings/:id/review', async (req, res) => {
@@ -754,6 +882,7 @@ export async function createApp({
       date.toISOString(),
       d.notes,
     );
+    await bookingEvent(key, req.user.id, 'requested');
     res.status(201).json({ id: key });
   });
   app.patch('/api/bookings/:id', async (req, res) => {
@@ -781,6 +910,7 @@ export async function createApp({
       throw fail(400, 'Add a service summary and mileage to complete the booking.');
     await transaction(db, async () => {
       await run('UPDATE bookings SET status=? WHERE id=?', d.status, b.id);
+      await bookingEvent(b.id, req.user.id, d.status);
       if (d.status === 'completed') {
         const vehicle = await one('SELECT mileage FROM vehicles WHERE id=?', b.vehicle_id);
         if (d.mileage < vehicle.mileage)
@@ -978,7 +1108,7 @@ export async function createApp({
     const g = await ownGarage(req.user);
     res.json(
       await all(
-        `SELECT u.id,u.name,u.email,COUNT(b.id) booking_count,COALESCE(n.notes,'') notes,COALESCE(n.tags,'') tags FROM users u JOIN bookings b ON b.driver_id=u.id LEFT JOIN customer_notes n ON n.driver_id=u.id AND n.garage_id=b.garage_id WHERE b.garage_id=? GROUP BY u.id ORDER BY u.name`,
+        `SELECT u.id,u.name,u.email,${photoOf('u.id')} photo,COUNT(b.id) booking_count,COALESCE(n.notes,'') notes,COALESCE(n.tags,'') tags FROM users u JOIN bookings b ON b.driver_id=u.id LEFT JOIN customer_notes n ON n.driver_id=u.id AND n.garage_id=b.garage_id WHERE b.garage_id=? GROUP BY u.id ORDER BY u.name`,
         g.id,
       ),
     );

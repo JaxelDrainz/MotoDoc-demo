@@ -8,7 +8,15 @@ export const metadata: Metadata = {
 };
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{document.documentElement.dataset.theme=localStorage.getItem('motodoc-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch(e){}",
+          }}
+        />
+      </head>
       <body className="font-sans antialiased">{children}</body>
     </html>
   );
