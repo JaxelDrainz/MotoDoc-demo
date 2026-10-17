@@ -811,3 +811,63 @@ test('free slots and notifications follow bookings, messages and reminders', asy
   assert.deepEqual((await other(`/api/garages/${profile.id}/busy?${range}`)).data, []);
   assert.equal((await g('/api/notifications')).data.items[0].type, 'cancelled');
 });
+test('only administrators can change site settings, which are versioned and public', async (t) => {
+  const { client, base } = await fixture(t, { adminEmails: 'boss@example.test' }),
+    admin = client(),
+    driver = client();
+  await signup(admin, 'boss@example.test');
+  await signup(driver, 'd@example.test');
+  assert.equal((await admin('/api/auth/me')).data.user.admin, true);
+  assert.equal((await driver('/api/auth/me')).data.user.admin, false);
+  const anonymous = await fetch(`${base}/api/site`).then((r) => r.json());
+  assert.equal(anonymous.site.content.hero.tagline, 'All in one place.');
+  assert.match(anonymous.style.css, /--green:#087658/);
+  assert.equal((await driver('/api/admin/site')).status, 403);
+  assert.equal((await driver('/api/admin/site', { site: {} }, 'PUT')).status, 403);
+  const draft = (await admin('/api/admin/site')).data.site;
+  draft.theme.light.primary = '#123456';
+  draft.motion.pixelFill = false;
+  draft.content.hero.tagline = 'Car care, sorted.';
+  assert.equal(
+    (
+      await admin(
+        '/api/admin/site',
+        {
+          site: {
+            ...draft,
+            theme: { ...draft.theme, light: { ...draft.theme.light, primary: 'red' } },
+          },
+        },
+        'PUT',
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await admin(
+        '/api/admin/site',
+        { site: { ...draft, images: { ...draft.images, hero: 'https://evil.example/x.png' } } },
+        'PUT',
+      )
+    ).status,
+    400,
+  );
+  assert.equal((await admin('/api/admin/site', { site: draft }, 'PUT')).status, 200);
+  const live = await fetch(`${base}/api/site`).then((r) => r.json());
+  assert.equal(live.site.content.hero.tagline, 'Car care, sorted.');
+  assert.match(live.style.css, /--green:#123456/);
+  assert(live.style.classes.includes('md-no-pixel'));
+  const pixel =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  assert.equal((await driver('/api/admin/assets', { name: 'x', image: pixel })).status, 403);
+  const asset = (await admin('/api/admin/assets', { name: 'Hero', image: pixel })).data;
+  assert.equal((await fetch(`${base}${asset.url}`)).headers.get('content-type'), 'image/png');
+  const revisions = (await admin('/api/admin/site')).data.revisions;
+  assert.equal(revisions.length, 1);
+  draft.content.hero.tagline = 'Second';
+  await admin('/api/admin/site', { site: draft }, 'PUT');
+  assert.equal((await admin(`/api/admin/revisions/${revisions[0].id}/restore`, {})).status, 200);
+  const restored = await fetch(`${base}/api/site`).then((r) => r.json());
+  assert.equal(restored.site.content.hero.tagline, 'Car care, sorted.');
+});

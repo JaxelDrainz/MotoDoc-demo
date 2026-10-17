@@ -1,0 +1,18 @@
+.md-no-motion *,
+.md-no-motion *::before,
+.md-no-motion *::after {
+  animation: none !important;
+  transition: none !important;
+}
+.md-no-motion .motion-ready,
+.md-no-reveal .motion-ready {
+  opacity: 1 !important;
+  transform: none !important;
+}
+.md-no-pixel :is(canvas.pixel-fill, .md-pixel-canvas),
+.md-no-notifications :is(.dash-bell, .md-bell),
+.md-no-darkmode :is(.md-theme-toggle),
+.md-no-google .auth-oauth-section,
+.md-no-reviews :is(.dash-rating, .md-rating) {
+  display: none !important;
+}

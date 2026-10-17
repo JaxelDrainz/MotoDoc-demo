@@ -55,7 +55,7 @@ export function ThemeToggle() {
   const next = theme === 'dark' ? 'light' : 'dark';
   return (
     <button
-      className="icon-button"
+      className="icon-button md-theme-toggle"
       aria-label={`Switch to ${next} mode`}
       onClick={() => {
         document.documentElement.dataset.theme = next;
@@ -181,13 +181,28 @@ export function SlotPicker({ garageId, name }) {
   const [day, setDay] = useState(days[1]),
     [value, setValue] = useState(''),
     [busy, setBusy] = useState(null);
+  const [availabilityError, setAvailabilityError] = useState('');
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    let active = true;
+    setBusy(null);
+    setAvailabilityError('');
     const to = new Date(days[13]);
     to.setDate(to.getDate() + 1);
     api(`/garages/${garageId}/busy?from=${days[0].toISOString()}&to=${to.toISOString()}`)
-      .then((taken) => setBusy(new Set(taken)))
-      .catch(() => setBusy(new Set()));
-  }, [garageId, days]);
+      .then((taken) => {
+        if (active) setBusy(new Set(taken));
+      })
+      .catch(() => {
+        if (active) {
+          setAvailabilityError('Available times could not be checked. Please retry.');
+          setValue('');
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [garageId, days, attempt]);
   const slot = (hour) => {
     const start = new Date(day);
     start.setHours(hour);
@@ -202,7 +217,10 @@ export function SlotPicker({ garageId, name }) {
             type="button"
             key={item.getTime()}
             aria-pressed={item.getTime() === day.getTime()}
-            onClick={() => setDay(item)}
+            onClick={() => {
+              setDay(item);
+              setValue('');
+            }}
           >
             <small>{item.toLocaleDateString(undefined, { weekday: 'short' })}</small>
             <strong>{item.getDate()}</strong>
@@ -210,7 +228,7 @@ export function SlotPicker({ garageId, name }) {
           </button>
         ))}
       </div>
-      <div className="dash-slot-times" aria-busy={!busy}>
+      <div className="dash-slot-times" aria-busy={!busy && !availabilityError}>
         {HOURS.map((hour) => {
           const start = slot(hour),
             iso = start.toISOString();
@@ -227,12 +245,23 @@ export function SlotPicker({ garageId, name }) {
           );
         })}
       </div>
+      {availabilityError && (
+        <div role="alert" className="dash-error">
+          <p>{availabilityError}</p>
+          <button type="button" onClick={() => setAttempt((n) => n + 1)} className="dash-secondary">
+            Retry availability
+          </button>
+        </div>
+      )}
       <p className="dash-slot-note">
         {value
           ? `Selected: ${when(value)}`
           : busy
             ? 'Greyed-out times are already booked or in the past.'
             : 'Checking free times…'}
+      </p>
+      <p className="dash-slot-note">
+        Times use your device�s timezone. Your garage confirms the appointment.
       </p>
       <input type="hidden" name={name} value={value} />
     </div>

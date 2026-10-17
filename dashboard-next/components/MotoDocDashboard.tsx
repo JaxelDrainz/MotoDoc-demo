@@ -10,10 +10,13 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
+import VehicleImage from './VehicleImage';
 import PixelFill, { usePixelFill } from './PixelFill';
 import { Bell, MileageTrend, SlotPicker, StatusBadge, ThemeToggle } from './DashParts';
 import {
   CircleAlert,
+  House,
+  Ellipsis,
   CalendarDays,
   CalendarPlus,
   CarFront,
@@ -120,7 +123,7 @@ export interface MotoDocDashboardProps {
   onLogOut: () => Promise<void>;
 }
 
-const tabs = ['Overview', 'Service History', 'Bookings'] as const;
+const tabs = ['Overview', 'Service History', 'Bookings', 'Messages'] as const;
 type Tab = (typeof tabs)[number];
 type DialogKind = 'manage' | 'message' | 'call' | 'profile' | 'condition' | null;
 const outlineButton =
@@ -216,14 +219,17 @@ function Metric({
           }
         >
           {value}
+          {progress !== null && tone !== 'ok' && (
+            <span className="ml-2 text-xs">{tone === 'bad' ? 'Check soon' : 'Plan service'}</span>
+          )}
         </span>
       </div>
       <div
-        role="progressbar"
+        role={progress === null ? undefined : 'meter'}
         aria-label={label}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={percentage}
+        aria-valuenow={progress === null ? undefined : percentage}
         aria-valuetext={value}
         className="h-[5px] overflow-hidden rounded-full bg-[#dcece5]"
       >
@@ -465,7 +471,7 @@ export default function MotoDocDashboard({
   return (
     <div className="md-connected min-h-screen bg-[#f4f8fa] text-[#111827]">
       <header className="sticky top-0 z-30 border-b border-[#dce1e5] bg-white">
-        <div className="mx-auto flex min-h-[90px] max-w-[1116px] flex-wrap items-center gap-x-8 gap-y-4 px-5 py-5 min-[1180px]:px-0">
+        <div className="mx-auto flex min-h-[90px] max-w-[1116px] flex-wrap items-center gap-x-5 gap-y-4 px-5 py-5 min-[1180px]:px-0">
           <a
             href="/"
             aria-label="MotoDoc home"
@@ -527,6 +533,7 @@ export default function MotoDocDashboard({
             </div>
           </nav>
           <div className="flex shrink-0 items-center gap-1">
+            <span data-lang-switch />
             <Bell onSelect={() => setTab('Bookings')} />
             <ThemeToggle />
           </div>
@@ -599,38 +606,7 @@ export default function MotoDocDashboard({
                 Update readings
               </button>
             </div>
-            <div className="md-vehicle-art relative m-4 min-h-[220px] overflow-hidden rounded-2xl border border-[#e3e8e6] bg-[#eef3f1] md:m-6 md:min-h-[304px]">
-              {vehicle.imageSrc && vehicle.imageCredit ? (
-                <>
-                  <img
-                    src={vehicle.imageSrc}
-                    alt={vehicle.name}
-                    className="absolute inset-0 h-full w-full object-cover"
-                  />
-                  <a
-                    href={vehicle.imageCredit.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="absolute bottom-2 right-3 max-w-[80%] truncate rounded-full bg-black/55 px-2.5 py-1 text-[11px] leading-4 text-white hover:bg-black/70 focus-visible:outline-2 focus-visible:outline-white"
-                  >
-                    Photo: {vehicle.imageCredit.label}
-                  </a>
-                </>
-              ) : vehicle.imageSrc ? (
-                <Image
-                  src={vehicle.imageSrc}
-                  alt=""
-                  fill
-                  unoptimized
-                  priority
-                  className="object-contain p-8 md:p-12"
-                />
-              ) : (
-                <div className="flex h-full min-h-[240px] items-center justify-center text-[#cfe3da]">
-                  <CarFront aria-hidden="true" size={168} strokeWidth={0.75} />
-                </div>
-              )}
-            </div>
+            <VehicleImage name={vehicle.name} src={vehicle.imageSrc} credit={vehicle.imageCredit} />
           </section>
         ) : (
           <section className="rounded-3xl border border-[#d7dce0] bg-white p-8">
@@ -680,7 +656,7 @@ export default function MotoDocDashboard({
                           <div
                             role="group"
                             aria-label={`Rate ${record.title}`}
-                            className="mt-2 flex items-center gap-0.5"
+                            className="md-rating mt-2 flex items-center gap-0.5"
                           >
                             {[1, 2, 3, 4, 5].map((value) => (
                               <button
@@ -732,6 +708,42 @@ export default function MotoDocDashboard({
               </Card>
             )}
 
+            {tab === 'Messages' && (
+              <Card title="Messages">
+                {vehicleBookings.length ? (
+                  <ul className="divide-y divide-slate-100">
+                    {vehicleBookings.map((booking) => {
+                      const latest = messages
+                        .filter((item) => item.bookingId === booking.id)
+                        .at(-1);
+                      return (
+                        <li key={booking.id} className="py-4">
+                          <button
+                            className="w-full rounded-lg p-2 text-left hover:bg-[#eaf6f0] focus-visible:outline-2 focus-visible:outline-[#087658]"
+                            onClick={() => openDialog('message', booking)}
+                          >
+                            <span className="block font-medium">{booking.workshop.name}</span>
+                            <span className="block text-sm text-[#626a72]">
+                              {booking.title} � {bookingDate(booking.startsAt)}
+                            </span>
+                            <span className="mt-2 block truncate text-sm">
+                              {latest?.body || 'Start a conversation about this booking'}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <>
+                    <Empty icon={<MessageSquare size={24} />} title="No conversations yet">
+                      Book a service to connect with a garage.
+                    </Empty>
+                    <div className="mt-5">{bookService}</div>
+                  </>
+                )}
+              </Card>
+            )}
             {tab === 'Bookings' && (
               <Card title="Bookings">
                 {vehicleBookings.length ? (
@@ -820,7 +832,7 @@ export default function MotoDocDashboard({
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                         <p className="text-[19px] leading-7">{workshopBooking.workshop.name}</p>
                         {workshopBooking.workshop.rating !== null && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-[#3f4652] px-2.5 py-1 text-[12px] leading-4 text-white">
+                          <span className="md-rating inline-flex items-center gap-1 rounded-full bg-[#3f4652] px-2.5 py-1 text-[12px] leading-4 text-white">
                             <Star
                               size={13}
                               className="fill-[#efb460] text-[#efb460]"
@@ -905,11 +917,37 @@ export default function MotoDocDashboard({
           </div>
         )}
       </main>
+      <nav className="md-mobile-nav" aria-label="Quick navigation">
+        {(
+          [
+            ['Overview', House],
+            ['Bookings', CalendarDays],
+            ['Messages', MessageSquare],
+          ] as const
+        ).map(([label, Icon]) => (
+          <button
+            key={label}
+            aria-current={tab === label ? 'page' : undefined}
+            onClick={() => setTab(label)}
+          >
+            <Icon size={21} aria-hidden="true" />
+            <span>{label}</span>
+          </button>
+        ))}
+        <button
+          aria-haspopup="dialog"
+          aria-current={tab === 'Service History' ? 'page' : undefined}
+          onClick={() => openDialog('profile')}
+        >
+          <Ellipsis size={23} aria-hidden="true" />
+          <span>More</span>
+        </button>
+      </nav>
 
       <div
         aria-live="polite"
         aria-atomic="true"
-        className="fixed bottom-5 left-1/2 z-40 w-[calc(100%-2.5rem)] max-w-md -translate-x-1/2"
+        className="md-toast-position fixed bottom-5 left-1/2 z-40 w-[calc(100%-2.5rem)] max-w-md -translate-x-1/2"
       >
         {notice && (
           <div
@@ -934,6 +972,7 @@ export default function MotoDocDashboard({
       </div>
 
       <dialog
+        data-mode={dialogKind}
         ref={dialog}
         aria-labelledby={dialogTitle}
         onCancel={() => setDialogKind(null)}
@@ -1123,6 +1162,16 @@ export default function MotoDocDashboard({
 
         {dialogKind === 'profile' && (
           <div className="space-y-5">
+            <button
+              className={outlineButton}
+              onClick={() => {
+                setTab('Service History');
+                closeDialog();
+              }}
+            >
+              <History size={17} />
+              Service history
+            </button>
             <div className="flex items-center gap-4">
               <Initial name={account.name} size={56} photo={account.photo} />
               <div className="min-w-0">

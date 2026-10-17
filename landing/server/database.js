@@ -79,6 +79,11 @@ export const schemaSql = `
     CREATE INDEX IF NOT EXISTS booking_event_times ON booking_events(booking_id,at);
     CREATE TABLE IF NOT EXISTS notification_reads(
       user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,seen_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS site_revisions(
+      id TEXT PRIMARY KEY,data TEXT NOT NULL,created_by TEXT NOT NULL,created_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS site_revision_times ON site_revisions(created_at);
+    CREATE TABLE IF NOT EXISTS site_assets(
+      id TEXT PRIMARY KEY,name TEXT NOT NULL,mime TEXT NOT NULL,data TEXT NOT NULL,created_at TEXT NOT NULL);
     INSERT OR IGNORE INTO schema_versions(version) VALUES(1);
   `;
 

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import './motion.css';
 
 const revealSelector =
-  '.section-heading,.feature,.garage-intro,.perk,.steps li,.closing-inner,.context-photo';
+  '.section-heading,.feature,.garage-intro,.perk,.steps li,.closing-inner,.context-photo,.browser-frame,.faq-list details';
 export function MotionEffects() {
   useEffect(() => {
     const preference = matchMedia('(prefers-reduced-motion: reduce)');
@@ -31,7 +31,7 @@ export function MotionEffects() {
           const siblings = [...el.parentElement.children].filter((child) =>
             child.matches(revealSelector),
           );
-          el.style.setProperty('--reveal-delay', `${Math.min(siblings.indexOf(el), 3) * 40}ms`);
+          el.style.setProperty('--reveal-delay', `${Math.min(siblings.indexOf(el), 3) * 50}ms`);
           el.classList.add('motion-ready');
           observer.observe(el);
         });

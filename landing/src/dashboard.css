@@ -1254,7 +1254,7 @@
 .md-splash-logo {
   width: 120px;
   aspect-ratio: 5555/4074;
-  animation: md-splash-rise 0.35s steps(5, end) both;
+  animation: md-splash-rise 0.5s steps(6, end) both;
 }
 .md-splash-logo img {
   display: block;
@@ -1266,7 +1266,7 @@
   font-size: 26px;
   font-weight: 600;
   letter-spacing: -0.05em;
-  animation: md-splash-fade 0.2s 0.25s both;
+  animation: md-splash-fade 0.25s 0.4s both;
 }
 .md-splash-pixels {
   display: flex;
@@ -1573,4 +1573,25 @@ img.dash-avatar {
   width: 42px;
   height: 42px;
   font-size: 17px;
+}
+
+.dash-car-frame {
+  animation: none;
+  background: #eef3f1;
+}
+.dash-car-frame.photo img {
+  object-fit: contain;
+  padding: 16px;
+}
+.dash-car-fallback {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--green, #087658);
+}
+.dash-car-fallback small {
+  color: var(--muted, #626a72);
 }

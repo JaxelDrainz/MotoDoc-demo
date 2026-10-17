@@ -10,10 +10,11 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <script src="/i18n.js" />
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "try{document.documentElement.dataset.theme=localStorage.getItem('motodoc-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch(e){}",
+              "try{var r=document.documentElement;r.dataset.theme=localStorage.getItem('motodoc-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');var s=JSON.parse(localStorage.getItem('motodoc-site')||'null');if(s&&s.style){var t=document.createElement('style');t.id='motodoc-site-style';t.textContent=s.style.css;document.head.appendChild(t);r.classList.add.apply(r.classList,s.style.classes);if(s.style.classes.indexOf('md-no-darkmode')>=0)r.dataset.theme='light'}}catch(e){}",
           }}
         />
       </head>

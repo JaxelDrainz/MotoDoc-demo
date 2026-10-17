@@ -56,7 +56,7 @@ export function ThemeToggle() {
   const next = theme === 'dark' ? 'light' : 'dark';
   return (
     <button
-      className={iconButton}
+      className={`${iconButton} md-theme-toggle`}
       aria-label={`Switch to ${next} mode`}
       onClick={() => {
         document.documentElement.dataset.theme = next;
@@ -127,7 +127,7 @@ export function Bell({ onSelect }: { onSelect: () => void }) {
     }
   }
   return (
-    <div className="relative" ref={box}>
+    <div className="md-bell relative" ref={box}>
       <button
         className={iconButton}
         aria-label={feed.unread ? `Notifications, ${feed.unread} new` : 'Notifications'}
@@ -216,13 +216,28 @@ export function SlotPicker({
   );
   const [day, setDay] = useState(days[1]);
   const [busy, setBusy] = useState<Set<string> | null>(null);
+  const [availabilityError, setAvailabilityError] = useState('');
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    let active = true;
+    setBusy(null);
+    setAvailabilityError('');
     const to = new Date(days[13]);
     to.setDate(to.getDate() + 1);
     api<string[]>(`/garages/${garageId}/busy?from=${days[0].toISOString()}&to=${to.toISOString()}`)
-      .then((taken) => setBusy(new Set(taken)))
-      .catch(() => setBusy(new Set()));
-  }, [garageId, days]);
+      .then((taken) => {
+        if (active) setBusy(new Set(taken));
+      })
+      .catch(() => {
+        if (active) {
+          setAvailabilityError('Available times could not be checked. Please retry.');
+          onChange('');
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [garageId, days, attempt, onChange]);
   const [now] = useState(() => Date.now());
   const pill =
     'md-slot border border-[#d7dce0] bg-white text-[#111827] hover:border-[#087658] aria-pressed:border-[#087658] aria-pressed:bg-[#087658] aria-pressed:text-white disabled:cursor-not-allowed disabled:bg-[#f1f4f3] disabled:text-[#a3aba7] disabled:line-through';
@@ -234,7 +249,10 @@ export function SlotPicker({
             type="button"
             key={item.getTime()}
             aria-pressed={item.getTime() === day.getTime()}
-            onClick={() => setDay(item)}
+            onClick={() => {
+              setDay(item);
+              onChange('');
+            }}
             className={`${pill} grid w-[54px] shrink-0 gap-px rounded-xl py-1.5 text-center`}
           >
             <small className="text-[11px] opacity-70">
@@ -248,7 +266,7 @@ export function SlotPicker({
         ))}
       </div>
       <div
-        aria-busy={!busy}
+        aria-busy={!busy && !availabilityError}
         className="mt-1.5 grid grid-cols-[repeat(auto-fill,minmax(76px,1fr))] gap-1.5"
       >
         {HOURS.map((hour) => {
@@ -271,6 +289,18 @@ export function SlotPicker({
           );
         })}
       </div>
+      {availabilityError && (
+        <div role="alert" className="mt-3 text-sm text-red-700">
+          <p>{availabilityError}</p>
+          <button
+            type="button"
+            onClick={() => setAttempt((n) => n + 1)}
+            className="mt-2 min-h-11 rounded-full border px-4"
+          >
+            Retry availability
+          </button>
+        </div>
+      )}
       <p className="mt-2.5 text-[13px] text-[#626a72]">
         {value
           ? `Selected: ${when(value)}`
