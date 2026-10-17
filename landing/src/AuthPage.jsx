@@ -1,3 +1,4 @@
+import { useSite } from './site.jsx';
 import { flash, toast } from './Toasts.jsx';
 import { Brand } from './Brand.jsx';
 import { useEffect, useRef, useState } from 'react';
@@ -38,6 +39,7 @@ function GoogleIcon() {
 }
 
 export function AuthPage({ mode }) {
+  const authImage = useSite().images.auth;
   const signup = mode === 'signup';
   const recovery = mode === 'recovery';
   const reset = mode === 'reset';
@@ -209,6 +211,7 @@ export function AuthPage({ mode }) {
       </a>
       <header className="auth-header">
         <Brand href="/#top" />
+        <span data-lang-switch />
         <a className="auth-home" href="/#top">
           <ArrowLeftIcon size={17} aria-hidden="true" /> Back to home
         </a>
@@ -261,7 +264,7 @@ export function AuthPage({ mode }) {
         </div>
         <img
           className="auth-mechanic"
-          src="/assets/mechanic-auth.png"
+          src={authImage}
           width="1024"
           height="1536"
           alt=""

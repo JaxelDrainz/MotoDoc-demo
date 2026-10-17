@@ -22,6 +22,7 @@ import {
   searchModels,
 } from './catalog.js';
 import { wikimediaImages } from './vehicle-images.js';
+import { mergeSite, siteDefaults, siteSchema, siteStyle } from './site.js';
 import { vehicleArt } from './vehicle-art.js';
 
 const scrypt = promisify(scryptCallback);
@@ -104,6 +105,7 @@ export async function createApp({
   verifyGoogleToken,
   vehicleLookup = nhtsaLookup(),
   imageLookup = wikimediaImages(),
+  adminEmails = process.env.ADMIN_EMAILS || '',
 } = {}) {
   if (production && !database && !process.env.TURSO_DATABASE_URL)
     throw new Error(
@@ -186,9 +188,36 @@ export async function createApp({
       }
       next();
     },
-    express.json({ limit: '24kb' }),
+    (req, res, next) =>
+      express.json({ limit: req.path.startsWith('/admin/') ? '1500kb' : '24kb' })(req, res, next),
   );
   app.get('/api/health', async (_req, res) => res.json({ ok: true }));
+  const admins = new Set(
+    adminEmails
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const isAdmin = (user) => admins.has(String(user.email).toLowerCase());
+  const currentSite = async () => {
+    const latest = await one(
+      'SELECT data FROM site_revisions ORDER BY created_at DESC, id DESC LIMIT 1',
+    );
+    return mergeSite(siteDefaults, latest ? JSON.parse(latest.data) : {});
+  };
+  app.get('/api/site', async (_req, res) => {
+    const site = await currentSite();
+    res.set('Cache-Control', 'public, max-age=20, stale-while-revalidate=300');
+    res.json({ site, style: siteStyle(site) });
+  });
+  app.get('/api/assets/:id', async (req, res) => {
+    const asset = await one('SELECT mime,data FROM site_assets WHERE id=?', req.params.id);
+    if (!asset) throw fail(404, 'Image not found.');
+    res
+      .set('Cache-Control', 'public, max-age=31536000, immutable')
+      .type(asset.mime)
+      .send(Buffer.from(asset.data, 'base64'));
+  });
   app.get('/api/catalog/art/:file', (req, res) => {
     const svg = vehicleArt(req.params.file.replace(/\.svg$/, ''));
     if (!svg) throw fail(404, 'Illustration not found.');
@@ -386,7 +415,76 @@ export async function createApp({
     if (!req.user) return res.status(401).json({ error: 'Please log in to continue.' });
     next();
   });
-  app.get('/api/auth/me', async (req, res) => res.json({ user: userView(req.user) }));
+  app.get('/api/auth/me', async (req, res) =>
+    res.json({ user: { ...userView(req.user), admin: isAdmin(req.user) } }),
+  );
+  app.use('/api/admin', (req, _res, next) => {
+    if (!isAdmin(req.user))
+      throw fail(403, 'Only MotoDoc administrators can change site settings.');
+    next();
+  });
+  app.get('/api/admin/site', async (_req, res) => {
+    const revisions = await all(
+      'SELECT r.id,r.created_at,u.name author FROM site_revisions r LEFT JOIN users u ON u.id=r.created_by ORDER BY r.created_at DESC, r.id DESC LIMIT 30',
+    );
+    res.json({ site: await currentSite(), defaults: siteDefaults, revisions });
+  });
+  app.put('/api/admin/site', async (req, res) => {
+    const site = siteSchema.parse(mergeSite(siteDefaults, req.body?.site));
+    await run(
+      'INSERT INTO site_revisions(id,data,created_by,created_at) VALUES(?,?,?,?)',
+      id(),
+      JSON.stringify(site),
+      req.user.id,
+      new Date(clock()).toISOString(),
+    );
+    res.json({ site, style: siteStyle(site) });
+  });
+  app.post('/api/admin/revisions/:id/restore', async (req, res) => {
+    const revision = await one('SELECT data FROM site_revisions WHERE id=?', req.params.id);
+    if (!revision) throw fail(404, 'Version not found.');
+    await run(
+      'INSERT INTO site_revisions(id,data,created_by,created_at) VALUES(?,?,?,?)',
+      id(),
+      revision.data,
+      req.user.id,
+      new Date(clock()).toISOString(),
+    );
+    res.json({ ok: true });
+  });
+  app.get('/api/admin/assets', async (_req, res) =>
+    res.json(
+      (await all('SELECT id,name,mime,created_at FROM site_assets ORDER BY created_at DESC')).map(
+        (asset) => ({ ...asset, url: `/api/assets/${asset.id}` }),
+      ),
+    ),
+  );
+  app.post('/api/admin/assets', async (req, res) => {
+    const { name, image } = parse(
+      z.object({
+        name: z.string().trim().min(1).max(120),
+        image: z
+          .string()
+          .max(1400000)
+          .regex(
+            /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/,
+            'Upload a JPG, PNG or WebP image.',
+          ),
+      }),
+      req,
+    );
+    const [, mime, data] = image.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+    const key = randomUUID();
+    await run(
+      'INSERT INTO site_assets(id,name,mime,data,created_at) VALUES(?,?,?,?,?)',
+      key,
+      name,
+      mime,
+      data,
+      new Date(clock()).toISOString(),
+    );
+    res.status(201).json({ id: key, url: `/api/assets/${key}` });
+  });
   app.post('/api/auth/link-google', async (req, res) => {
     await rateLimit(req, 'google-link', 10, req.user.id);
     if (!googleClientId && !verifyGoogleToken) throw fail(503, 'Google Sign-In is not configured.');

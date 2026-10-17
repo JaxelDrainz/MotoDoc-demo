@@ -11,8 +11,22 @@
         document.documentElement.dataset.theme =
           localStorage.getItem('motodoc-theme') ||
           (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        var saved = JSON.parse(localStorage.getItem('motodoc-site') || 'null');
+        if (saved && saved.style) {
+          var tag = document.createElement('style');
+          tag.id = 'motodoc-site-style';
+          tag.textContent = saved.style.css;
+          document.head.appendChild(tag);
+          document.documentElement.classList.add.apply(
+            document.documentElement.classList,
+            saved.style.classes,
+          );
+          if (saved.style.classes.indexOf('md-no-darkmode') >= 0)
+            document.documentElement.dataset.theme = 'light';
+        }
       } catch (e) {}
     </script>
+    <script src="/i18n.js"></script>
     <meta
       name="description"
       content="Your car. Your mechanic. All in one place. Find trusted garages, book services, track your maintenance, and unlock member benefits with MotoDoc."

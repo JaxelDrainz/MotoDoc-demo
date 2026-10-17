@@ -83,10 +83,28 @@ interface Data {
 
 const APP_HREF = '/app';
 const LOGIN_HREF = '/login';
-const SPLASH_MS = 400;
+const SPLASH_MS = 600;
 const OPENED_KEY = 'motodoc-opened';
 
-const vehicleImage = (v: ApiVehicle) => v.image_url ?? `/api/catalog/art/${v.body ?? 'car'}.svg`;
+const photosOn = () =>
+  typeof document === 'undefined' || !document.documentElement.classList.contains('md-no-photos');
+const vehicleImage = (v: ApiVehicle) =>
+  (photosOn() && v.image_url) || `/api/catalog/art/${v.body ?? 'car'}.svg`;
+const applySite = (style: { css: string; classes: string[] }) => {
+  let tag = document.getElementById('motodoc-site-style');
+  if (!tag) {
+    tag = document.createElement('style');
+    tag.id = 'motodoc-site-style';
+  }
+  document.head.append(tag);
+  tag.textContent = style.css;
+  const root = document.documentElement;
+  [...root.classList]
+    .filter((name) => name.startsWith('md-no-'))
+    .forEach((name) => root.classList.remove(name));
+  root.classList.add(...style.classes);
+  if (style.classes.includes('md-no-darkmode')) root.dataset.theme = 'light';
+};
 const imageCredit = (v: ApiVehicle) =>
   v.image_url && v.image_source
     ? { label: [v.image_credit, v.image_license].filter(Boolean).join(' · '), href: v.image_source }
@@ -99,6 +117,16 @@ export default function ConnectedDashboard() {
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
+    await fetch('/api/site', { cache: 'no-cache' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!data) return;
+        applySite(data.style);
+        try {
+          window.localStorage.setItem('motodoc-site', JSON.stringify(data));
+        } catch {}
+      })
+      .catch(() => {});
     const { user } = await api<{ user: ApiUser }>('/auth/me');
     if (user.role !== 'driver') {
       window.location.replace(APP_HREF);
@@ -174,6 +202,9 @@ export default function ConnectedDashboard() {
     });
   }, [load]);
   useEffect(open, [open]);
+  useEffect(() => {
+    document.documentElement.dataset.mdReady = '1';
+  }, []);
 
   const [opening, setOpening] = useState(true);
   useEffect(() => {
@@ -182,7 +213,14 @@ export default function ConnectedDashboard() {
       seen = !!window.sessionStorage.getItem(OPENED_KEY);
       window.sessionStorage.setItem(OPENED_KEY, '1');
     } catch {}
-    const timer = window.setTimeout(() => setOpening(false), seen ? 0 : SPLASH_MS);
+    const timer = window.setTimeout(
+      () => setOpening(false),
+      seen ||
+        document.documentElement.classList.contains('md-no-splash') ||
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 0
+        : SPLASH_MS,
+    );
     return () => window.clearTimeout(timer);
   }, []);
 

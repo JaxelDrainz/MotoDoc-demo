@@ -114,7 +114,7 @@ export default function PixelFill({
     <canvas
       ref={canvas}
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 h-full w-full"
+      className="md-pixel-canvas pointer-events-none absolute inset-0 h-full w-full"
     />
   );
 }

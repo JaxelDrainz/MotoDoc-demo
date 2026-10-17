@@ -26,6 +26,7 @@ import { api } from './api.js';
 import { Brand } from './Brand.jsx';
 import { Bell, SlotPicker, Status, ThemeToggle } from './DashParts.jsx';
 import { flash, toast } from './Toasts.jsx';
+import { siteFlag } from './site.jsx';
 import './dashboard.css';
 
 const euro = (cents) =>
@@ -141,6 +142,8 @@ function FormDialog({ config, onClose, onSave }) {
     setError('');
     const values = Object.fromEntries(new FormData(e.currentTarget));
     try {
+      if (config.fields?.some((field) => field.type === 'slots' && !values[field.name]))
+        throw new Error('Choose an available appointment time before continuing.');
       await config.save(values);
       await onSave();
       onClose();
@@ -257,23 +260,44 @@ function FormDialog({ config, onClose, onSave }) {
   );
 }
 function CarPicture({ vehicle, className = '' }) {
-  const photo = vehicle.image_url;
+  const [failedSources, setFailedSources] = useState([]);
+  const photo =
+    siteFlag('md-no-photos') && vehicle.image_url && !failedSources.includes(vehicle.image_url)
+      ? vehicle.image_url
+      : null;
+  const source = photo || `/api/catalog/art/${vehicle.body || 'car'}.svg`;
   return (
     <figure className={`dash-car ${className}`.trim()}>
       <div className={`dash-car-frame ${photo ? 'photo' : 'art'}`}>
-        <img src={photo || `/api/catalog/art/${vehicle.body || 'car'}.svg`} alt="" loading="lazy" />
+        {failedSources.includes(source) ? (
+          <div className="dash-car-fallback">
+            <CarIcon size={64} aria-hidden="true" />
+            <span>
+              {vehicle.make} {vehicle.model}
+            </span>
+            <small>Vehicle image unavailable</small>
+          </div>
+        ) : (
+          <img
+            src={source}
+            alt={`${vehicle.make} ${vehicle.model}, model image`}
+            loading="lazy"
+            onError={() => setFailedSources((current) => [...current, source])}
+          />
+        )}
       </div>
-      {photo && (
+      {photo && vehicle.image_source && (
         <figcaption>
           <a href={vehicle.image_source} target="_blank" rel="noreferrer">
             Photo: {vehicle.image_credit}
-            {vehicle.image_license && ` · ${vehicle.image_license}`}
+            {vehicle.image_license && ` � ${vehicle.image_license}`}
           </a>
         </figcaption>
       )}
     </figure>
   );
 }
+
 function Avatar({ name, photo, className = '' }) {
   return photo ? (
     <img className={`dash-avatar ${className}`.trim()} src={photo} alt="" />
@@ -486,6 +510,7 @@ export function Dashboard() {
   }, []);
 
   const [opening, setOpening] = useState(() => {
+    if (!siteFlag('md-no-splash')) return false;
     try {
       return !sessionStorage.getItem('motodoc-opened');
     } catch {
@@ -494,12 +519,15 @@ export function Dashboard() {
   });
   useEffect(() => {
     if (!opening) return;
-    const timer = setTimeout(() => {
-      setOpening(false);
-      try {
-        sessionStorage.setItem('motodoc-opened', '1');
-      } catch {}
-    }, 400);
+    const timer = setTimeout(
+      () => {
+        setOpening(false);
+        try {
+          sessionStorage.setItem('motodoc-opened', '1');
+        } catch {}
+      },
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 600,
+    );
     return () => clearTimeout(timer);
   }, [opening]);
   const [more, setMore] = useState(false);
@@ -930,6 +958,7 @@ export function Dashboard() {
           )}
         </nav>
         <div className="dash-account">
+          <span data-lang-switch />
           <Bell />
           <Avatar name={user.name} photo={user.photo} />
           <ThemeToggle />

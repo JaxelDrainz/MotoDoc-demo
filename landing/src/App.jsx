@@ -3,6 +3,8 @@ import { AuthPage } from './AuthPage.jsx';
 import { Dashboard } from './Dashboard.jsx';
 import { Brand } from './Brand.jsx';
 import { InfoPage, Proof } from './Pages.jsx';
+import { Admin } from './Admin.jsx';
+import { Lines, useSite } from './site.jsx';
 import {
   ArrowRightIcon,
   ArrowUpRightIcon,
@@ -174,6 +176,8 @@ function InfoDialog({ type, onClose }) {
 
 function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { content, images } = useSite(),
+    { hero, drivers, garages, closing } = content;
   const [info, setInfo] = useState(null);
   const menuButton = useRef(null);
   useEffect(() => {
@@ -204,6 +208,7 @@ function LandingPage() {
             <a href="#how-it-works">How it works</a>
           </nav>
           <div className="header-actions">
+            <span data-lang-switch />
             <a className="login-link" href={APP_URL}>
               Log in
             </a>
@@ -246,28 +251,23 @@ function LandingPage() {
           <div className="container hero-inner">
             <div className="hero-copy">
               <h1 id="hero-title">
-                Your car.
-                <br />
-                Your mechanic.
+                <Lines text={hero.title} />
               </h1>
-              <p className="hero-tagline">All in one place.</p>
-              <p className="hero-description">
-                Book a trusted garage, keep your service history together, and enjoy benefits from
-                your mechanic.
-              </p>
+              <p className="hero-tagline">{hero.tagline}</p>
+              <p className="hero-description">{hero.description}</p>
               <div className="hero-actions">
                 <button className="button" onClick={() => openStart('driver')}>
-                  Get started
+                  {hero.cta}
                 </button>
                 <a className="text-link" href="#garages">
-                  For garage owners <ArrowRightIcon size={23} aria-hidden="true" />
+                  {hero.secondary} <ArrowRightIcon size={23} aria-hidden="true" />
                 </a>
               </div>
             </div>
             <div className="hero-visual">
               <img
                 className="hero-art"
-                src="/assets/mechanic-hero.png"
+                src={images.hero}
                 alt="A mechanic caring for a car, illustrated in green."
                 width="1536"
                 height="1024"
@@ -308,24 +308,20 @@ function LandingPage() {
         >
           <div className="container" id="drivers">
             <div className="section-heading">
-              <span className="eyebrow">FOR DRIVERS</span>
+              <span className="eyebrow">{drivers.eyebrow}</span>
               <h2 id="drivers-heading">
-                Your car care,
-                <br className="mobile-break" /> clearly organised.
+                <Lines text={drivers.title} />
               </h2>
-              <p>
-                Everything your car needs, in one place. From the next service to the last repair,
-                stay connected to the people who keep you moving.
-              </p>
+              <p>{drivers.text}</p>
             </div>
             <div className="driver-grid">
-              {driverFeatures.map((feature) => (
-                <Feature key={feature.title} feature={feature} />
+              {driverFeatures.map((feature, index) => (
+                <Feature key={feature.title} feature={{ ...feature, ...drivers.features[index] }} />
               ))}
             </div>
             <figure className="context-photo">
               <img
-                src="/assets/garage-visit.png"
+                src={images.drivers}
                 alt="A driver and mechanic reviewing a service note together beside a car in a garage."
                 loading="lazy"
                 width="1536"
@@ -348,26 +344,21 @@ function LandingPage() {
         <section className="section garage-section" id="garages" aria-labelledby="garages-heading">
           <div className="container garage-layout">
             <div className="garage-intro">
-              <span className="eyebrow">FOR GARAGES</span>
+              <span className="eyebrow">{garages.eyebrow}</span>
               <h2 id="garages-heading">
-                Your garage.
-                <br />
-                Fully connected.
+                <Lines text={garages.title} />
               </h2>
-              <p>
-                Manage bookings, memberships, service records, and communication in one place —
-                built for modern car care.
-              </p>
+              <p>{garages.text}</p>
               <button className="button button-outline" onClick={() => openStart('garage')}>
-                Register your garage <ArrowRightIcon size={20} aria-hidden="true" />
+                {garages.cta} <ArrowRightIcon size={20} aria-hidden="true" />
               </button>
               <div className="garage-caption">
                 <WrenchIcon size={22} aria-hidden="true" />
-                <span>More time for what you do best.</span>
+                <span>{garages.caption}</span>
               </div>
               <img
                 className="garage-photo"
-                src="/assets/garage-work.png"
+                src={images.garages}
                 alt="A mechanic inspecting a car engine in a bright workshop."
                 loading="lazy"
                 width="1024"
@@ -375,8 +366,12 @@ function LandingPage() {
               />
             </div>
             <div className="garage-grid">
-              {garageFeatures.map((feature) => (
-                <Feature key={feature.title} feature={feature} compact />
+              {garageFeatures.map((feature, index) => (
+                <Feature
+                  key={feature.title}
+                  feature={{ ...feature, ...garages.features[index] }}
+                  compact
+                />
               ))}
             </div>
           </div>
@@ -467,23 +462,18 @@ function LandingPage() {
         <section className="closing-section" aria-labelledby="closing-heading">
           <div className="container closing-inner">
             <div>
-              <span className="eyebrow">CAR CARE MADE EASY</span>
+              <span className="eyebrow">{closing.eyebrow}</span>
               <h2 id="closing-heading">
-                Your mechanic.
-                <br />
-                Your service. Your MotoDoc.
+                <Lines text={closing.title} />
               </h2>
-              <p>
-                Find a garage you can trust. Book services, track maintenance, and unlock member
-                benefits — all in one app.
-              </p>
+              <p>{closing.text}</p>
             </div>
             <div className="closing-actions">
               <button className="button button-white" onClick={() => openStart('driver')}>
-                Get early access <ArrowRightIcon size={20} aria-hidden="true" />
+                {closing.cta} <ArrowRightIcon size={20} aria-hidden="true" />
               </button>
               <button className="text-link" onClick={() => openStart('garage')}>
-                Register your garage <ArrowRightIcon size={20} aria-hidden="true" />
+                {closing.secondary} <ArrowRightIcon size={20} aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -534,6 +524,7 @@ function LandingPage() {
 export function App() {
   const path = window.location.pathname.replace(/\/$/, '');
   if (path === '/app') return <Dashboard />;
+  if (path === '/admin') return <Admin />;
   if (['/privacy', '/terms', '/contact'].includes(path)) return <InfoPage kind={path.slice(1)} />;
   if (path === '/reset-password') return <AuthPage mode="reset" />;
   if (path === '/login' || path === '/auth') return <AuthPage mode="login" />;

@@ -1,37 +1,30 @@
+:root {
+  --motion-fast: 150ms;
+  --motion-base: 220ms;
+  --motion-slow: 420ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+  --motion-distance: 8px;
+}
 @keyframes motor-enter {
   from {
     opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-@keyframes motor-gauge {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
-}
-@keyframes motor-dialog {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.99);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(var(--motion-distance));
   }
 }
 @keyframes motor-fade {
   from {
     opacity: 0;
   }
-  to {
-    opacity: 1;
+}
+@keyframes motor-gauge {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes motor-dialog {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
   }
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -39,34 +32,52 @@
     navigation: auto;
   }
   ::view-transition-old(root) {
-    animation: motor-fade 0.15s ease reverse both;
+    animation: motor-fade var(--motion-fast) ease reverse both;
   }
   ::view-transition-new(root) {
-    animation: motor-fade 0.2s ease both;
+    animation: motor-fade var(--motion-base) ease both;
   }
   .md-brand-link {
     view-transition-name: motodoc-brand;
   }
   .md-connected main {
-    animation: motor-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: motor-enter var(--motion-slow) var(--motion-ease) both;
+  }
+  .md-vehicle-art {
+    animation: motor-fade 600ms 80ms ease both;
   }
   .md-reading-fill {
     transform-origin: left;
-    animation: motor-gauge 0.6s 0.1s cubic-bezier(0.16, 1, 0.3, 1) both;
-    transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: motor-gauge 700ms 120ms var(--motion-ease) both;
+    transition: width var(--motion-slow) var(--motion-ease);
+  }
+  .md-reading:nth-child(2) .md-reading-fill {
+    animation-delay: 200ms;
+  }
+  .md-reading:nth-child(3) .md-reading-fill {
+    animation-delay: 280ms;
   }
   .md-connected [role='tabpanel'] {
-    animation: motor-fade 0.2s ease both;
+    animation: motor-fade var(--motion-base) ease both;
   }
   .md-service-card {
-    transition: border-color 0.2s;
+    animation: motor-enter var(--motion-slow) 80ms var(--motion-ease) backwards;
+    transition:
+      border-color var(--motion-base) ease,
+      box-shadow var(--motion-base) ease;
   }
-  .md-service-card:hover {
-    border-color: #9dbdac;
+  .md-service-card:nth-child(2) {
+    animation-delay: 140ms;
+  }
+  @media (hover: hover) {
+    .md-service-card:hover {
+      border-color: #b9d6c8;
+      box-shadow: 0 8px 24px #10251c0d;
+    }
   }
   .md-connected [role='tab'] {
     position: relative;
-    transition: color 0.2s;
+    transition: color var(--motion-base) ease;
   }
   .md-connected [role='tab']:after {
     content: '';
@@ -79,36 +90,36 @@
     background: #087658;
     transform: scaleX(0);
     transform-origin: left;
-    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform var(--motion-base) var(--motion-ease);
   }
   .md-connected [role='tab'][aria-selected='true']:after {
     transform: scaleX(1);
   }
   .md-action {
     transition:
-      transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
-      background-color 0.2s,
-      border-color 0.2s;
+      transform var(--motion-fast) var(--motion-ease),
+      background-color var(--motion-base) ease,
+      border-color var(--motion-base) ease;
   }
   .md-action:active:not(:disabled) {
-    transform: scale(0.97);
+    transform: scale(0.98);
   }
   .md-connected input,
   .md-connected textarea,
   .md-connected select {
     transition:
-      border-color 0.2s,
-      box-shadow 0.2s;
+      border-color var(--motion-base) ease,
+      box-shadow var(--motion-base) ease;
   }
   .md-connected dialog[open] {
-    animation: motor-dialog 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: motor-dialog var(--motion-base) var(--motion-ease) both;
   }
   .md-connected dialog[open]::backdrop {
-    animation: motor-fade 0.2s ease both;
+    animation: motor-fade var(--motion-base) ease both;
   }
   .md-toast,
   .md-chat-entry {
-    animation: motor-enter 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: motor-enter var(--motion-base) var(--motion-ease) both;
   }
 }
 @media (prefers-reduced-motion: reduce) {

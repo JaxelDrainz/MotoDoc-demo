@@ -1,32 +1,25 @@
 :root {
-  --motion-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-fast: 150ms;
+  --motion-base: 220ms;
+  --motion-slow: 420ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+  --motion-distance: 8px;
 }
-@keyframes md-rise {
+@keyframes md-enter {
   from {
     opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+    transform: translateY(var(--motion-distance));
   }
 }
 @keyframes md-fade {
   from {
     opacity: 0;
   }
-  to {
-    opacity: 1;
-  }
 }
 @keyframes md-dialog {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.99);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(6px) scale(0.98);
   }
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -34,10 +27,10 @@
     navigation: auto;
   }
   ::view-transition-old(root) {
-    animation: md-fade 0.15s ease reverse both;
+    animation: md-fade var(--motion-fast) ease reverse both;
   }
   ::view-transition-new(root) {
-    animation: md-fade 0.2s ease both;
+    animation: md-fade var(--motion-base) ease both;
   }
   .site-header .brand,
   .auth-header .brand,
@@ -47,87 +40,119 @@
   html {
     scroll-behavior: smooth;
   }
-  .hero-copy {
-    animation: md-rise 0.45s var(--motion-enter) both;
+  .hero-copy > * {
+    animation: md-enter var(--motion-slow) var(--motion-ease) both;
+  }
+  .hero-copy > :nth-child(2) {
+    animation-delay: 60ms;
+  }
+  .hero-copy > :nth-child(3) {
+    animation-delay: 120ms;
+  }
+  .hero-copy > :nth-child(4) {
+    animation-delay: 180ms;
   }
   .hero-art {
-    animation: md-fade 0.6s 0.1s ease both;
+    animation: md-fade 600ms 100ms ease both;
   }
   .appointment-card {
-    animation: md-rise 0.45s 0.3s var(--motion-enter) both;
+    animation: md-enter var(--motion-slow) 320ms var(--motion-ease) both;
   }
   .motion-ready {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(var(--motion-distance));
     transition:
-      opacity 0.4s var(--motion-enter) var(--reveal-delay, 0ms),
-      transform 0.4s var(--motion-enter) var(--reveal-delay, 0ms);
+      opacity var(--motion-slow) var(--motion-ease) var(--reveal-delay, 0ms),
+      transform var(--motion-slow) var(--motion-ease) var(--reveal-delay, 0ms);
   }
   .motion-ready.motion-visible {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
   .motion-ready:focus-within {
     opacity: 1;
     transform: none;
     transition: none;
   }
+  .feature,
+  .faq-list details,
+  .dash-tile,
+  .dash-stats article {
+    transition:
+      opacity var(--motion-slow) var(--motion-ease) var(--reveal-delay, 0ms),
+      transform var(--motion-slow) var(--motion-ease) var(--reveal-delay, 0ms),
+      border-color var(--motion-base) ease,
+      box-shadow var(--motion-base) ease;
+  }
+  @media (hover: hover) {
+    .feature:hover,
+    .faq-list details:hover,
+    .dash-tile:hover,
+    .dash-stats article:hover {
+      border-color: #b9d6c8;
+      box-shadow: 0 8px 24px #10251c0d;
+    }
+  }
   .button,
   .dash-secondary,
-  .icon-button {
+  .icon-button,
+  .dash-text-button,
+  .desktop-nav a,
+  .login-link,
+  .auth-home,
+  .dash-sidebar nav a,
+  .auth-roles label,
+  .role-choice {
     transition:
-      transform 0.15s var(--motion-enter),
-      background-color 0.2s,
-      border-color 0.2s;
+      color var(--motion-base) ease,
+      background-color var(--motion-base) ease,
+      border-color var(--motion-base) ease,
+      transform var(--motion-fast) var(--motion-ease);
   }
   .button:active:not(:disabled),
   .dash-secondary:active:not(:disabled),
   .icon-button:active {
-    transform: scale(0.97);
+    transform: scale(0.98);
   }
   .text-link svg,
-  .button svg {
-    transition: transform 0.25s var(--motion-enter);
+  .button svg,
+  .dash-text-button svg {
+    transition: transform var(--motion-base) var(--motion-ease);
   }
   .text-link:hover svg,
-  .button:hover svg {
-    transform: translateX(3px);
-  }
-  .desktop-nav a,
-  .auth-home,
-  .login-link,
-  .dash-sidebar nav a,
-  .auth-roles label {
-    transition:
-      color 0.2s,
-      background-color 0.2s,
-      border-color 0.2s;
+  .button:hover svg,
+  .dash-text-button:hover svg {
+    transform: translateX(2px);
   }
   .auth-field input,
   .dash-field input,
+  .dash-field select,
   .dash-field textarea {
     transition:
-      border-color 0.2s,
-      box-shadow 0.2s;
+      border-color var(--motion-base) ease,
+      box-shadow var(--motion-base) ease;
   }
-  .auth-stage {
-    animation: md-rise 0.4s var(--motion-enter) both;
+  .auth-story {
+    animation: md-fade var(--motion-slow) ease both;
+  }
+  .auth-card {
+    animation: md-enter var(--motion-slow) 60ms var(--motion-ease) both;
   }
   .auth-feedback,
   .dash-notice {
-    animation: md-rise 0.3s var(--motion-enter) both;
+    animation: md-enter var(--motion-base) var(--motion-ease) both;
   }
   .dash-main {
-    animation: md-fade 0.2s ease both;
+    animation: md-fade var(--motion-base) ease both;
   }
   .mobile-nav,
   .dash-dialog[open],
   .start-dialog[open],
   .dash-more[open] {
-    animation: md-dialog 0.2s var(--motion-enter) both;
+    animation: md-dialog var(--motion-base) var(--motion-ease) both;
   }
   dialog[open]::backdrop {
-    animation: md-fade 0.2s both;
+    animation: md-fade var(--motion-base) ease both;
   }
 }
 @media (prefers-reduced-motion: reduce) {
