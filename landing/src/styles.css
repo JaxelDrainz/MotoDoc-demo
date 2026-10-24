@@ -1703,3 +1703,62 @@ h3 {
 .dash-overview-note {
   position: relative;
 }
+.mobile-nav [data-lang-switch] {
+  display: none;
+}
+@media (max-width: 700px) {
+  .header-actions [data-lang-switch] {
+    display: none;
+  }
+  .mobile-nav [data-lang-switch] {
+    display: inline-flex;
+    align-self: flex-start;
+    margin: 4px 0 8px;
+  }
+}
+.brand {
+  flex-shrink: 0;
+}
+[data-fit] > * {
+  flex-shrink: 0;
+}
+[data-fit][data-fit-level~='1'] {
+  column-gap: 12px;
+}
+[data-fit][data-fit-level~='1'] :is(.header-actions, .dash-account) {
+  column-gap: 10px;
+}
+[data-fit][data-fit-level~='2'] {
+  column-gap: 8px;
+}
+[data-fit][data-fit-level~='2'] :is(.header-actions, .dash-account) {
+  column-gap: 6px;
+}
+[data-fit][data-fit-level~='2'] [data-lang-switch] button {
+  min-width: 28px;
+  min-height: 26px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+[data-fit][data-fit-level~='3'] .brand {
+  zoom: 0.88;
+}
+[data-fit][data-fit-level~='3'] [data-fit-label] {
+  display: none;
+}
+[data-fit][data-fit-level~='3'] .auth-home {
+  min-width: 44px;
+  justify-content: center;
+}
+[data-fit][data-fit-level~='4'] {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .site-header .header-inner {
+    height: 64px;
+  }
+  .auth-page .auth-header {
+    min-height: 64px;
+  }
+}

@@ -403,7 +403,7 @@ function Empty({ icon: Icon = WrenchIcon, title, children, action }) {
 function Skeleton() {
   return (
     <div className="dashboard" aria-busy="true">
-      <aside className="dash-sidebar">
+      <aside className="dash-sidebar" data-fit>
         <Brand />
       </aside>
       <main className="dash-main">
@@ -935,7 +935,7 @@ export function Dashboard() {
     );
   return (
     <div className="dashboard">
-      <aside className="dash-sidebar">
+      <aside className="dash-sidebar" data-fit>
         <Brand />
         <span className="dash-role">{isGarage ? 'FOR GARAGES' : 'FOR DRIVERS'}</span>
         <nav aria-label="Account navigation">
