@@ -68,11 +68,14 @@ export function InfoPage({ kind }) {
   return (
     <div className="info-page">
       <header className="site-header">
-        <div className="container header-inner">
+        <div className="container header-inner" data-fit>
           <Brand />
           <span data-lang-switch />
-          <a className="auth-home" href="/">
-            <ArrowLeftIcon size={17} aria-hidden="true" /> Back to home
+          <a className="auth-home" href="/" aria-label="Back to home">
+            <ArrowLeftIcon size={17} aria-hidden="true" />
+            <span className="auth-home-label" data-fit-label>
+              Back to home
+            </span>
           </a>
         </div>
       </header>

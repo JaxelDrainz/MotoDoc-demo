@@ -1595,3 +1595,13 @@ img.dash-avatar {
 .dash-car-fallback small {
   color: var(--muted, #626a72);
 }
+@media (max-width: 760px) {
+  .dash-sidebar[data-fit-level~='4'] {
+    grid-template-columns: 1fr;
+    grid-template-areas: 'brand' 'account' 'nav';
+    row-gap: 10px;
+  }
+  .dash-sidebar[data-fit-level~='4'] .dash-account {
+    justify-content: flex-start;
+  }
+}

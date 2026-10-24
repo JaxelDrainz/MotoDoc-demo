@@ -200,7 +200,7 @@ function LandingPage() {
         Skip to content
       </a>
       <header className="site-header" id="top">
-        <div className="container header-inner">
+        <div className="container header-inner" data-fit>
           <Brand href="#top" />
           <nav className="desktop-nav" aria-label="Main navigation">
             <a href="#features">Features</a>
@@ -229,6 +229,7 @@ function LandingPage() {
         </div>
         {menuOpen && (
           <nav id="mobile-navigation" className="mobile-nav" aria-label="Mobile navigation">
+            <span data-lang-switch />
             <a href="#features" onClick={() => setMenuOpen(false)}>
               Features
             </a>

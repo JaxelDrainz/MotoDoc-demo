@@ -209,11 +209,14 @@ export function AuthPage({ mode }) {
       <a className="skip-link" href="#auth-form">
         Skip to form
       </a>
-      <header className="auth-header">
+      <header className="auth-header" data-fit>
         <Brand href="/#top" />
         <span data-lang-switch />
-        <a className="auth-home" href="/#top">
-          <ArrowLeftIcon size={17} aria-hidden="true" /> Back to home
+        <a className="auth-home" href="/#top" aria-label="Back to home">
+          <ArrowLeftIcon size={17} aria-hidden="true" />
+          <span className="auth-home-label" data-fit-label>
+            Back to home
+          </span>
         </a>
       </header>
       <main className="auth-stage">
