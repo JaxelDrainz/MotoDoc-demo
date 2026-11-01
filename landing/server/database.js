@@ -99,13 +99,32 @@ export const schemaSql = `
       garage_id TEXT PRIMARY KEY REFERENCES garages(id) ON DELETE CASCADE,business_id TEXT NOT NULL DEFAULT '',
       hourly_rate_cents INTEGER,member_rate_cents INTEGER,specializations TEXT NOT NULL DEFAULT '[]',
       main_focus TEXT NOT NULL DEFAULT '',hours TEXT NOT NULL DEFAULT '',membership_launched_at TEXT);
+    CREATE TABLE IF NOT EXISTS booking_jobs(
+      booking_id TEXT PRIMARY KEY REFERENCES bookings(id) ON DELETE CASCADE,requested_by TEXT NOT NULL DEFAULT 'driver',
+      stage TEXT NOT NULL DEFAULT 'booked',mechanic TEXT NOT NULL DEFAULT '',pickup_at TEXT,pickup_note TEXT NOT NULL DEFAULT '',
+      completed_at TEXT,no_show INTEGER NOT NULL DEFAULT 0,declined INTEGER NOT NULL DEFAULT 0,cancel_reason TEXT NOT NULL DEFAULT '',
+      cancelled_by TEXT NOT NULL DEFAULT '',cost_cents INTEGER,parts TEXT NOT NULL DEFAULT '');
     INSERT OR IGNORE INTO schema_versions(version) VALUES(1);
   `;
 
 export const migrations = [
   [
     2,
-    'INSERT OR IGNORE INTO user_settings(user_id,terms_accepted_at,onboarded_at) SELECT id,created_at,created_at FROM users',
+    [
+      'INSERT OR IGNORE INTO user_settings(user_id,terms_accepted_at,onboarded_at) SELECT id,created_at,created_at FROM users',
+    ],
+  ],
+  [
+    3,
+    [
+      "ALTER TABLE booking_events ADD COLUMN detail TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE reviews ADD COLUMN comment TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE reviews ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'",
+      'ALTER TABLE reviews ADD COLUMN reply TEXT',
+      'ALTER TABLE reviews ADD COLUMN reply_at TEXT',
+      'ALTER TABLE reviews ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0',
+      "INSERT OR IGNORE INTO booking_jobs(booking_id,stage,completed_at) SELECT id,CASE WHEN status='completed' THEN 'finished' ELSE 'booked' END,CASE WHEN status='completed' THEN starts_at END FROM bookings",
+    ],
   ],
 ];
 
@@ -121,9 +140,9 @@ export function openDatabase(path) {
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL;',
     );
   }
-  for (const [version, sql] of migrations)
+  for (const [version, statements] of migrations)
     if (!db.prepare('SELECT 1 FROM schema_versions WHERE version=?').get(version)) {
-      db.exec(sql);
+      for (const sql of statements) db.exec(sql);
       db.prepare('INSERT INTO schema_versions(version) VALUES(?)').run(version);
     }
   return db;

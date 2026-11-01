@@ -24,7 +24,7 @@ export async function openRemoteDatabase({
   await client.execute(
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL',
   );
-  for (const [version, sql] of migrations)
+  for (const [version, statements] of migrations)
     if (
       !(
         await client.execute({
@@ -34,7 +34,10 @@ export async function openRemoteDatabase({
       ).rows.length
     )
       await client.batch(
-        [sql, { sql: 'INSERT OR IGNORE INTO schema_versions(version) VALUES(?)', args: [version] }],
+        [
+          ...statements,
+          { sql: 'INSERT OR IGNORE INTO schema_versions(version) VALUES(?)', args: [version] },
+        ],
         'write',
       );
   const context = new AsyncLocalStorage();

@@ -156,6 +156,8 @@ export async function buildDemoWorld({ run, clock, world }) {
     [member, golf, 'Brake check', slot(5, 11), 'pending', ''],
     [basic, octavia, 'Oil change', slot(-60, 8), 'completed', ''],
     [basic, octavia, 'Diagnostics', slot(3, 9), 'pending', 'Engine light came on yesterday.'],
+    [member, golf, 'Air conditioning', slot(0, 6), 'confirmed', 'The air smells a bit musty.'],
+    [basic, octavia, 'Inspection prep', slot(7, 10), 'pending', 'Katsastus is due next month.'],
   ].map(([driver, vehicle, service, startsAt, status, notes]) => ({
     key: id(),
     driver,
@@ -178,14 +180,49 @@ export async function buildDemoWorld({ run, clock, world }) {
       b.status,
       at(-2 * day),
     );
-  const [annual, tyres, brakes, oil, diagnostics] = bookings;
-  const event = (booking, actor, kind, offset) =>
+  const [annual, tyres, brakes, oil, diagnostics, aircon, inspection] = bookings;
+  const pickup = (booking) => new Date(Date.parse(booking.startsAt) + 6 * 3600000).toISOString();
+  for (const [booking, fields] of [
+    [
+      annual,
+      {
+        stage: 'ready_for_pickup',
+        mechanic: 'Mikko',
+        pickup_at: pickup(annual),
+        completed_at: pickup(annual),
+        pickup_note: 'All done. Keys at the front desk.',
+      },
+    ],
+    [
+      oil,
+      {
+        stage: 'ready_for_pickup',
+        mechanic: 'Mikko',
+        pickup_at: pickup(oil),
+        completed_at: pickup(oil),
+      },
+    ],
+    [tyres, { mechanic: 'Mikko' }],
+    [brakes, {}],
+    [diagnostics, {}],
+    [aircon, { stage: 'in_progress', mechanic: 'Mikko' }],
+    [inspection, { requested_by: 'garage' }],
+  ]) {
+    const keys = ['booking_id', ...Object.keys(fields)];
+    await run(
+      `INSERT INTO booking_jobs(${keys.join(',')}) VALUES(${keys.map(() => '?').join(',')})`,
+      booking.key,
+      ...Object.values(fields),
+    );
+  }
+  const event = (booking, actor, kind, offset, detail = '') =>
     run(
-      'INSERT INTO booking_events(id,booking_id,actor_id,kind,at) VALUES(?,?,?,?,?)',
+      'INSERT INTO booking_events(id,booking_id,actor_id,kind,detail,at) VALUES(?,?,?,?,?,?)',
       id(),
       booking.key,
       actor,
       kind,
+      detail,
       at(offset),
     );
   await event(annual, member, 'requested', -33 * day);
@@ -198,6 +235,23 @@ export async function buildDemoWorld({ run, clock, world }) {
   await event(tyres, owner, 'confirmed', -day);
   await event(brakes, member, 'requested', -3 * 3600000);
   await event(diagnostics, basic, 'requested', -5 * 3600000);
+  await event(aircon, member, 'requested', -day);
+  await event(aircon, owner, 'confirmed', -20 * 3600000);
+  await event(aircon, mechanic, 'stage', -2 * 3600000, 'in_progress');
+  await event(
+    aircon,
+    mechanic,
+    'note',
+    -3600000,
+    'Compressor looks fine. Cleaning the cabin filter and refilling the gas now.',
+  );
+  await event(
+    inspection,
+    owner,
+    'scheduled',
+    -6 * 3600000,
+    'We have a free slot before your katsastus. Does this time suit you?',
+  );
   for (const [booking, vehicle, summary, mileage] of [
     [
       annual,
@@ -242,11 +296,15 @@ export async function buildDemoWorld({ run, clock, world }) {
     at(-60 * day),
   );
   await run(
-    'INSERT INTO reviews(booking_id,garage_id,driver_id,rating,created_at) VALUES(?,?,?,?,?)',
+    'INSERT INTO reviews(booking_id,garage_id,driver_id,rating,tags,comment,reply,reply_at,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
     annual.key,
     garage,
     member,
     5,
+    JSON.stringify(['Quality work', 'On time', 'Clear communication']),
+    'Mikko explained everything and the car was ready on time.',
+    'Thanks John, see you for the winter tyres!',
+    at(-28 * day),
     at(-29 * day),
   );
   for (const [booking, sender, body, offset] of [
@@ -290,6 +348,7 @@ const bookings = `(SELECT id FROM bookings WHERE driver_id IN ${users} OR garage
 const purgeSteps = [
   `DELETE FROM messages WHERE booking_id IN ${bookings}`,
   `DELETE FROM booking_events WHERE booking_id IN ${bookings}`,
+  `DELETE FROM booking_jobs WHERE booking_id IN ${bookings}`,
   `DELETE FROM reviews WHERE booking_id IN ${bookings}`,
   `DELETE FROM invoices WHERE booking_id IN ${bookings}`,
   `DELETE FROM service_records WHERE booking_id IN ${bookings}`,

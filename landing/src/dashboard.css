@@ -1707,3 +1707,32 @@ img.dash-avatar {
     transition: none;
   }
 }
+.dash-checks {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dash-checks legend {
+  padding: 0;
+  margin-bottom: 8px;
+}
+.dash-checks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.dash-checks label:has(input:checked) {
+  border-color: var(--green);
+  background: var(--mint);
+}
+.dash-checks input {
+  accent-color: var(--green);
+}

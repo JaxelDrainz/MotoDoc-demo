@@ -29,6 +29,7 @@ import { Bell, SlotPicker, Status, ThemeToggle } from './DashParts.jsx';
 import { flash, toast } from './Toasts.jsx';
 import { DemoBar } from './Demo.jsx';
 import { AccountSettings } from './Settings.jsx';
+import { JobDetails, JobStatus, jobActions, toLocalInput } from './Jobs.jsx';
 import { GuidedTour } from './Tour.jsx';
 import { siteFlag } from './site.jsx';
 import './dashboard.css';
@@ -144,7 +145,10 @@ function FormDialog({ config, onClose, onSave }) {
     if (busy) return;
     setBusy(true);
     setError('');
-    const values = Object.fromEntries(new FormData(e.currentTarget));
+    const form = new FormData(e.currentTarget);
+    const values = Object.fromEntries(form);
+    for (const field of config.fields || [])
+      if (field.type === 'checkboxes') values[field.name] = form.getAll(field.name);
     try {
       if (config.fields?.some((field) => field.type === 'slots' && !values[field.name]))
         throw new Error('Choose an available appointment time before continuing.');
@@ -195,6 +199,21 @@ function FormDialog({ config, onClose, onSave }) {
               <span className="required"> *</span>
               <SlotPicker garageId={f.garageId} name={f.name} />
             </div>
+          ) : f.type === 'checkboxes' ? (
+            <fieldset className="dash-field dash-checks" key={f.name}>
+              <legend>{f.label}</legend>
+              {f.options.map((o) => (
+                <label key={o.value}>
+                  <input
+                    type="checkbox"
+                    name={f.name}
+                    value={o.value}
+                    defaultChecked={config.values?.[f.name]?.includes(o.value)}
+                  />
+                  {o.label}
+                </label>
+              ))}
+            </fieldset>
           ) : (
             <label className="dash-field" key={f.name}>
               {f.label}
@@ -696,43 +715,6 @@ export function Dashboard() {
       },
     });
   }
-  function bookingAction(b, status) {
-    open({
-      title:
-        status === 'completed'
-          ? 'Complete the service'
-          : status === 'confirmed'
-            ? 'Confirm booking'
-            : 'Cancel booking',
-      note: `${b.service} · ${b.registration} · ${time(b.starts_at)}`,
-      fields:
-        status === 'completed'
-          ? [
-              { name: 'summary', label: 'Work carried out', type: 'textarea', required: true },
-              {
-                name: 'mileage',
-                label: 'Vehicle mileage (km)',
-                type: 'number',
-                min: 0,
-                max: 5000000,
-                required: true,
-              },
-            ]
-          : [],
-      submit:
-        status === 'completed'
-          ? 'Save service record'
-          : status === 'confirmed'
-            ? 'Confirm booking'
-            : 'Cancel booking',
-      save: (d) =>
-        act(
-          `/bookings/${b.id}`,
-          { status, ...d, ...(status === 'completed' ? { mileage: Number(d.mileage) } : {}) },
-          'PATCH',
-        ),
-    });
-  }
   function profile() {
     const g = data['garage/profile'];
     open({
@@ -849,6 +831,79 @@ export function Dashboard() {
         act('/invoices', { ...d, amount_cents: Math.round(Number(amount) * 100) }),
     });
   }
+  const quickAction = async (path, body, message) => {
+    try {
+      await act(path, body);
+      await reload();
+      toast(message);
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+  const openDetails = (b) =>
+    open({
+      title: b.service,
+      note: `${isGarage ? b.driver_name : b.garage_name} · ${b.make} ${b.model} · ${b.registration}`,
+      content: <JobDetails booking={b} isGarage={isGarage} />,
+      submit: 'Close',
+      save: async () => {},
+    });
+  function scheduleForCustomer() {
+    const choices = (data.customers || []).flatMap((c) =>
+      (c.vehicles || []).map((v) => ({
+        value: `${c.id}|${v.id}`,
+        label: `${c.name} · ${v.make} ${v.model} · ${v.registration}`,
+      })),
+    );
+    if (!choices.length) {
+      toast(
+        'Customers appear here after they book with you. Invite people who aren’t on MotoDoc yet.',
+        'error',
+      );
+      return;
+    }
+    const tomorrow = new Date(Date.now() + 86400000);
+    tomorrow.setHours(9, 0, 0, 0);
+    const services = data['garage/profile']?.services || [];
+    open({
+      title: 'Schedule an appointment',
+      note: 'For a customer on MotoDoc. They get a request in the app and approve or decline it. It shows in your calendar as waiting for the customer until they approve it.',
+      values: {
+        customer: choices[0].value,
+        service: services[0],
+        starts_at: toLocalInput(tomorrow.toISOString()),
+      },
+      fields: [
+        { name: 'customer', label: 'Customer and car', required: true, options: choices },
+        {
+          name: 'service',
+          label: 'Service',
+          required: true,
+          options: services.map((x) => ({ value: x, label: x })),
+        },
+        {
+          name: 'starts_at',
+          label: 'Date and time',
+          type: 'datetime-local',
+          step: 3600,
+          required: true,
+        },
+        { name: 'notes', label: 'Note for the customer', type: 'textarea', maxLength: 1000 },
+      ],
+      submit: 'Send to customer',
+      save: ({ customer, starts_at, ...d }) => {
+        const [driver_id, vehicle_id] = customer.split('|');
+        const start = new Date(starts_at);
+        start.setMinutes(0, 0, 0);
+        return act('/bookings/schedule', {
+          ...d,
+          driver_id,
+          vehicle_id,
+          starts_at: start.toISOString(),
+        });
+      },
+    });
+  }
   const confirm = (title, note, path, body, method = 'PATCH') =>
     open({ title, note, submit: 'Confirm', save: () => act(path, body, method) });
   function rows(bookings) {
@@ -864,7 +919,7 @@ export function Dashboard() {
             <div className="dash-row-body">
               <div className="dash-row-title">
                 <h3>{b.service}</h3>
-                <Status>{b.status}</Status>
+                <JobStatus booking={b} isGarage={isGarage} />
               </div>
               <p>
                 {isGarage ? b.driver_name : b.garage_name} · {b.make} {b.model} · {b.registration}
@@ -875,29 +930,33 @@ export function Dashboard() {
               </p>
             </div>
             <div className="dash-row-actions">
-              <button className="dash-text-button" onClick={() => messageBooking(b)}>
-                <ChatCircleIcon size={16} /> Messages
-                {data.messages.some((m) => m.booking_id === b.id) &&
+              {jobActions(b, {
+                isGarage,
+                open,
+                act,
+                quick: quickAction,
+                details: () => openDetails(b),
+                rebook: () => navigate('garages'),
+              }).map(([label, onClick, tone]) => (
+                <button
+                  key={label}
+                  className={`dash-text-button${tone === 'danger' ? ' muted' : ''}${tone === 'primary' ? ' strong' : ''}`}
+                  onClick={onClick}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                className="dash-text-button"
+                onClick={() => messageBooking(b)}
+                disabled={!b.chat_open}
+                title={b.chat_open ? undefined : 'Chat closed 24 hours after the repair'}
+              >
+                <ChatCircleIcon size={16} /> {b.chat_open ? 'Messages' : 'Chat closed'}
+                {b.chat_open &&
+                  data.messages.some((m) => m.booking_id === b.id) &&
                   ` (${data.messages.filter((m) => m.booking_id === b.id).length})`}
               </button>
-              {isGarage && b.status === 'pending' && (
-                <button className="dash-text-button" onClick={() => bookingAction(b, 'confirmed')}>
-                  Confirm
-                </button>
-              )}
-              {isGarage && b.status === 'confirmed' && (
-                <button className="dash-text-button" onClick={() => bookingAction(b, 'completed')}>
-                  Complete service
-                </button>
-              )}
-              {['pending', 'confirmed'].includes(b.status) && (
-                <button
-                  className="dash-text-button muted"
-                  onClick={() => bookingAction(b, 'cancelled')}
-                >
-                  Cancel
-                </button>
-              )}
             </div>
           </article>
         ))}
@@ -1303,16 +1362,41 @@ export function Dashboard() {
 
         {selected === 'bookings' && (
           <>
-            {!isGarage && (
-              <div className="dash-section-heading">
-                <h2>All appointments</h2>
+            <div className="dash-section-heading">
+              <h2>{isGarage ? 'Bookings & appointments' : 'All appointments'}</h2>
+              {isGarage ? (
+                <button className="button button-small" onClick={scheduleForCustomer}>
+                  Schedule appointment <PlusIcon size={16} />
+                </button>
+              ) : (
                 <button className="button button-small" onClick={() => navigate('garages')}>
                   Book a service <PlusIcon size={16} />
                 </button>
-              </div>
+              )}
+            </div>
+            {isGarage && data.bookings.some((b) => b.state === 'waiting') && (
+              <>
+                <h3 className="dash-subheading">
+                  {`Incoming requests (${data.bookings.filter((b) => b.state === 'waiting').length})`}
+                </h3>
+                {rows(data.bookings.filter((b) => b.state === 'waiting'))}
+                <h3 className="dash-subheading">Appointments</h3>
+              </>
             )}
+            {!isGarage &&
+              data.bookings.some((b) => b.state === 'needs_approval' || b.review_due) && (
+                <>
+                  <h3 className="dash-subheading">Needs your action</h3>
+                  {rows(data.bookings.filter((b) => b.state === 'needs_approval' || b.review_due))}
+                  <h3 className="dash-subheading">All appointments</h3>
+                </>
+              )}
             {data.bookings.length ? (
-              rows(data.bookings)
+              rows(
+                isGarage
+                  ? data.bookings.filter((b) => b.state !== 'waiting')
+                  : data.bookings.filter((b) => b.state !== 'needs_approval' && !b.review_due),
+              )
             ) : (
               <Empty
                 icon={CalendarBlankIcon}
