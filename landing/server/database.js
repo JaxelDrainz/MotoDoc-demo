@@ -91,8 +91,23 @@ export const schemaSql = `
     CREATE TABLE IF NOT EXISTS demo_users(
       user_id TEXT PRIMARY KEY,world TEXT NOT NULL,persona TEXT NOT NULL,created_at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS demo_worlds ON demo_users(world,created_at);
+    CREATE TABLE IF NOT EXISTS user_settings(
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,phone TEXT NOT NULL DEFAULT '',
+      address TEXT NOT NULL DEFAULT '',email_updates INTEGER NOT NULL DEFAULT 1,email_chat INTEGER NOT NULL DEFAULT 0,
+      request_sound INTEGER NOT NULL DEFAULT 1,terms_accepted_at TEXT,onboarded_at TEXT);
+    CREATE TABLE IF NOT EXISTS garage_details(
+      garage_id TEXT PRIMARY KEY REFERENCES garages(id) ON DELETE CASCADE,business_id TEXT NOT NULL DEFAULT '',
+      hourly_rate_cents INTEGER,member_rate_cents INTEGER,specializations TEXT NOT NULL DEFAULT '[]',
+      main_focus TEXT NOT NULL DEFAULT '',hours TEXT NOT NULL DEFAULT '',membership_launched_at TEXT);
     INSERT OR IGNORE INTO schema_versions(version) VALUES(1);
   `;
+
+export const migrations = [
+  [
+    2,
+    'INSERT OR IGNORE INTO user_settings(user_id,terms_accepted_at,onboarded_at) SELECT id,created_at,created_at FROM users',
+  ],
+];
 
 export function openDatabase(path) {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -106,6 +121,11 @@ export function openDatabase(path) {
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL;',
     );
   }
+  for (const [version, sql] of migrations)
+    if (!db.prepare('SELECT 1 FROM schema_versions WHERE version=?').get(version)) {
+      db.exec(sql);
+      db.prepare('INSERT INTO schema_versions(version) VALUES(?)').run(version);
+    }
   return db;
 }
 

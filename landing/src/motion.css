@@ -23,15 +23,6 @@
   }
 }
 @media (prefers-reduced-motion: no-preference) {
-  @view-transition {
-    navigation: auto;
-  }
-  ::view-transition-old(root) {
-    animation: md-fade var(--motion-fast) ease reverse both;
-  }
-  ::view-transition-new(root) {
-    animation: md-fade var(--motion-base) ease both;
-  }
   .site-header .brand,
   .auth-header .brand,
   .dash-sidebar > .brand {

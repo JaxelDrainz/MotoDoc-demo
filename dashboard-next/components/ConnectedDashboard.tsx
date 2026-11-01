@@ -20,6 +20,7 @@ interface ApiUser {
   email: string;
   role: 'driver' | 'garage';
   photo: string | null;
+  onboarded?: boolean;
 }
 interface ApiVehicle {
   id: string;
@@ -128,6 +129,10 @@ export default function ConnectedDashboard() {
       })
       .catch(() => {});
     const { user } = await api<{ user: ApiUser }>('/auth/me');
+    if (user.onboarded === false) {
+      window.location.replace('/onboarding');
+      return;
+    }
     if (user.role !== 'driver') {
       window.location.replace(APP_HREF);
       return;

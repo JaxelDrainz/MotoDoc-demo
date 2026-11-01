@@ -11,6 +11,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
     <html lang="en" suppressHydrationWarning>
       <head>
         <script src="/i18n.js" />
+        <script src="/fit.js" defer />
         <script
           dangerouslySetInnerHTML={{
             __html:

@@ -52,6 +52,7 @@ const signup = (c, email, role = 'driver') =>
     email,
     password: 'testing-password-42',
     role,
+    terms: true,
   });
 const vehicle = (c) =>
   c('/api/vehicles', {
@@ -219,12 +220,12 @@ test('reset links expire, are single use, and revoke existing sessions', async (
   const mail = JSON.parse(await readFile(join(dir, 'mailbox', files[0]), 'utf8'));
   const token = new URLSearchParams(new URL(mail.url).hash.slice(1)).get('token');
   assert.equal(
-    (await b('/api/auth/reset-password', { token, password: 'new-testing-password' })).status,
+    (await b('/api/auth/reset-password', { token, password: 'new-testing-password-7' })).status,
     200,
   );
   assert.equal((await a('/api/auth/me')).status, 401);
   assert.equal(
-    (await b('/api/auth/reset-password', { token, password: 'other-password' })).status,
+    (await b('/api/auth/reset-password', { token, password: 'other-password-8' })).status,
     400,
   );
   assert.equal(
@@ -233,8 +234,12 @@ test('reset links expire, are single use, and revoke existing sessions', async (
     401,
   );
   assert.equal(
-    (await b('/api/auth/login', { email: 'reset@example.test', password: 'new-testing-password' }))
-      .status,
+    (
+      await b('/api/auth/login', {
+        email: 'reset@example.test',
+        password: 'new-testing-password-7',
+      })
+    ).status,
     200,
   );
   await b('/api/auth/forgot-password', { email: 'reset@example.test' });
@@ -247,7 +252,7 @@ test('reset links expire, are single use, and revoke existing sessions', async (
     (
       await b('/api/auth/reset-password', {
         token: expiredToken,
-        password: 'next-testing-password',
+        password: 'next-testing-password-9',
       })
     ).status,
     400,
@@ -926,4 +931,188 @@ test('demo worlds give each visitor private sample data across roles and expire'
   await client()('/api/demo', { persona: 'driver' });
   assert.equal((await visitor('/api/auth/me')).status, 401);
   assert.equal((await real('/api/auth/me')).status, 200);
+});
+
+test('onboarding, terms, password rule, settings, password change and account deletion', async (t) => {
+  const { client } = await fixture(t),
+    driver = client(),
+    garage = client(),
+    other = client();
+  const noTerms = await driver('/api/auth/signup', {
+    name: 'No Terms',
+    email: 'noterms@example.test',
+    password: 'testing-password-42',
+    role: 'driver',
+  });
+  assert.equal(noTerms.status, 400);
+  const weak = await driver('/api/auth/signup', {
+    name: 'Weak',
+    email: 'weak@example.test',
+    password: 'onlyletters',
+    role: 'driver',
+    terms: true,
+  });
+  assert.equal(weak.status, 400);
+  assert.match(weak.data.error, /letters and numbers/);
+
+  await signup(driver, 'onboard@example.test');
+  let me = (await driver('/api/auth/me')).data.user;
+  assert.equal(me.onboarded, false);
+  assert.equal(me.termsAccepted, true);
+  const badPlate = await driver('/api/onboarding', {
+    phone: '+358 40 123 4567',
+    car: { plate: 'NOTAPLATE1', make: 'Toyota', model: 'Corolla', year: 2019 },
+  });
+  assert.equal(badPlate.status, 400);
+  const done = await driver('/api/onboarding', {
+    phone: '+358 40 123 4567',
+    email_updates: false,
+    car: { plate: 'abc123', make: 'Toyota', model: 'Corolla', year: 2019 },
+  });
+  assert.equal(done.status, 200);
+  assert.equal(done.data.next, '/app');
+  me = (await driver('/api/auth/me')).data.user;
+  assert.equal(me.onboarded, true);
+  assert.equal(me.phone, '+358 40 123 4567');
+  assert.equal(me.prefs.emailUpdates, false);
+  assert.equal((await driver('/api/vehicles')).data[0].registration, 'ABC-123');
+
+  await signup(garage, 'workshop@example.test', 'garage');
+  const hours = Object.fromEntries(
+    ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d) => [
+      d,
+      { open: !['sat', 'sun'].includes(d), from: '08:00', to: '17:00' },
+    ]),
+  );
+  const garageBody = {
+    phone: '+358 9 123 456',
+    request_sound: false,
+    garage: {
+      name: 'Kallio Auto',
+      address: 'Mannerheimintie 42, 00100 Helsinki',
+      business_id: '1234567-8',
+      services: ['Oil Change', 'Brake Service'],
+      specializations: ['diesel', 'ev'],
+      main_focus: 'ev',
+      hourly_rate: 75,
+      hours,
+    },
+  };
+  assert.equal((await garage('/api/onboarding', garageBody)).status, 400);
+  garageBody.garage.business_id = '2345678-0';
+  assert.equal(
+    (
+      await garage('/api/onboarding', {
+        ...garageBody,
+        garage: {
+          ...garageBody.garage,
+          hours: { ...hours, mon: { open: true, from: '17:00', to: '08:00' } },
+        },
+      })
+    ).status,
+    400,
+  );
+  const garageDone = await garage('/api/onboarding', garageBody);
+  assert.equal(garageDone.data.next, '/onboarding/membership');
+  const profile = (await garage('/api/garage/profile')).data;
+  assert.equal(profile.city, 'Helsinki');
+  assert.equal(profile.hourly_rate, 75);
+  assert.deepEqual(profile.specializations, ['diesel', 'ev']);
+  assert.equal(profile.published, true);
+  const perks = [
+    'Priority booking within 5 days',
+    'Free annual safety check (30 min)',
+    'Free loaner car during service',
+  ];
+  assert.equal(
+    (await garage('/api/garage/membership', { price: 49, hourly_rate: 75, member_rate: 80, perks }))
+      .status,
+    400,
+  );
+  assert.equal(
+    (
+      await garage('/api/garage/membership', {
+        price: 49,
+        hourly_rate: 75,
+        member_rate: 68,
+        perks: perks.slice(0, 2),
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await garage('/api/garage/membership', {
+        price: 49,
+        hourly_rate: 75,
+        member_rate: 68,
+        perks,
+        own_perk: 'Coffee',
+      })
+    ).status,
+    201,
+  );
+  assert.equal(
+    (await garage('/api/garage/membership', { price: 49, hourly_rate: 75, member_rate: 68, perks }))
+      .status,
+    409,
+  );
+  const plans = (await driver('/api/plans')).data;
+  assert.equal(plans[0].price_cents, 4900);
+  assert.match(plans[0].benefits, /Coffee/);
+
+  assert.equal(
+    (
+      await driver(
+        '/api/account/settings',
+        { phone: '+358 50 1', address: 'Home 1', email_updates: true, email_chat: true },
+        'PUT',
+      )
+    ).status,
+    200,
+  );
+  assert.equal((await driver('/api/auth/me')).data.user.prefs.emailChat, true);
+  assert.equal(
+    (await driver('/api/account/password', { current: 'wrong', next: 'brand-new-pass-1' })).status,
+    400,
+  );
+  assert.equal(
+    (
+      await driver('/api/account/password', {
+        current: 'testing-password-42',
+        next: 'testing-password-42',
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await driver('/api/account/password', {
+        current: 'testing-password-42',
+        next: 'brand-new-pass-1',
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await other('/api/auth/login', {
+        email: 'onboard@example.test',
+        password: 'brand-new-pass-1',
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await driver('/api/account', {}, 'DELETE')).status, 200);
+  assert.equal((await driver('/api/auth/me')).status, 401);
+  assert.equal((await other('/api/auth/me')).status, 401);
+  assert.equal(
+    (
+      await other('/api/auth/login', {
+        email: 'onboard@example.test',
+        password: 'brand-new-pass-1',
+      })
+    ).status,
+    401,
+  );
 });

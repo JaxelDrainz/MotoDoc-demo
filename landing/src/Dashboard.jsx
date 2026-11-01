@@ -21,12 +21,15 @@ import {
   PlusIcon,
   WrenchIcon,
   LockKeyIcon,
+  QuestionIcon,
 } from '@phosphor-icons/react';
 import { api } from './api.js';
 import { Brand } from './Brand.jsx';
 import { Bell, SlotPicker, Status, ThemeToggle } from './DashParts.jsx';
 import { flash, toast } from './Toasts.jsx';
 import { DemoBar } from './Demo.jsx';
+import { AccountSettings } from './Settings.jsx';
+import { GuidedTour } from './Tour.jsx';
 import { siteFlag } from './site.jsx';
 import './dashboard.css';
 
@@ -532,6 +535,10 @@ export function Dashboard() {
     return () => clearTimeout(timer);
   }, [opening]);
   const [more, setMore] = useState(false);
+  const [tourOpen, setTourOpen] = useState(
+    () => new URLSearchParams(location.search).get('from') === 'onboarding',
+  );
+  const [tourTarget, setTourTarget] = useState('');
   useEffect(() => {
     if (!notice) return;
     toast(notice);
@@ -567,6 +574,7 @@ export function Dashboard() {
     api('/auth/me')
       .then(async ({ user: u }) => {
         if (!active) return;
+        if (!u.onboarded) return location.replace('/onboarding');
         setUser(u);
         await load(u);
       })
@@ -585,6 +593,7 @@ export function Dashboard() {
     const changed = () => {
       setView(location.hash.slice(1) || 'overview');
       setSearch('');
+      window.scrollTo({ top: 0, behavior: 'instant' });
     };
     window.addEventListener('hashchange', changed);
     return () => window.removeEventListener('hashchange', changed);
@@ -949,6 +958,7 @@ export function Dashboard() {
               className={selected === key ? 'active' : ''}
               aria-current={selected === key ? 'page' : undefined}
               key={key}
+              data-tour-active={tourTarget === key ? 'true' : undefined}
             >
               <Icon size={20} />
               <span>{label}</span>
@@ -966,6 +976,16 @@ export function Dashboard() {
           <Bell />
           <Avatar name={user.name} photo={user.photo} />
           <ThemeToggle />
+          {!isMechanic && (
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Start guided tour"
+              onClick={() => setTourOpen(true)}
+            >
+              <QuestionIcon size={20} />
+            </button>
+          )}
           <div>
             <strong>{user.name}</strong>
             <small>{user.email}</small>
@@ -1389,43 +1409,20 @@ export function Dashboard() {
 
         {selected === 'memberships' && (
           <>
+            {isGarage && !isMechanic && !data['garage/profile']?.membership_launched_at && (
+              <article className="dash-tile dash-launch">
+                <GiftIcon size={28} />
+                <div>
+                  <h2>Turn your regulars into members.</h2>
+                  <p>Lock in customers for a year. Get paid for loyalty you already earn.</p>
+                </div>
+                <a className="button button-small" href="/onboarding/membership">
+                  Set up your membership <ArrowRightIcon size={16} />
+                </a>
+              </article>
+            )}
             <div className="dash-section-heading">
               <h2>{isGarage ? 'Your plans' : 'Available plans'}</h2>
-              {isGarage && (
-                <button
-                  className="button button-small"
-                  onClick={() =>
-                    open({
-                      title: 'Create a membership plan',
-                      note: 'This records your offer. Billing is arranged outside MotoDoc.',
-                      values: { price: 0 },
-                      fields: [
-                        { name: 'name', label: 'Plan name', required: true },
-                        {
-                          name: 'benefits',
-                          label: 'Benefits and billing terms',
-                          type: 'textarea',
-                          required: true,
-                          maxLength: 1500,
-                        },
-                        {
-                          name: 'price',
-                          label: 'Plan price (EUR)',
-                          type: 'number',
-                          min: 0,
-                          max: 1000000,
-                          step: 0.01,
-                          required: true,
-                        },
-                      ],
-                      save: ({ price, ...d }) =>
-                        act('/plans', { ...d, price_cents: Math.round(Number(price) * 100) }),
-                    })
-                  }
-                >
-                  Add plan <PlusIcon size={16} />
-                </button>
-              )}
             </div>
             {data.plans.length ? (
               <div className="dash-grid">
@@ -1730,6 +1727,15 @@ export function Dashboard() {
             )}
           </article>
         )}
+        {selected === 'account' && (
+          <AccountSettings
+            user={user}
+            onSaved={async () => {
+              const result = await api('/auth/me');
+              setUser(result.user);
+            }}
+          />
+        )}
       </main>
       <nav className="dash-bottom-nav" aria-label="Quick navigation">
         {nav
@@ -1770,6 +1776,16 @@ export function Dashboard() {
             Log out
           </button>
         </MoreSheet>
+      )}
+      {tourOpen && !isMechanic && (
+        <GuidedTour
+          role={user.role}
+          onTarget={setTourTarget}
+          onClose={() => {
+            setTourOpen(false);
+            history.replaceState(null, '', `${location.pathname}${location.hash}`);
+          }}
+        />
       )}
       {dialog && (
         <FormDialog

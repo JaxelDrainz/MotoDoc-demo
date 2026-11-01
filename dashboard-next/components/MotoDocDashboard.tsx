@@ -512,7 +512,7 @@ export default function MotoDocDashboard({
           )}
           <nav
             aria-label="Dashboard sections"
-            className="order-4 w-full overflow-x-auto sm:order-4 lg:order-none lg:w-auto"
+            className="md-scroll-x order-4 w-full overflow-x-auto sm:order-4 lg:order-none lg:w-auto"
           >
             <div role="tablist" aria-label="Vehicle details" className="flex gap-5">
               {tabs.map((item, index) => (
