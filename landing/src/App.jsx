@@ -8,6 +8,7 @@ import { Lines, useSite } from './site.jsx';
 import {
   ArrowRightIcon,
   ArrowUpRightIcon,
+  CaretRightIcon,
   BellIcon,
   CalendarBlankIcon,
   CarIcon,
@@ -229,20 +230,26 @@ function LandingPage() {
         </div>
         {menuOpen && (
           <nav id="mobile-navigation" className="mobile-nav" aria-label="Mobile navigation">
-            <span data-lang-switch />
-            <a href="#features" onClick={() => setMenuOpen(false)}>
-              Features
+            <div className="mobile-nav-lang">
+              <span>Language</span>
+              <span data-lang-switch />
+            </div>
+            <div className="mobile-nav-links">
+              {[
+                ['#features', 'Features'],
+                ['#membership', 'Membership'],
+                ['#how-it-works', 'How it works'],
+                ['#garages', 'For garages'],
+              ].map(([href, label]) => (
+                <a key={href} href={href} onClick={() => setMenuOpen(false)}>
+                  {label}
+                  <CaretRightIcon size={16} aria-hidden="true" />
+                </a>
+              ))}
+            </div>
+            <a className="button button-outline mobile-nav-login" href={APP_URL}>
+              Log in
             </a>
-            <a href="#membership" onClick={() => setMenuOpen(false)}>
-              Membership
-            </a>
-            <a href="#how-it-works" onClick={() => setMenuOpen(false)}>
-              How it works
-            </a>
-            <a href="#garages" onClick={() => setMenuOpen(false)}>
-              For garages
-            </a>
-            <a href={APP_URL}>Log in</a>
           </nav>
         )}
       </header>

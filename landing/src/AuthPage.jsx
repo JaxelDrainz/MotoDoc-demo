@@ -15,6 +15,7 @@ import {
 } from '@phosphor-icons/react';
 import './auth.css';
 import { api } from './api.js';
+import { DemoAccounts } from './Demo.jsx';
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
@@ -471,6 +472,7 @@ export function AuthPage({ mode }) {
               </>
             )}
           </p>
+          {!recovery && !reset && <DemoAccounts disabled={busy} />}
           <div className="auth-preview-note">
             {local
               ? 'Local MotoDoc - Your account and data stay on this computer.'

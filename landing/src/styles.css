@@ -1762,3 +1762,104 @@ h3 {
     min-height: 64px;
   }
 }
+.desktop-nav {
+  flex: 1;
+  justify-content: center;
+  margin-left: 0;
+}
+.header-actions [data-lang-switch] + .login-link {
+  padding-left: 20px;
+  border-left: 1px solid var(--line);
+  line-height: 24px;
+}
+@media (max-width: 1024px) {
+  .desktop-nav {
+    display: none;
+  }
+  .header-actions {
+    margin-left: auto;
+    gap: 16px;
+  }
+  .header-actions .login-link {
+    display: inline;
+  }
+  .menu-toggle {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+  }
+  .mobile-nav {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    padding: 12px max(32px, calc((100% - var(--container, 1090px)) / 2)) 20px;
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 12px 16px #122b1810;
+  }
+  .mobile-nav a {
+    padding: 14px 0;
+    font-size: 16px;
+  }
+}
+@media (max-width: 700px) {
+  .header-actions {
+    gap: 0;
+  }
+  .header-actions .login-link {
+    display: none;
+  }
+  .mobile-nav {
+    padding-inline: 20px;
+  }
+}
+.mobile-nav-lang {
+  display: none;
+}
+.mobile-nav-links {
+  display: flex;
+  flex-direction: column;
+}
+.mobile-nav .mobile-nav-links a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 500;
+}
+.mobile-nav .mobile-nav-links a svg {
+  color: var(--muted);
+}
+.mobile-nav .mobile-nav-links a:hover {
+  color: var(--green);
+}
+.mobile-nav .mobile-nav-login {
+  display: flex;
+  justify-content: center;
+  min-height: 46px;
+  margin-top: 18px;
+  padding: 12px 18px;
+  font-size: 15px;
+}
+@media (max-width: 700px) {
+  .mobile-nav-lang {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0 14px;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .mobile-nav .mobile-nav-lang [data-lang-switch] {
+    display: inline-flex;
+    margin: 0;
+  }
+}

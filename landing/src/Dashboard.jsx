@@ -26,6 +26,7 @@ import { api } from './api.js';
 import { Brand } from './Brand.jsx';
 import { Bell, SlotPicker, Status, ThemeToggle } from './DashParts.jsx';
 import { flash, toast } from './Toasts.jsx';
+import { DemoBar } from './Demo.jsx';
 import { siteFlag } from './site.jsx';
 import './dashboard.css';
 
@@ -544,6 +545,7 @@ export function Dashboard() {
     [dialog, setDialog] = useState(null),
     [search, setSearch] = useState('');
   const isGarage = user?.role === 'garage';
+  const isMechanic = user?.garageRole === 'mechanic';
   const load = useCallback(async (account) => {
     const paths = [
       'overview',
@@ -552,7 +554,7 @@ export function Dashboard() {
       'service-history',
       'plans',
       'memberships',
-      'invoices',
+      ...(account.garageRole === 'mechanic' ? [] : ['invoices']),
       'reminders',
       ...(account.role === 'garage' ? ['garage/profile', 'customers'] : ['vehicles', 'garages']),
     ];
@@ -607,7 +609,7 @@ export function Dashboard() {
     ['invoices', ReceiptIcon, 'Invoices'],
     ['reminders', BellIcon, 'Reminders'],
     ['account', LockKeyIcon, 'Account'],
-  ];
+  ].filter(([key]) => !isMechanic || !['profile', 'memberships', 'invoices'].includes(key));
   const selected = nav.some((n) => n[0] === view) ? view : 'overview';
   const quick = isGarage
     ? { overview: 'Overview', bookings: 'Bookings', customers: 'Customers', profile: 'Profile' }
@@ -937,7 +939,9 @@ export function Dashboard() {
     <div className="dashboard">
       <aside className="dash-sidebar" data-fit>
         <Brand />
-        <span className="dash-role">{isGarage ? 'FOR GARAGES' : 'FOR DRIVERS'}</span>
+        <span className="dash-role">
+          {isMechanic ? 'GARAGE TEAM' : isGarage ? 'FOR GARAGES' : 'FOR DRIVERS'}
+        </span>
         <nav aria-label="Account navigation">
           {nav.map(([key, Icon, label]) => (
             <a
@@ -984,6 +988,7 @@ export function Dashboard() {
         </div>
       </aside>
       <main className="dash-main" key={selected}>
+        {user.demo && <DemoBar persona={user.demo} />}
         <header className="dash-page-header">
           <div>
             <span className="eyebrow">YOUR MOTODOC</span>
@@ -1030,11 +1035,13 @@ export function Dashboard() {
               {[
                 [CalendarBlankIcon, 'Upcoming bookings', data.overview.upcoming],
                 [CheckCircleIcon, 'Services completed', data.overview.completed],
-                [
-                  ReceiptIcon,
-                  isGarage ? 'Awaiting payment' : 'Outstanding invoices',
-                  euro(data.overview.invoiceTotals.unpaid),
-                ],
+                isMechanic
+                  ? [UsersIcon, 'Customers', data.customers.length]
+                  : [
+                      ReceiptIcon,
+                      isGarage ? 'Awaiting payment' : 'Outstanding invoices',
+                      euro(data.overview.invoiceTotals.unpaid),
+                    ],
               ].map(([Icon, label, value]) => (
                 <article key={label}>
                   <Icon size={23} />
@@ -1089,9 +1096,11 @@ export function Dashboard() {
                     : 'A familiar face for every service.'}
                 </h3>
                 <p>
-                  {isGarage
-                    ? `Payments recorded as received: ${euro(data.overview.invoiceTotals.paid)}. These are your recorded payments, not processed transactions.`
-                    : 'Bookings, records, and reminders stay together in your MotoDoc account.'}
+                  {isMechanic
+                    ? 'Your jobs, customers and messages, all in one place.'
+                    : isGarage
+                      ? `Payments recorded as received: ${euro(data.overview.invoiceTotals.paid)}. These are your recorded payments, not processed transactions.`
+                      : 'Bookings, records, and reminders stay together in your MotoDoc account.'}
                 </p>
               </div>
             </div>
