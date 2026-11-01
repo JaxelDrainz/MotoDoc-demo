@@ -256,6 +256,32 @@ export const fiStrings = {
   'Awaiting garage confirmation': 'Odottaa korjaamon vahvistusta',
   'Awaiting payment': 'Odottaa maksua',
   'Back to home': 'Takaisin etusivulle',
+  Language: 'Kieli',
+  'Try a demo account': 'Kokeile demotiliä',
+  'One tap, sample data, nothing to sign up for.':
+    'Yksi napautus, esimerkkitiedot, ei rekisteröitymistä.',
+  'Driver demo': 'Kuljettajan demo',
+  'Driver, no membership': 'Kuljettaja ilman jäsenyyttä',
+  'Garage demo': 'Korjaamon demo',
+  'Garage team member (mechanic)': 'Korjaamon tiimin jäsen (mekaanikko)',
+  'MotoDoc admin': 'MotoDoc-ylläpitäjä',
+  'Opening…': 'Avataan…',
+  'Demo ready. Sample data resets after a day.':
+    'Demo on valmis. Esimerkkitiedot nollataan vuorokauden kuluttua.',
+  Demo: 'Demo',
+  'Sample data, reset after a day.': 'Esimerkkitiedot, nollataan vuorokauden kuluttua.',
+  'Viewing as': 'Näkymä',
+  Driver: 'Kuljettaja',
+  Mechanic: 'Mekaanikko',
+  'GARAGE TEAM': 'KORJAAMON TIIMI',
+  'Your jobs, customers and messages, all in one place.':
+    'Työsi, asiakkaasi ja viestisi yhdessä paikassa.',
+  'Only the garage owner can do this.': 'Vain korjaamon omistaja voi tehdä tämän.',
+  'Only the garage owner can change memberships.':
+    'Vain korjaamon omistaja voi muuttaa jäsenyyksiä.',
+  'Preview only in the demo': 'Demossa vain esikatselu',
+  'This is the demo admin. You can look around, but changes are not saved to the live site.':
+    'Tämä on demoylläpitäjä. Voit katsella, mutta muutoksia ei tallenneta oikealle sivustolle.',
   'Back to log in': 'Takaisin kirjautumiseen',
   'Benefits and billing terms': 'Edut ja laskutusehdot',
   'Benefits created by your mechanic, for their members.': 'Mekaanikkosi luomat edut jäsenilleen.',

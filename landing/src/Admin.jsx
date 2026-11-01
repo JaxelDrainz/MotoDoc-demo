@@ -18,6 +18,7 @@ import { siteStyle } from './siteCore.js';
 import { applyStyle, rememberSite, setSite } from './site.jsx';
 import { toast } from './Toasts.jsx';
 import './admin.css';
+import { DemoBar } from './Demo.jsx';
 
 const tabs = [
   ['look', PaletteIcon, 'Colours & shape'],
@@ -148,7 +149,8 @@ export function Admin() {
     [previewLang, setPreviewLang] = useState('en'),
     [query, setQuery] = useState(''),
     [onlyEmpty, setOnlyEmpty] = useState(false),
-    frame = useRef(null);
+    frame = useRef(null),
+    [demo, setDemo] = useState(null);
 
   useEffect(() => {
     document.title = 'Site settings — MotoDoc';
@@ -158,6 +160,7 @@ export function Admin() {
           setDenied(user.email);
           return;
         }
+        setDemo(user.demo);
         return Promise.all([api('/admin/site'), api('/admin/assets')]).then(([loaded, list]) => {
           setState(loaded);
           setDraft(clone(loaded.site));
@@ -292,11 +295,16 @@ export function Admin() {
           >
             Discard
           </button>
-          <button className="admin-primary" disabled={!dirty || busy} onClick={save}>
-            {busy ? 'Saving…' : 'Save and publish'}
+          <button className="admin-primary" disabled={!dirty || busy || !!demo} onClick={save}>
+            {demo ? 'Preview only in the demo' : busy ? 'Saving…' : 'Save and publish'}
           </button>
         </div>
       </header>
+      {demo && (
+        <div className="admin-demo">
+          <DemoBar persona={demo} />
+        </div>
+      )}
       <div className="admin-layout">
         <nav className="admin-tabs" aria-label="Settings sections">
           {tabs.map(([key, Icon, label]) => (

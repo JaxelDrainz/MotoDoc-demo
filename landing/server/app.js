@@ -24,6 +24,7 @@ import {
 import { wikimediaImages } from './vehicle-images.js';
 import { mergeSite, siteDefaults, siteSchema, siteStyle } from './site.js';
 import { vehicleArt } from './vehicle-art.js';
+import { buildDemoWorld, demoLifetime, demoPersonas, purgeDemoWorld } from './demo.js';
 
 const scrypt = promisify(scryptCallback);
 const hash = (value) => createHash('sha256').update(value).digest('hex');
@@ -47,10 +48,14 @@ const userView = (u) => ({
   role: u.role,
   googleLinked: !!u.google_id,
   photo: u.photo || null,
+  garageRole: u.role === 'garage' ? u.staff_role || 'owner' : null,
+  demo: u.demo_persona || null,
 });
 const photoOf = (column) =>
   `(SELECT '/api/photos/'||user_id||'?v='||updated_at FROM photos WHERE user_id=${column})`;
 
+const worldOf = (column) => `COALESCE((SELECT world FROM demo_users WHERE user_id=${column}),'')`;
+const userSelect = `SELECT u.*,${photoOf('u.id')} photo,COALESCE((SELECT id FROM garages WHERE owner_id=u.id),(SELECT garage_id FROM garage_staff WHERE user_id=u.id)) garage_id,(SELECT role FROM garage_staff WHERE user_id=u.id) staff_role,(SELECT world FROM demo_users WHERE user_id=u.id) demo_world,(SELECT persona FROM demo_users WHERE user_id=u.id) demo_persona FROM users u`;
 const ratingColumns = `(SELECT ROUND(AVG(rating),1) FROM reviews WHERE garage_id=g.id) rating,(SELECT COUNT(*) FROM reviews WHERE garage_id=g.id) review_count`;
 const garageView = (g) => ({ ...g, services: JSON.parse(g.services), published: !!g.published });
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -132,9 +137,15 @@ export async function createApp({
   const run = (sql, ...params) => db.prepare(sql).run(...params);
   const parse = (schema, req) => schema.parse(req.body);
   const ownGarage = async (user) => {
-    if (user.role !== 'garage') throw fail(403, 'A garage account is required.');
-    return await one('SELECT * FROM garages WHERE owner_id=?', user.id);
+    if (user.role !== 'garage' || !user.garage_id) throw fail(403, 'A garage account is required.');
+    return await one('SELECT * FROM garages WHERE id=?', user.garage_id);
   };
+  const ownerGarage = async (user) => {
+    const garage = await ownGarage(user);
+    if (user.staff_role) throw fail(403, 'Only the garage owner can do this.');
+    return garage;
+  };
+  const world = (user) => user.demo_world || '';
   const driverOnly = (user) => {
     if (user.role !== 'driver') throw fail(403, 'A driver account is required.');
   };
@@ -198,7 +209,8 @@ export async function createApp({
       .map((email) => email.trim().toLowerCase())
       .filter(Boolean),
   );
-  const isAdmin = (user) => admins.has(String(user.email).toLowerCase());
+  const isAdmin = (user) =>
+    admins.has(String(user.email).toLowerCase()) || user.demo_persona === 'admin';
   const currentSite = async () => {
     const latest = await one(
       'SELECT data FROM site_revisions ORDER BY created_at DESC, id DESC LIMIT 1',
@@ -403,12 +415,45 @@ export async function createApp({
     res.json({ message: 'Password updated. Log in with your new password.' });
   });
 
+  app.post('/api/demo', async (req, res) => {
+    const { persona } = parse(z.object({ persona: z.enum(demoPersonas) }), req);
+    const token = sessionToken(req);
+    const current =
+      token &&
+      (await one(
+        'SELECT d.world,(SELECT MIN(created_at) FROM demo_users WHERE world=d.world) born FROM sessions s JOIN demo_users d ON d.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>?',
+        hash(token),
+        clock(),
+      ));
+    let worldId = current && Number(current.born) > clock() - demoLifetime ? current.world : '';
+    if (worldId) await rateLimit(req, 'demo-switch', 120);
+    else {
+      await rateLimit(req, 'demo', 10);
+      for (const old of await all(
+        'SELECT DISTINCT world FROM demo_users WHERE created_at<=? LIMIT 20',
+        clock() - demoLifetime,
+      ))
+        await transaction(db, () => purgeDemoWorld({ run, world: old.world }));
+      worldId = randomUUID();
+      await transaction(db, () => buildDemoWorld({ run, clock, world: worldId }));
+    }
+    const user = await one(
+      `${userSelect} JOIN demo_users w ON w.user_id=u.id WHERE w.world=? AND w.persona=?`,
+      worldId,
+      persona,
+    );
+    await session(req, res, user);
+    res.status(201).json({
+      user: { ...userView(user), admin: isAdmin(user) },
+      redirect: persona === 'admin' ? '/admin' : '/app',
+    });
+  });
   app.use('/api', async (req, res, next) => {
     const token = sessionToken(req);
     req.user =
       token &&
       (await one(
-        `SELECT u.*,${photoOf('u.id')} photo FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>?`,
+        `${userSelect} JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>?`,
         hash(token),
         clock(),
       ));
@@ -421,6 +466,11 @@ export async function createApp({
   app.use('/api/admin', (req, _res, next) => {
     if (!isAdmin(req.user))
       throw fail(403, 'Only MotoDoc administrators can change site settings.');
+    if (req.user.demo_persona === 'admin' && req.method !== 'GET')
+      throw fail(
+        403,
+        'This is the demo admin. You can look around, but changes are not saved to the live site.',
+      );
     next();
   });
   app.get('/api/admin/site', async (_req, res) => {
@@ -710,7 +760,8 @@ export async function createApp({
     res.json(
       (
         await all(
-          `SELECT g.id,g.name,g.city,g.address,g.description,g.services,g.published,${ratingColumns} FROM garages g WHERE g.published=1 ORDER BY g.name`,
+          `SELECT g.id,g.name,g.city,g.address,g.description,g.services,g.published,${ratingColumns} FROM garages g WHERE g.published=1 AND ${worldOf('g.owner_id')}=? ORDER BY g.name`,
+          world(req.user),
         )
       ).map(garageView),
     ),
@@ -729,7 +780,7 @@ export async function createApp({
     });
   });
   app.put('/api/garage/contact', async (req, res) => {
-    const g = await ownGarage(req.user);
+    const g = await ownerGarage(req.user);
     const d = parse(
       z.object({
         phone: z
@@ -752,7 +803,7 @@ export async function createApp({
     res.json({ ok: true });
   });
   app.put('/api/garage/profile', async (req, res) => {
-    const garage = await ownGarage(req.user);
+    const garage = await ownerGarage(req.user);
     const d = parse(
       z.object({
         name: text(100),
@@ -780,7 +831,7 @@ export async function createApp({
   const scopedBookings = async (user) =>
     user.role === 'driver'
       ? await all(`${bookingSelect} WHERE b.driver_id=? ORDER BY b.starts_at DESC`, user.id)
-      : await all(`${bookingSelect} WHERE g.owner_id=? ORDER BY b.starts_at DESC`, user.id);
+      : await all(`${bookingSelect} WHERE g.id=? ORDER BY b.starts_at DESC`, user.garage_id);
   app.get('/api/bookings', async (req, res) => res.json(await scopedBookings(req.user)));
   const bookingEvent = (bookingId, actorId, kind) =>
     run(
@@ -813,19 +864,20 @@ export async function createApp({
   };
   app.get('/api/notifications', async (req, res) => {
     const isDriver = req.user.role === 'driver',
-      column = isDriver ? 'b.driver_id' : 'g.owner_id',
+      column = isDriver ? 'b.driver_id' : 'b.garage_id',
+      scope = isDriver ? req.user.id : req.user.garage_id,
       now = new Date(clock()).toISOString();
     const seen =
       (await one('SELECT seen_at FROM notification_reads WHERE user_id=?', req.user.id))?.seen_at ||
       '';
     const messages = await all(
       `SELECT m.id,m.body,m.created_at at,m.booking_id,u.name sender_name FROM messages m JOIN bookings b ON b.id=m.booking_id JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=m.sender_id WHERE ${column}=? AND m.sender_id<>? ORDER BY m.created_at DESC LIMIT 20`,
-      req.user.id,
+      scope,
       req.user.id,
     );
     const events = await all(
       `SELECT e.id,e.kind,e.at,e.booking_id,b.service,g.name garage_name,u.name driver_name FROM booking_events e JOIN bookings b ON b.id=e.booking_id JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=b.driver_id WHERE ${column}=? AND e.actor_id<>? ORDER BY e.at DESC LIMIT 20`,
-      req.user.id,
+      scope,
       req.user.id,
     );
     const soon = new Date(clock() + 7 * 86400000).toISOString().slice(0, 10);
@@ -874,11 +926,11 @@ export async function createApp({
     res.json({ ok: true });
   });
   app.get('/api/messages', async (req, res) => {
-    const column = req.user.role === 'driver' ? 'b.driver_id' : 'g.owner_id';
+    const driver = req.user.role === 'driver';
     res.json(
       await all(
-        `SELECT m.*,u.name sender_name,${photoOf('m.sender_id')} sender_photo FROM messages m JOIN bookings b ON b.id=m.booking_id JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=m.sender_id WHERE ${column}=? ORDER BY m.created_at,m.id`,
-        req.user.id,
+        `SELECT m.*,u.name sender_name,${photoOf('m.sender_id')} sender_photo FROM messages m JOIN bookings b ON b.id=m.booking_id JOIN users u ON u.id=m.sender_id WHERE ${driver ? 'b.driver_id' : 'b.garage_id'}=? ORDER BY m.created_at,m.id`,
+        driver ? req.user.id : req.user.garage_id,
       ),
     );
   });
@@ -966,7 +1018,11 @@ export async function createApp({
       !(await one('SELECT id FROM vehicles WHERE id=? AND owner_id=?', d.vehicle_id, req.user.id))
     )
       throw fail(404, 'Vehicle not found.');
-    const garage = await one('SELECT * FROM garages WHERE id=? AND published=1', d.garage_id);
+    const garage = await one(
+      `SELECT * FROM garages g WHERE g.id=? AND g.published=1 AND ${worldOf('g.owner_id')}=?`,
+      d.garage_id,
+      world(req.user),
+    );
     if (!garage || !JSON.parse(garage.services).includes(d.service))
       throw fail(400, 'Select a service offered by this garage.');
     const key = id();
@@ -1030,11 +1086,11 @@ export async function createApp({
     res.json({ ok: true });
   });
   app.get('/api/service-history', async (req, res) => {
-    const column = req.user.role === 'driver' ? 'r.driver_id' : 'g.owner_id';
+    const driver = req.user.role === 'driver';
     res.json(
       await all(
-        `SELECT r.*,g.name garage_name,v.registration,b.service,(SELECT rating FROM reviews WHERE booking_id=r.booking_id) rating FROM service_records r JOIN garages g ON r.garage_id=g.id JOIN vehicles v ON v.id=r.vehicle_id JOIN bookings b ON b.id=r.booking_id WHERE ${column}=? ORDER BY r.performed_at DESC`,
-        req.user.id,
+        `SELECT r.*,g.name garage_name,v.registration,b.service,(SELECT rating FROM reviews WHERE booking_id=r.booking_id) rating FROM service_records r JOIN garages g ON r.garage_id=g.id JOIN vehicles v ON v.id=r.vehicle_id JOIN bookings b ON b.id=r.booking_id WHERE ${driver ? 'r.driver_id' : 'r.garage_id'}=? ORDER BY r.performed_at DESC`,
+        driver ? req.user.id : req.user.garage_id,
       ),
     );
   });
@@ -1043,12 +1099,13 @@ export async function createApp({
       req.user.role === 'garage'
         ? await all('SELECT * FROM plans WHERE garage_id=?', (await ownGarage(req.user)).id)
         : await all(
-            'SELECT p.*,g.name garage_name FROM plans p JOIN garages g ON g.id=p.garage_id WHERE p.active=1 AND g.published=1',
+            `SELECT p.*,g.name garage_name FROM plans p JOIN garages g ON g.id=p.garage_id WHERE p.active=1 AND g.published=1 AND ${worldOf('g.owner_id')}=?`,
+            world(req.user),
           ),
     ),
   );
   app.post('/api/plans', async (req, res) => {
-    const g = await ownGarage(req.user),
+    const g = await ownerGarage(req.user),
       d = parse(z.object({ name: text(100), benefits: text(1500), price_cents: money }), req),
       key = id();
     await run(
@@ -1062,11 +1119,11 @@ export async function createApp({
     res.status(201).json({ id: key });
   });
   app.get('/api/memberships', async (req, res) => {
-    const column = req.user.role === 'driver' ? 'm.driver_id' : 'g.owner_id';
+    const driver = req.user.role === 'driver';
     res.json(
       await all(
-        `SELECT m.*,p.name plan_name,p.benefits,p.price_cents,g.name garage_name,u.name driver_name FROM memberships m JOIN plans p ON p.id=m.plan_id JOIN garages g ON g.id=p.garage_id JOIN users u ON u.id=m.driver_id WHERE ${column}=? ORDER BY m.created_at DESC`,
-        req.user.id,
+        `SELECT m.*,p.name plan_name,p.benefits,p.price_cents,g.name garage_name,u.name driver_name FROM memberships m JOIN plans p ON p.id=m.plan_id JOIN garages g ON g.id=p.garage_id JOIN users u ON u.id=m.driver_id WHERE ${driver ? 'm.driver_id' : 'p.garage_id'}=? ORDER BY m.created_at DESC`,
+        driver ? req.user.id : req.user.garage_id,
       ),
     );
   });
@@ -1075,8 +1132,9 @@ export async function createApp({
     const { plan_id } = parse(z.object({ plan_id: z.uuid() }), req);
     if (
       !(await one(
-        'SELECT p.id FROM plans p JOIN garages g ON g.id=p.garage_id WHERE p.id=? AND p.active=1 AND g.published=1',
+        `SELECT p.id FROM plans p JOIN garages g ON g.id=p.garage_id WHERE p.id=? AND p.active=1 AND g.published=1 AND ${worldOf('g.owner_id')}=?`,
         plan_id,
+        world(req.user),
       ))
     )
       throw fail(404, 'Plan not found.');
@@ -1100,26 +1158,31 @@ export async function createApp({
   app.patch('/api/memberships/:id', async (req, res) => {
     const { status } = parse(z.object({ status: z.enum(['active', 'cancelled']) }), req);
     const m = await one(
-      'SELECT m.*,g.owner_id FROM memberships m JOIN plans p ON p.id=m.plan_id JOIN garages g ON g.id=p.garage_id WHERE m.id=?',
+      'SELECT m.*,p.garage_id FROM memberships m JOIN plans p ON p.id=m.plan_id WHERE m.id=?',
       req.params.id,
     );
-    if (!m || (m.driver_id !== req.user.id && m.owner_id !== req.user.id))
+    const garageSide = !!m && req.user.role === 'garage' && req.user.garage_id === m.garage_id;
+    if (!m || (m.driver_id !== req.user.id && !garageSide))
       throw fail(404, 'Membership not found.');
-    if (status === 'active' && (req.user.id !== m.owner_id || m.status !== 'requested'))
+    if (garageSide && req.user.staff_role)
+      throw fail(403, 'Only the garage owner can change memberships.');
+    if (status === 'active' && (!garageSide || m.status !== 'requested'))
       throw fail(403, 'Only the garage can approve a pending membership.');
     await run('UPDATE memberships SET status=? WHERE id=?', status, m.id);
     res.json({ ok: true });
   });
-  app.get('/api/invoices', async (req, res) =>
+  app.get('/api/invoices', async (req, res) => {
+    const driver = req.user.role === 'driver';
+    if (!driver) await ownerGarage(req.user);
     res.json(
       await all(
-        `SELECT i.*,g.name garage_name,u.name driver_name FROM invoices i JOIN garages g ON g.id=i.garage_id JOIN users u ON u.id=i.driver_id WHERE ${req.user.role === 'driver' ? 'i.driver_id' : 'g.owner_id'}=? ORDER BY i.created_at DESC`,
-        req.user.id,
+        `SELECT i.*,g.name garage_name,u.name driver_name FROM invoices i JOIN garages g ON g.id=i.garage_id JOIN users u ON u.id=i.driver_id WHERE ${driver ? 'i.driver_id' : 'i.garage_id'}=? ORDER BY i.created_at DESC`,
+        driver ? req.user.id : req.user.garage_id,
       ),
-    ),
-  );
+    );
+  });
   app.post('/api/invoices', async (req, res) => {
-    const g = await ownGarage(req.user),
+    const g = await ownerGarage(req.user),
       d = parse(
         z.object({
           booking_id: z.uuid(),
@@ -1149,7 +1212,7 @@ export async function createApp({
     res.status(201).json({ id: key });
   });
   app.patch('/api/invoices/:id', async (req, res) => {
-    const g = await ownGarage(req.user),
+    const g = await ownerGarage(req.user),
       d = parse(
         z.object({ status: z.enum(['paid', 'void']), payment_reference: optional(200) }),
         req,
@@ -1232,10 +1295,12 @@ export async function createApp({
       isGarage = req.user.role === 'garage';
     const accountId = isGarage ? (await ownGarage(req.user)).id : req.user.id,
       col = isGarage ? 'garage_id' : 'driver_id';
-    const invoiceTotals = await one(
-      `SELECT COALESCE(SUM(CASE WHEN status='paid' THEN amount_cents ELSE 0 END),0) paid,COALESCE(SUM(CASE WHEN status='unpaid' THEN amount_cents ELSE 0 END),0) unpaid FROM invoices WHERE ${col}=?`,
-      accountId,
-    );
+    const invoiceTotals = req.user.staff_role
+      ? null
+      : await one(
+          `SELECT COALESCE(SUM(CASE WHEN status='paid' THEN amount_cents ELSE 0 END),0) paid,COALESCE(SUM(CASE WHEN status='unpaid' THEN amount_cents ELSE 0 END),0) unpaid FROM invoices WHERE ${col}=?`,
+          accountId,
+        );
     res.json({
       bookings: bookings.length,
       upcoming: bookings.filter((b) => ['pending', 'confirmed'].includes(b.status)).length,

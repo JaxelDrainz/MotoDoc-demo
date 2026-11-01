@@ -84,6 +84,13 @@ export const schemaSql = `
     CREATE INDEX IF NOT EXISTS site_revision_times ON site_revisions(created_at);
     CREATE TABLE IF NOT EXISTS site_assets(
       id TEXT PRIMARY KEY,name TEXT NOT NULL,mime TEXT NOT NULL,data TEXT NOT NULL,created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS garage_staff(
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,garage_id TEXT NOT NULL REFERENCES garages(id),
+      role TEXT NOT NULL DEFAULT 'mechanic',created_at TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS garage_team ON garage_staff(garage_id);
+    CREATE TABLE IF NOT EXISTS demo_users(
+      user_id TEXT PRIMARY KEY,world TEXT NOT NULL,persona TEXT NOT NULL,created_at INTEGER NOT NULL);
+    CREATE INDEX IF NOT EXISTS demo_worlds ON demo_users(world,created_at);
     INSERT OR IGNORE INTO schema_versions(version) VALUES(1);
   `;
 

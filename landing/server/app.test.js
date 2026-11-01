@@ -871,3 +871,59 @@ test('only administrators can change site settings, which are versioned and publ
   const restored = await fetch(`${base}/api/site`).then((r) => r.json());
   assert.equal(restored.site.content.hero.tagline, 'Car care, sorted.');
 });
+
+test('demo worlds give each visitor private sample data across roles and expire', async (t) => {
+  let now = Date.now();
+  const { client } = await fixture(t, { clock: () => now }),
+    visitor = client(),
+    stranger = client(),
+    real = client();
+  const driver = await visitor('/api/demo', { persona: 'driver' });
+  assert.equal(driver.status, 201);
+  assert.equal(driver.data.user.demo, 'driver');
+  assert.equal(driver.data.redirect, '/app');
+  assert.equal((await visitor('/api/vehicles')).data.length, 2);
+  assert.equal((await visitor('/api/memberships')).data[0].status, 'active');
+  const [demoGarage] = (await visitor('/api/garages')).data;
+  assert.equal(demoGarage.name, 'MotoDoc Demo Garage');
+
+  await signup(real, 'real@example.test');
+  assert.equal((await real('/api/garages')).data.length, 0);
+  await stranger('/api/demo', { persona: 'driver' });
+  assert.notEqual((await stranger('/api/garages')).data[0].id, demoGarage.id);
+
+  const mechanic = await visitor('/api/demo', { persona: 'mechanic' });
+  assert.equal(mechanic.data.user.garageRole, 'mechanic');
+  const jobs = (await visitor('/api/bookings')).data;
+  assert.equal(jobs.length, 5);
+  assert.equal((await visitor('/api/invoices')).status, 403);
+  assert.equal(
+    (await visitor('/api/plans', { name: 'x', benefits: 'y', price_cents: 1 })).status,
+    403,
+  );
+  assert.equal((await visitor('/api/customers')).status, 200);
+  const pending = jobs.find((b) => b.status === 'pending');
+  assert.equal(
+    (await visitor(`/api/bookings/${pending.id}`, { status: 'confirmed' }, 'PATCH')).status,
+    200,
+  );
+
+  await visitor('/api/demo', { persona: 'garage' });
+  const owner = (await visitor('/api/auth/me')).data.user;
+  assert.equal(owner.garageRole, 'owner');
+  assert.equal((await visitor('/api/invoices')).data.length, 2);
+  assert((await visitor('/api/notifications')).data.items.some((n) => n.type === 'confirmed'));
+
+  const admin = await visitor('/api/demo', { persona: 'admin' });
+  assert.equal(admin.data.redirect, '/admin');
+  assert.equal(admin.data.user.admin, true);
+  const site = (await visitor('/api/admin/site')).data.site;
+  assert.equal((await visitor('/api/admin/site', { site }, 'PUT')).status, 403);
+
+  assert.equal((await visitor('/api/demo', { persona: 'boss' })).status, 400);
+  now += 25 * 3600000;
+  assert.equal((await visitor('/api/auth/me')).status, 200);
+  await client()('/api/demo', { persona: 'driver' });
+  assert.equal((await visitor('/api/auth/me')).status, 401);
+  assert.equal((await real('/api/auth/me')).status, 200);
+});
