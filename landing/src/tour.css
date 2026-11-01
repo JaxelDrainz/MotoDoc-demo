@@ -1,0 +1,103 @@
+.tour-dialog {
+  width: min(430px, calc(100% - 32px));
+  margin: auto 28px 28px auto;
+  padding: 28px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 24px 70px #10251c33;
+}
+.tour-dialog::backdrop {
+  background: #10251c4d;
+  backdrop-filter: blur(2px);
+}
+.tour-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+}
+.tour-close:hover {
+  color: var(--ink);
+  background: var(--mint);
+}
+.tour-progress {
+  display: flex;
+  gap: 5px;
+  padding-right: 42px;
+}
+.tour-progress span {
+  width: 22px;
+  height: 3px;
+  background: #dce5e0;
+  border-radius: 99px;
+}
+.tour-progress span.active {
+  background: var(--green);
+}
+.tour-count {
+  margin-top: 24px;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.tour-dialog h2 {
+  margin-top: 10px;
+  font-size: 26px;
+  letter-spacing: -0.04em;
+}
+.tour-copy {
+  min-height: 52px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.75;
+}
+.tour-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 25px;
+}
+.tour-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 8px 4px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  font-size: 13px;
+}
+.tour-back:hover {
+  color: var(--green);
+}
+.dash-sidebar nav a[data-tour-active='true'] {
+  color: var(--green);
+  background: var(--mint);
+  box-shadow: inset 3px 0 var(--green);
+}
+@media (max-width: 700px) {
+  .tour-dialog {
+    width: calc(100% - 24px);
+    margin: auto 12px 12px;
+    padding: 24px 20px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tour-dialog[open] {
+    animation: md-dialog 0.22s var(--motion-enter) both;
+  }
+}

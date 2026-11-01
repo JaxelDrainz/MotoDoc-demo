@@ -16,6 +16,7 @@ import {
 import './auth.css';
 import { api } from './api.js';
 import { DemoAccounts } from './Demo.jsx';
+import { passwordProblem } from './finland.js';
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
@@ -60,15 +61,25 @@ export function AuthPage({ mode }) {
   const [local, setLocal] = useState(false);
   const [googleClientId, setGoogleClientId] = useState(null);
   const [role, setRole] = useState(
-    new URLSearchParams(location.search).get('role') === 'garage' ? 'garage' : 'driver',
+    ['garage'].includes(
+      new URLSearchParams(location.search).get('role') ||
+        new URLSearchParams(location.search).get('as'),
+    )
+      ? 'garage'
+      : 'driver',
   );
   const [values, setValues] = useState({ name: '', email: '', password: '' });
+  const [terms, setTerms] = useState(false);
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const form = useRef(null);
   const feedback = useRef(null);
   const googleButton = useRef(null);
+  const continueToAccount = async () => {
+    const { user } = await api('/auth/me');
+    window.location.assign(user.admin ? '/admin' : user.onboarded ? '/app' : '/onboarding');
+  };
   useEffect(() => {
     document.title = `${signup ? 'Create your account' : recovery || reset ? 'Reset your password' : 'Log in'} — MotoDoc`;
   }, [signup, recovery, reset]);
@@ -84,7 +95,7 @@ export function AuthPage({ mode }) {
       .catch(() => {});
   }, []);
   useEffect(() => {
-    if (!googleClientId) return;
+    if (!googleClientId || local) return;
     const script = document.createElement('script');
     script.src = 'https://accounts.google.com/gsi/client';
     script.async = true;
@@ -102,7 +113,7 @@ export function AuthPage({ mode }) {
                 body: { credential: response.credential, role },
               });
               flash('Signed in with Google. Welcome to MotoDoc.');
-              window.location.assign('/app');
+              await continueToAccount();
             } catch (err) {
               setServerError(err.message);
               toast(err.message, 'error');
@@ -129,7 +140,7 @@ export function AuthPage({ mode }) {
         document.head.removeChild(script);
       } catch {}
     };
-  }, [googleClientId, role]);
+  }, [googleClientId, local, role]);
   const handleGoogleAuth = () =>
     setServerError('Google sign-in is not available yet. Please use email for now.');
   const change = (event) => {
@@ -148,8 +159,9 @@ export function AuthPage({ mode }) {
     else if (!reset && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim()))
       next.email = 'Enter a valid email address.';
     if (!recovery && !values.password) next.password = 'Enter your password.';
-    else if ((signup || reset) && values.password.length < 8)
-      next.password = 'Use at least 8 characters.';
+    else if ((signup || reset) && passwordProblem(values.password))
+      next.password = passwordProblem(values.password);
+    if (signup && !terms) next.terms = 'Please accept the terms and privacy policy to continue.';
     setErrors(next);
     if (Object.keys(next).length) {
       form.current.elements.namedItem(Object.keys(next)[0])?.focus();
@@ -165,7 +177,7 @@ export function AuthPage({ mode }) {
             ? '/auth/reset-password'
             : '/auth/login';
       const body = signup
-        ? { ...values, role }
+        ? { ...values, role, terms }
         : recovery
           ? { email: values.email }
           : reset
@@ -176,7 +188,7 @@ export function AuthPage({ mode }) {
       setShowPassword(false);
       if (signup || (!recovery && !reset)) {
         flash(signup ? 'Account created. Welcome to MotoDoc.' : 'Signed in. Welcome back.');
-        window.location.assign('/app');
+        await continueToAccount();
       } else {
         setMessage(result.message);
         toast(result.message);
@@ -204,7 +216,9 @@ export function AuthPage({ mode }) {
         : 'A little less admin. A lot more peace of mind.'
       : recovery
         ? 'Let’s help you get back to your car care.'
-        : 'Your car, your garage, and everything in between.';
+        : role === 'garage'
+          ? 'Your customers, bookings, and workshop in one place.'
+          : 'Your car, your garage, and everything in between.';
   return (
     <div className={`auth-page auth-${mode}`}>
       <a className="skip-link" href="#auth-form">
@@ -245,6 +259,12 @@ export function AuthPage({ mode }) {
                 Whenever you
                 <br className="auth-story-break" /> need it.
               </>
+            ) : role === 'garage' ? (
+              <>
+                Your garage.
+                <br />
+                Ready for the day.
+              </>
             ) : (
               <>
                 Your car.
@@ -260,7 +280,9 @@ export function AuthPage({ mode }) {
                 : 'Meet your mechanic. Keep your car’s story together. Feel ready for the road ahead.'
               : recovery
                 ? 'We all lose track sometimes. Getting back on the road should be simple.'
-                : 'Pick up where you left off. Your next service and trusted mechanic are right here.'}
+                : role === 'garage'
+                  ? 'Pick up where you left off. Your bookings, customers, and workshop are ready.'
+                  : 'Pick up where you left off. Your next service and trusted mechanic are right here.'}
           </p>
           <span className="auth-story-signoff">
             <span /> Your mechanic. Your MotoDoc.
@@ -275,6 +297,22 @@ export function AuthPage({ mode }) {
           aria-hidden="true"
         />
         <section className="auth-card" aria-labelledby="auth-title">
+          {!recovery && !reset && (
+            <nav className="auth-mode-tabs" aria-label="Account action">
+              <a
+                href={`/login${role === 'garage' ? '?as=garage' : ''}`}
+                aria-current={!signup ? 'page' : undefined}
+              >
+                Log in
+              </a>
+              <a
+                href={`/signup${role === 'garage' ? '?role=garage' : ''}`}
+                aria-current={signup ? 'page' : undefined}
+              >
+                Create account
+              </a>
+            </nav>
+          )}
           <div className="auth-card-top">
             <span className="auth-card-mark">
               <LockKeyIcon size={19} aria-hidden="true" />
@@ -284,9 +322,9 @@ export function AuthPage({ mode }) {
           <h1 id="auth-title">{title}</h1>
           <p className="auth-description">{description}</p>
           <form id="auth-form" ref={form} onSubmit={submit} noValidate>
-            {signup && (
+            {(signup || (!recovery && !reset)) && (
               <fieldset className="auth-roles">
-                <legend>I’m joining as a</legend>
+                <legend>{signup ? 'I’m joining as a' : 'I’m signing in as a'}</legend>
                 {[
                   ['driver', CarIcon, 'Driver'],
                   ['garage', StorefrontIcon, 'Garage owner'],
@@ -297,7 +335,13 @@ export function AuthPage({ mode }) {
                       name="role"
                       value={value}
                       checked={role === value}
-                      onChange={() => setRole(value)}
+                      onChange={() => {
+                        setRole(value);
+                        const next = signup
+                          ? `/signup${value === 'garage' ? '?role=garage' : ''}`
+                          : `/login${value === 'garage' ? '?as=garage' : ''}`;
+                        history.replaceState(null, '', next);
+                      }}
                     />
                     <Icon size={21} aria-hidden="true" />
                     <span>{label}</span>
@@ -310,7 +354,7 @@ export function AuthPage({ mode }) {
             )}
             {(signup || (!recovery && !reset)) && (
               <div className="auth-oauth-section">
-                {googleClientId ? (
+                {googleClientId && !local ? (
                   <div className="auth-google-provider" ref={googleButton} />
                 ) : (
                   <button
@@ -423,9 +467,42 @@ export function AuthPage({ mode }) {
                 ) : (
                   (signup || reset) && (
                     <p className="auth-hint" id="password-hint">
-                      Use at least 8 characters.
+                      At least 8 characters, with letters and numbers.
                     </p>
                   )
+                )}
+              </div>
+            )}
+            {signup && (
+              <div className="auth-terms">
+                <label>
+                  <input
+                    type="checkbox"
+                    name="terms"
+                    checked={terms}
+                    onChange={(event) => {
+                      setTerms(event.target.checked);
+                      setErrors((current) => ({ ...current, terms: undefined }));
+                    }}
+                    aria-invalid={!!errors.terms}
+                    aria-describedby={errors.terms ? 'terms-error' : undefined}
+                  />
+                  <span>
+                    I accept the{' '}
+                    <a href="/terms" target="_blank" rel="noreferrer">
+                      terms of service
+                    </a>{' '}
+                    and{' '}
+                    <a href="/privacy" target="_blank" rel="noreferrer">
+                      privacy policy
+                    </a>
+                    .
+                  </span>
+                </label>
+                {errors.terms && (
+                  <p className="auth-error" id="terms-error">
+                    {errors.terms}
+                  </p>
                 )}
               </div>
             )}

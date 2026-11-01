@@ -64,6 +64,22 @@ Verified in browser:
 
 No outstanding actionable P0/P1/P2 visual findings within this UI milestone. Actual authentication is intentionally not connected: no credentials are transmitted or persisted, no user account is created, and no recovery email is sent. The forms explain this and offer an explicit live-app link after preview completion. No deployment was made. These notes supersede the earlier landing-only description of account handoff.
 
+# Account and onboarding continuation — 1 November 2026
+
+final result: passed
+
+The account work was continued against `docs/spec-checklist.md` and the established MotoDoc authentication reference in `qa/auth-style-comparison.jpg`.
+
+Verified in the in-app browser:
+
+- Desktop garage sign-in at `/login?as=garage`: Log in / Create account tabs, audience selector, garage-specific headline and supporting copy, email fields, and the existing mechanic composition remain aligned.
+- Mobile garage sign-in at 390 × 844: header, tabs, audience selector and fields reflow without horizontal overflow.
+- Driver dashboard guided tour: the help control opens the tour, the eight-step progress indicator advances, the matching navigation item is highlighted, and dark mode remains legible.
+- Local development shows an explicit Google fallback instead of an empty provider frame when localhost is not authorized by the Google client.
+- Browser console is clean after removing the unsupported cross-page View Transition opt-in. Existing component motion remains enabled and still respects reduced motion.
+
+The onboarding and account workflows are covered by the backend integration suite: driver and garage onboarding, Finnish plate and Y-tunnus validation, terms, membership launch, settings, password changes, session revocation, and account anonymisation. No outstanding P0, P1 or P2 finding remains in this continuation scope.
+
 # Authenticated car-care and local backend milestone — October 2026
 
 final result: passed

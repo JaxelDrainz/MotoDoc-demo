@@ -33,6 +33,13 @@ export async function buildDemoWorld({ run, clock, world }) {
       role,
     );
     await run(
+      'INSERT INTO user_settings(user_id,phone,terms_accepted_at,onboarded_at) VALUES(?,?,?,?)',
+      key,
+      '+358 40 000 0000',
+      at(-120 * day),
+      at(-120 * day),
+    );
+    await run(
       'INSERT INTO demo_users(user_id,world,persona,created_at) VALUES(?,?,?,?)',
       key,
       world,
@@ -68,6 +75,25 @@ export async function buildDemoWorld({ run, clock, world }) {
     '+358 40 000 0000',
     'Mon–Fri 8–17, Sat 10–14',
     'Mikko',
+  );
+  await run(
+    'INSERT INTO garage_details(garage_id,business_id,hourly_rate_cents,member_rate_cents,specializations,main_focus,hours,membership_launched_at) VALUES(?,?,?,?,?,?,?,?)',
+    garage,
+    '1234567-1',
+    7500,
+    6800,
+    JSON.stringify(['diagnostics', 'petrol', 'tyres']),
+    'diagnostics',
+    JSON.stringify({
+      mon: { open: true, from: '08:00', to: '17:00' },
+      tue: { open: true, from: '08:00', to: '17:00' },
+      wed: { open: true, from: '08:00', to: '17:00' },
+      thu: { open: true, from: '08:00', to: '17:00' },
+      fri: { open: true, from: '08:00', to: '17:00' },
+      sat: { open: true, from: '10:00', to: '14:00' },
+      sun: { open: false, from: '08:00', to: '17:00' },
+    }),
+    at(-150 * day),
   );
   await run(
     "INSERT INTO garage_staff(user_id,garage_id,role,created_at) VALUES(?,?,'mechanic',?)",
@@ -272,12 +298,13 @@ const purgeSteps = [
   `DELETE FROM plans WHERE garage_id IN ${garages}`,
   `DELETE FROM customer_notes WHERE garage_id IN ${garages} OR driver_id IN ${users}`,
   `DELETE FROM garage_contact WHERE garage_id IN ${garages}`,
+  `DELETE FROM garage_details WHERE garage_id IN ${garages}`,
   `DELETE FROM garage_staff WHERE user_id IN ${users} OR garage_id IN ${garages}`,
   `DELETE FROM vehicle_condition WHERE vehicle_id IN (SELECT id FROM vehicles WHERE owner_id IN ${users})`,
   `DELETE FROM vehicles WHERE owner_id IN ${users}`,
   `DELETE FROM reminders WHERE user_id IN ${users}`,
   `DELETE FROM garages WHERE owner_id IN ${users}`,
-  ...['sessions', 'resets', 'photos', 'notification_reads'].map(
+  ...['sessions', 'resets', 'photos', 'notification_reads', 'user_settings'].map(
     (table) => `DELETE FROM ${table} WHERE user_id IN ${users}`,
   ),
   `DELETE FROM users WHERE id IN ${users}`,

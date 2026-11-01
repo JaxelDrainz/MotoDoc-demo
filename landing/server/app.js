@@ -25,6 +25,15 @@ import { wikimediaImages } from './vehicle-images.js';
 import { mergeSite, siteDefaults, siteSchema, siteStyle } from './site.js';
 import { vehicleArt } from './vehicle-art.js';
 import { buildDemoWorld, demoLifetime, demoPersonas, purgeDemoWorld } from './demo.js';
+import {
+  FI_PLATE,
+  SPECIALIZATIONS,
+  WEEKDAYS,
+  formatPlate,
+  hoursProblem,
+  passwordProblem,
+  validBusinessId,
+} from '../src/finland.js';
 
 const scrypt = promisify(scryptCallback);
 const hash = (value) => createHash('sha256').update(value).digest('hex');
@@ -32,7 +41,13 @@ const id = () => randomUUID();
 const text = (max = 160) => z.string().trim().min(1).max(max);
 const optional = (max = 2000) => z.string().trim().max(max).default('');
 const emailSchema = z.string().trim().toLowerCase().email().max(254);
-const passwordSchema = z.string().min(8, 'Use at least 8 characters.').max(128);
+const passwordSchema = z
+  .string()
+  .max(128)
+  .superRefine((value, ctx) => {
+    const problem = passwordProblem(value);
+    if (problem) ctx.addIssue({ code: 'custom', message: problem });
+  });
 const dateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -50,12 +65,23 @@ const userView = (u) => ({
   photo: u.photo || null,
   garageRole: u.role === 'garage' ? u.staff_role || 'owner' : null,
   demo: u.demo_persona || null,
+  phone: u.phone || '',
+  address: u.address || '',
+  termsAccepted: !!u.terms_accepted_at,
+  hasPassword: !!u.password_hash && !String(u.password_hash).startsWith('oauth:'),
+  prefs: {
+    emailUpdates:
+      u.email_updates === undefined || u.email_updates === null ? true : !!u.email_updates,
+    emailChat: !!u.email_chat,
+    requestSound:
+      u.request_sound === undefined || u.request_sound === null ? true : !!u.request_sound,
+  },
 });
 const photoOf = (column) =>
   `(SELECT '/api/photos/'||user_id||'?v='||updated_at FROM photos WHERE user_id=${column})`;
 
 const worldOf = (column) => `COALESCE((SELECT world FROM demo_users WHERE user_id=${column}),'')`;
-const userSelect = `SELECT u.*,${photoOf('u.id')} photo,COALESCE((SELECT id FROM garages WHERE owner_id=u.id),(SELECT garage_id FROM garage_staff WHERE user_id=u.id)) garage_id,(SELECT role FROM garage_staff WHERE user_id=u.id) staff_role,(SELECT world FROM demo_users WHERE user_id=u.id) demo_world,(SELECT persona FROM demo_users WHERE user_id=u.id) demo_persona FROM users u`;
+const userSelect = `SELECT u.*,${photoOf('u.id')} photo,COALESCE((SELECT id FROM garages WHERE owner_id=u.id),(SELECT garage_id FROM garage_staff WHERE user_id=u.id)) garage_id,(SELECT role FROM garage_staff WHERE user_id=u.id) staff_role,(SELECT world FROM demo_users WHERE user_id=u.id) demo_world,(SELECT persona FROM demo_users WHERE user_id=u.id) demo_persona,us.phone,us.address,us.email_updates,us.email_chat,us.request_sound,us.terms_accepted_at,us.onboarded_at FROM users u LEFT JOIN user_settings us ON us.user_id=u.id`;
 const ratingColumns = `(SELECT ROUND(AVG(rating),1) FROM reviews WHERE garage_id=g.id) rating,(SELECT COUNT(*) FROM reviews WHERE garage_id=g.id) review_count`;
 const garageView = (g) => ({ ...g, services: JSON.parse(g.services), published: !!g.published });
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -305,6 +331,9 @@ export async function createApp({
           email: emailSchema,
           password: passwordSchema,
           role: z.enum(['driver', 'garage']),
+          terms: z
+            .boolean()
+            .refine(Boolean, 'Please accept the terms and privacy policy to continue.'),
         })
         .strict(),
       req,
@@ -312,7 +341,8 @@ export async function createApp({
     if (await one('SELECT id FROM users WHERE email=?', data.email))
       throw fail(409, 'Unable to create this account. Try logging in or resetting your password.');
     const password = await passwordHash(data.password);
-    const user = { id: id(), ...data };
+    const { terms: _terms, ...fields } = data;
+    const user = { id: id(), ...fields };
     await transaction(db, async () => {
       await run(
         'INSERT INTO users(id,name,email,password_hash,role) VALUES(?,?,?,?,?)',
@@ -321,6 +351,11 @@ export async function createApp({
         data.email,
         password,
         data.role,
+      );
+      await run(
+        'INSERT INTO user_settings(user_id,terms_accepted_at) VALUES(?,?)',
+        user.id,
+        new Date(clock()).toISOString(),
       );
       if (data.role === 'garage')
         await run(
@@ -461,8 +496,297 @@ export async function createApp({
     next();
   });
   app.get('/api/auth/me', async (req, res) =>
-    res.json({ user: { ...userView(req.user), admin: isAdmin(req.user) } }),
+    res.json({
+      user: {
+        ...userView(req.user),
+        admin: isAdmin(req.user),
+        onboarded: !!(req.user.onboarded_at || req.user.staff_role || isAdmin(req.user)),
+      },
+    }),
   );
+  const now = () => new Date(clock()).toISOString();
+  const saveSettings = (userId, fields) => {
+    const keys = Object.keys(fields);
+    return run(
+      `INSERT INTO user_settings(user_id,${keys.join(',')}) VALUES(?${',?'.repeat(keys.length)}) ON CONFLICT(user_id) DO UPDATE SET ${keys.map((k) => `${k}=excluded.${k}`).join(',')}`,
+      userId,
+      ...Object.values(fields),
+    );
+  };
+  const phoneSchema = z
+    .string()
+    .trim()
+    .max(30)
+    .regex(/^[+\d\s().-]*$/, 'Use digits, spaces and + only.')
+    .default('');
+  const specKeys = SPECIALIZATIONS.map(([key]) => key);
+  const hoursSchema = z
+    .object(
+      Object.fromEntries(
+        WEEKDAYS.map(([key]) => [
+          key,
+          z.object({
+            open: z.boolean(),
+            from: z.string().regex(/^\d{2}:\d{2}$/),
+            to: z.string().regex(/^\d{2}:\d{2}$/),
+          }),
+        ]),
+      ),
+    )
+    .superRefine((hours, ctx) => {
+      const problem = hoursProblem(hours);
+      if (problem) ctx.addIssue({ code: 'custom', message: problem });
+    });
+  const hoursText = (hours) =>
+    WEEKDAYS.filter(([key]) => hours[key].open)
+      .map(([key]) => `${key[0].toUpperCase()}${key.slice(1)} ${hours[key].from}–${hours[key].to}`)
+      .join(', ');
+  const garageDetails = async (garageId) => {
+    const row = await one('SELECT * FROM garage_details WHERE garage_id=?', garageId);
+    return {
+      business_id: row?.business_id || '',
+      hourly_rate: row?.hourly_rate_cents ? row.hourly_rate_cents / 100 : null,
+      member_rate: row?.member_rate_cents ? row.member_rate_cents / 100 : null,
+      specializations: row ? JSON.parse(row.specializations) : [],
+      main_focus: row?.main_focus || '',
+      hours: row?.hours ? JSON.parse(row.hours) : null,
+      membership_launched_at: row?.membership_launched_at || null,
+    };
+  };
+  app.post('/api/onboarding', async (req, res) => {
+    if (req.user.staff_role) throw fail(403, 'Team members don’t need to set up an account.');
+    const base = {
+      phone: phoneSchema,
+      terms: z.boolean().optional(),
+      email_updates: z.boolean().default(true),
+    };
+    const garage = req.user.role === 'garage';
+    const d = parse(
+      garage
+        ? z.object({
+            ...base,
+            request_sound: z.boolean().default(true),
+            garage: z
+              .object({
+                name: z.string().trim().min(2, 'Add the garage name.').max(100),
+                address: z.string().trim().min(4, 'Add the street address and city.').max(200),
+                business_id: z
+                  .string()
+                  .trim()
+                  .max(9)
+                  .default('')
+                  .refine(
+                    (v) => !v || validBusinessId(v),
+                    'This Business ID doesn’t look right. Check the digits, for example 1234567-1.',
+                  ),
+                services: z.array(text(80)).min(1, 'Pick at least one service.').max(20),
+                specializations: z
+                  .array(z.enum(specKeys))
+                  .min(1, 'Pick at least one specialisation.'),
+                main_focus: z.enum(specKeys),
+                hourly_rate: z.number().positive().max(1000),
+                hours: hoursSchema,
+              })
+              .refine((g) => g.specializations.includes(g.main_focus), {
+                message: 'Your main focus must be one of your specialisations.',
+                path: ['main_focus'],
+              }),
+          })
+        : z.object({
+            ...base,
+            car: z.object({
+              plate: z
+                .string()
+                .trim()
+                .regex(FI_PLATE, 'Use the Finnish format, for example ABC-123.'),
+              make: text(60),
+              model: text(60),
+              year: z
+                .number()
+                .int()
+                .min(1950)
+                .max(new Date().getFullYear() + 1),
+            }),
+          }),
+      req,
+    );
+    if (!req.user.terms_accepted_at && !d.terms)
+      throw fail(400, 'Please accept the terms and privacy policy to continue.');
+    await transaction(db, async () => {
+      if (garage) {
+        const g = d.garage;
+        const city = g.address.split(',').pop().replace(/\d+/g, '').trim() || g.address;
+        await run(
+          'UPDATE garages SET name=?,address=?,city=?,services=?,published=1 WHERE id=?',
+          g.name,
+          g.address,
+          city,
+          JSON.stringify([...new Set(g.services)]),
+          req.user.garage_id,
+        );
+        await run(
+          `INSERT INTO garage_details(garage_id,business_id,hourly_rate_cents,specializations,main_focus,hours) VALUES(?,?,?,?,?,?)
+           ON CONFLICT(garage_id) DO UPDATE SET business_id=excluded.business_id,hourly_rate_cents=excluded.hourly_rate_cents,specializations=excluded.specializations,main_focus=excluded.main_focus,hours=excluded.hours`,
+          req.user.garage_id,
+          g.business_id,
+          Math.round(g.hourly_rate * 100),
+          JSON.stringify(g.specializations),
+          g.main_focus,
+          JSON.stringify(g.hours),
+        );
+        await run(
+          'INSERT INTO garage_contact(garage_id,phone,opening_hours) VALUES(?,?,?) ON CONFLICT(garage_id) DO UPDATE SET phone=excluded.phone,opening_hours=excluded.opening_hours',
+          req.user.garage_id,
+          d.phone,
+          hoursText(g.hours),
+        );
+      } else {
+        const plate = formatPlate(d.car.plate);
+        if (
+          !(await one(
+            'SELECT id FROM vehicles WHERE owner_id=? AND registration=?',
+            req.user.id,
+            plate,
+          ))
+        )
+          await run(
+            'INSERT INTO vehicles(id,owner_id,make,model,year,registration,mileage) VALUES(?,?,?,?,?,?,0)',
+            id(),
+            req.user.id,
+            d.car.make,
+            d.car.model,
+            d.car.year,
+            plate,
+          );
+      }
+      await saveSettings(req.user.id, {
+        phone: d.phone,
+        email_updates: Number(d.email_updates),
+        ...(garage ? { request_sound: Number(d.request_sound) } : {}),
+        terms_accepted_at: req.user.terms_accepted_at || now(),
+        onboarded_at: now(),
+      });
+    });
+    res.json({ next: garage ? '/onboarding/membership' : '/app' });
+  });
+  app.post('/api/garage/membership', async (req, res) => {
+    const g = await ownerGarage(req.user);
+    const d = parse(
+      z
+        .object({
+          price: z.number().int().min(29).max(59),
+          hourly_rate: z.number().positive().max(1000),
+          member_rate: z.number().positive().max(1000),
+          perks: z
+            .array(z.string().trim().min(3).max(80))
+            .min(3, 'Choose at least 3 perks.')
+            .max(6),
+          own_perk: z.string().trim().max(60).default(''),
+        })
+        .refine((v) => v.member_rate <= v.hourly_rate, {
+          message: 'The member hourly rate can’t be higher than your normal hourly rate.',
+          path: ['member_rate'],
+        }),
+      req,
+    );
+    if ((await garageDetails(g.id)).membership_launched_at)
+      throw fail(409, 'Your membership is already live.');
+    const perks = [...d.perks, ...(d.own_perk ? [d.own_perk] : [])];
+    await transaction(db, async () => {
+      await run(
+        'INSERT INTO plans(id,garage_id,name,benefits,price_cents) VALUES(?,?,?,?,?)',
+        id(),
+        g.id,
+        `${g.name} membership`,
+        perks.join('\n'),
+        d.price * 100,
+      );
+      await run(
+        `INSERT INTO garage_details(garage_id,hourly_rate_cents,member_rate_cents,membership_launched_at) VALUES(?,?,?,?)
+         ON CONFLICT(garage_id) DO UPDATE SET hourly_rate_cents=excluded.hourly_rate_cents,member_rate_cents=excluded.member_rate_cents,membership_launched_at=excluded.membership_launched_at`,
+        g.id,
+        Math.round(d.hourly_rate * 100),
+        Math.round(d.member_rate * 100),
+        now(),
+      );
+    });
+    res.status(201).json({ ok: true });
+  });
+  app.put('/api/account/settings', async (req, res) => {
+    const d = parse(
+      z.object({
+        name: text(100).optional(),
+        phone: phoneSchema,
+        address: optional(200),
+        email_updates: z.boolean(),
+        email_chat: z.boolean(),
+        request_sound: z.boolean().optional(),
+      }),
+      req,
+    );
+    if (d.name) await run('UPDATE users SET name=? WHERE id=?', d.name, req.user.id);
+    await saveSettings(req.user.id, {
+      phone: d.phone,
+      address: d.address,
+      email_updates: Number(d.email_updates),
+      email_chat: Number(d.email_chat),
+      ...(d.request_sound === undefined ? {} : { request_sound: Number(d.request_sound) }),
+    });
+    res.json({ ok: true });
+  });
+  app.post('/api/account/password', async (req, res) => {
+    await rateLimit(req, 'password-change', 10, req.user.id);
+    const d = parse(z.object({ current: z.string().min(1).max(128), next: passwordSchema }), req);
+    const stored = (await one('SELECT password_hash FROM users WHERE id=?', req.user.id))
+      .password_hash;
+    if (stored.startsWith('oauth:'))
+      throw fail(
+        400,
+        req.user.demo_persona
+          ? 'Demo accounts don’t have a password.'
+          : 'You sign in with Google, so your password is managed there.',
+      );
+    if (!(await passwordMatches(d.current, stored)))
+      throw fail(400, 'Your current password is incorrect.');
+    if (d.current === d.next) throw fail(400, 'Choose a password you haven’t used here before.');
+    await run(
+      'UPDATE users SET password_hash=? WHERE id=?',
+      await passwordHash(d.next),
+      req.user.id,
+    );
+    await run(
+      'DELETE FROM sessions WHERE user_id=? AND token_hash<>?',
+      req.user.id,
+      hash(sessionToken(req)),
+    );
+    res.json({ ok: true });
+  });
+  app.delete('/api/account', async (req, res) => {
+    const userId = req.user.id;
+    await transaction(db, async () => {
+      if (req.user.role === 'garage' && !req.user.staff_role && req.user.garage_id) {
+        await run('UPDATE garages SET published=0 WHERE id=?', req.user.garage_id);
+        await run('DELETE FROM garage_staff WHERE garage_id=?', req.user.garage_id);
+      }
+      for (const table of [
+        'sessions',
+        'resets',
+        'photos',
+        'notification_reads',
+        'reminders',
+        'garage_staff',
+        'user_settings',
+      ])
+        await run(`DELETE FROM ${table} WHERE user_id=?`, userId);
+      await run(
+        "UPDATE users SET name='Deleted user',email=?,password_hash='oauth:deleted',google_id=NULL WHERE id=?",
+        `deleted-${userId}@deleted.invalid`,
+        userId,
+      );
+    });
+    res.clearCookie('motodoc_session', { ...cookieOptions, maxAge: undefined });
+    res.json({ ok: true });
+  });
   app.use('/api/admin', (req, _res, next) => {
     if (!isAdmin(req.user))
       throw fail(403, 'Only MotoDoc administrators can change site settings.');
@@ -770,6 +1094,7 @@ export async function createApp({
     const g = await ownGarage(req.user);
     res.json({
       ...garageView(g),
+      ...(await garageDetails(g.id)),
       phone: '',
       opening_hours: '',
       mechanic_name: '',

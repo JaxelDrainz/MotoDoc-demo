@@ -63,6 +63,32 @@
   const sizes = new ResizeObserver(() => schedule());
   let queued = false;
 
+  const SCROLLERS = '.dash-sidebar nav, .dash-slot-days, .md-scroll-x';
+  const edges = (el) => {
+    const max = el.scrollWidth - el.clientWidth;
+    el.toggleAttribute('data-more-left', max > 1 && el.scrollLeft > 2);
+    el.toggleAttribute('data-more-right', max > 1 && el.scrollLeft < max - 2);
+  };
+  const scrollers = new WeakSet();
+  const watchScroller = (el) => {
+    if (!scrollers.has(el)) {
+      scrollers.add(el);
+      sizes.observe(el);
+      el.addEventListener('scroll', () => edges(el), { passive: true });
+      el.addEventListener(
+        'wheel',
+        (event) => {
+          if (event.ctrlKey || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+          const before = el.scrollLeft;
+          el.scrollLeft += event.deltaY;
+          if (el.scrollLeft !== before) event.preventDefault();
+        },
+        { passive: false },
+      );
+    }
+    edges(el);
+  };
+
   const run = () => {
     queued = false;
     document.querySelectorAll('[data-fit]').forEach((row) => {
@@ -72,12 +98,15 @@
       }
       fit(row);
     });
+    document.querySelectorAll(SCROLLERS).forEach(watchScroller);
   };
 
   const schedule = () => {
     if (queued) return;
     queued = true;
-    requestAnimationFrame(run);
+    const go = () => queued && run();
+    requestAnimationFrame(go);
+    setTimeout(go, 120);
   };
 
   new MutationObserver(schedule).observe(document.documentElement, {

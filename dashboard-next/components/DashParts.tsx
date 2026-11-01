@@ -243,7 +243,7 @@ export function SlotPicker({
     'md-slot border border-[#d7dce0] bg-white text-[#111827] hover:border-[#087658] aria-pressed:border-[#087658] aria-pressed:bg-[#087658] aria-pressed:text-white disabled:cursor-not-allowed disabled:bg-[#f1f4f3] disabled:text-[#a3aba7] disabled:line-through';
   return (
     <div>
-      <div className="flex gap-1.5 overflow-x-auto pb-2">
+      <div className="md-scroll-x flex gap-1.5 overflow-x-auto pb-2">
         {days.map((item) => (
           <button
             type="button"

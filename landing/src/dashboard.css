@@ -1605,3 +1605,105 @@ img.dash-avatar {
     justify-content: flex-start;
   }
 }
+.dash-launch {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.dash-launch > div {
+  flex: 1;
+  min-width: 220px;
+}
+.dash-launch h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+.dash-launch p {
+  margin: 0;
+  color: var(--muted);
+}
+
+:is(.dash-sidebar nav, .dash-slot-days, .md-scroll-x) {
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
+}
+:is(.dash-sidebar nav, .dash-slot-days, .md-scroll-x)::-webkit-scrollbar {
+  display: none;
+}
+:is(.dash-sidebar nav, .dash-slot-days, .md-scroll-x)[data-more-right]:not([data-more-left]) {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+:is(.dash-sidebar nav, .dash-slot-days, .md-scroll-x)[data-more-left]:not([data-more-right]) {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+}
+:is(.dash-sidebar nav, .dash-slot-days, .md-scroll-x)[data-more-left][data-more-right] {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 40px,
+    #000 calc(100% - 40px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 40px,
+    #000 calc(100% - 40px),
+    transparent
+  );
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.dash-sidebar nav, .dash-slot-days, .md-scroll-x) {
+    scroll-behavior: auto;
+  }
+}
+.dash-sidebar nav {
+  column-gap: 24px;
+}
+.dash-sidebar nav a {
+  position: relative;
+  font-size: 14px;
+  padding: 12px 0 13px;
+  min-height: 0;
+  transition: color var(--motion-fast, 150ms) var(--motion-ease, ease);
+}
+.dash-sidebar nav a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--green);
+  opacity: 0;
+  transform: scaleX(0.4);
+  transition:
+    transform var(--motion-base, 220ms) var(--motion-ease, ease),
+    opacity var(--motion-fast, 150ms) var(--motion-ease, ease);
+}
+.dash-sidebar nav a:hover::after {
+  opacity: 0.35;
+  transform: scaleX(1);
+}
+.dash-sidebar nav a.active {
+  color: var(--ink);
+}
+.dash-sidebar nav a.active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+.dash-sidebar nav a:focus-visible {
+  outline: 3px solid #4da58b;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-sidebar nav a::after {
+    transition: none;
+  }
+}

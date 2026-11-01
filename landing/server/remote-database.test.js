@@ -30,8 +30,9 @@ test('hosted database adapter persists signup and sessions across app instances'
     body: JSON.stringify({
       name: 'Hosted Driver',
       email: 'driver@hosted.example',
-      password: 'secure-test-password',
+      password: 'secure-test-password-1',
       role: 'driver',
+      terms: true,
     }),
   });
   assert.equal(signup.status, 201);
