@@ -900,14 +900,14 @@ test('demo worlds give each visitor private sample data across roles and expire'
   const mechanic = await visitor('/api/demo', { persona: 'mechanic' });
   assert.equal(mechanic.data.user.garageRole, 'mechanic');
   const jobs = (await visitor('/api/bookings')).data;
-  assert.equal(jobs.length, 5);
+  assert.equal(jobs.length, 7);
   assert.equal((await visitor('/api/invoices')).status, 403);
   assert.equal(
     (await visitor('/api/plans', { name: 'x', benefits: 'y', price_cents: 1 })).status,
     403,
   );
   assert.equal((await visitor('/api/customers')).status, 200);
-  const pending = jobs.find((b) => b.status === 'pending');
+  const pending = jobs.find((b) => b.status === 'pending' && b.requested_by !== 'garage');
   assert.equal(
     (await visitor(`/api/bookings/${pending.id}`, { status: 'confirmed' }, 'PATCH')).status,
     200,
@@ -1115,4 +1115,195 @@ test('onboarding, terms, password rule, settings, password change and account de
     ).status,
     401,
   );
+});
+
+test('booking to pickup: approve, decline, garage-made appointments, stages, pickup, reviews and chat close', async (t) => {
+  let now = Date.now();
+  const { client } = await fixture(t, { clock: () => now }),
+    shop = client(),
+    driver = client(),
+    other = client();
+  await garage(shop);
+  await signup(driver, 'flow@example.test');
+  const car = (await vehicle(driver)).data.id;
+  const g = (await driver('/api/garages')).data[0];
+  const hour = (h) => {
+    const d = new Date(now + h * 3600000);
+    d.setUTCMinutes(0, 0, 0);
+    return d.toISOString();
+  };
+  const book = async (h) =>
+    (
+      await driver('/api/bookings', {
+        garage_id: g.id,
+        vehicle_id: car,
+        service: 'Oil change',
+        starts_at: hour(h),
+      })
+    ).data.id;
+
+  const declined = await book(30);
+  assert.equal((await driver(`/api/bookings/${declined}/approve`, {})).status, 403);
+  assert.equal(
+    (await shop(`/api/bookings/${declined}/decline`, { reason: 'No free slot that week' })).status,
+    200,
+  );
+  let rows = (await driver('/api/bookings')).data;
+  let row = rows.find((b) => b.id === declined);
+  assert.equal(row.state, 'declined');
+  assert.equal(row.cancel_reason, 'No free slot that week');
+  const items = (await driver('/api/notifications')).data.items;
+  assert(
+    items.some((n) => n.title === 'Booking declined' && n.detail === 'No free slot that week'),
+  );
+
+  const proposed = await book(32);
+  assert.equal(
+    (
+      await shop(`/api/bookings/${proposed}/propose`, {
+        starts_at: hour(56),
+        reason: 'Busy that day',
+      })
+    ).status,
+    200,
+  );
+  row = (await driver('/api/bookings')).data.find((b) => b.id === proposed);
+  assert.equal(row.state, 'confirmed');
+  assert.equal(row.starts_at, hour(56));
+
+  const job = await book(26);
+  assert.equal((await shop(`/api/bookings/${job}/stage`, { stage: 'in_progress' })).status, 409);
+  assert.equal(
+    (await shop(`/api/bookings/${job}/approve`, { starts_at: hour(27), mechanic: 'Mikko' })).status,
+    200,
+  );
+  row = (await shop('/api/bookings')).data.find((b) => b.id === job);
+  assert.equal(row.mechanic, 'Mikko');
+  assert.equal(row.starts_at, hour(27));
+  assert.equal((await shop(`/api/bookings/${job}/stage`, { stage: 'finished' })).status, 409);
+  assert.equal((await shop(`/api/bookings/${job}/stage`, { stage: 'in_progress' })).status, 200);
+  assert.equal(
+    (await driver(`/api/bookings/${job}/cancel`, { reason: 'Changed my mind' })).status,
+    409,
+  );
+  assert.equal(
+    (await shop(`/api/bookings/${job}/notes`, { note: 'Front pads are worn.' })).status,
+    201,
+  );
+  assert.equal(
+    (await shop(`/api/bookings/${job}/ready`, { pickup_at: hour(30), mileage: 12500 })).status,
+    409,
+  );
+  assert.equal((await shop(`/api/bookings/${job}/stage`, { stage: 'finished' })).status, 200);
+  assert.equal(
+    (await shop(`/api/bookings/${job}/ready`, { pickup_at: hour(30), mileage: 100 })).status,
+    400,
+  );
+  assert.equal(
+    (
+      await shop(`/api/bookings/${job}/ready`, {
+        pickup_at: hour(30),
+        mileage: 12500,
+        note: 'Keys at the desk.',
+      })
+    ).status,
+    200,
+  );
+  row = (await driver('/api/bookings')).data.find((b) => b.id === job);
+  assert.equal(row.state, 'ready');
+  assert.equal(row.review_due, true);
+  assert.equal(row.chat_open, true);
+  assert.equal((await driver('/api/vehicles')).data[0].mileage, 12500);
+  assert.equal((await driver('/api/service-history')).data.length, 1);
+  const titles = (await driver('/api/notifications')).data.items.map((n) => n.title);
+  assert(titles.includes('Your car is ready for pickup'));
+  assert(titles.includes('Mechanic note'));
+  assert(titles.includes('Repair progress updated'));
+
+  assert.equal(
+    (
+      await driver(
+        `/api/bookings/${job}/review`,
+        { rating: 5, tags: ['On time', 'Not a tag'] },
+        'PUT',
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await driver(
+        `/api/bookings/${job}/review`,
+        { rating: 4, tags: ['On time'], comment: 'Quick and clear.' },
+        'PUT',
+      )
+    ).status,
+    200,
+  );
+  assert.equal((await shop(`/api/bookings/${job}/review/reply`, { reply: 'Thanks!' })).status, 201);
+  assert.equal((await shop(`/api/bookings/${job}/review/reply`, { reply: 'Again' })).status, 409);
+  row = (await driver('/api/bookings')).data.find((b) => b.id === job);
+  assert.equal(row.review_comment, 'Quick and clear.');
+  assert.deepEqual(row.review_tags, ['On time']);
+  assert.equal(row.review_reply, 'Thanks!');
+
+  now += 45 * 3600000;
+  row = (await driver('/api/bookings')).data.find((b) => b.id === job);
+  assert.equal(row.state, 'completed');
+  assert.equal(row.chat_open, false);
+  assert.equal((await driver(`/api/bookings/${job}/messages`, { body: 'Hello?' })).status, 403);
+
+  const driverId = (await driver('/api/auth/me')).data.user.id;
+  const made = await shop('/api/bookings/schedule', {
+    driver_id: driverId,
+    vehicle_id: car,
+    service: 'Oil change',
+    starts_at: hour(48),
+    notes: 'Free slot before winter.',
+  });
+  assert.equal(made.status, 201);
+  row = (await driver('/api/bookings')).data.find((b) => b.id === made.data.id);
+  assert.equal(row.state, 'needs_approval');
+  await signup(other, 'stranger@example.test');
+  const strangerId = (await other('/api/auth/me')).data.user.id;
+  assert.equal(
+    (
+      await shop('/api/bookings/schedule', {
+        driver_id: strangerId,
+        vehicle_id: car,
+        service: 'Oil change',
+        starts_at: hour(50),
+      })
+    ).status,
+    404,
+  );
+  assert.equal((await shop(`/api/bookings/${made.data.id}/approve`, {})).status, 409);
+  assert.equal(
+    (await driver(`/api/bookings/${made.data.id}/respond`, { accept: true })).status,
+    200,
+  );
+  assert(
+    (await shop('/api/notifications')).data.items.some(
+      (n) => n.title === 'Customer approved the appointment',
+    ),
+  );
+
+  const noShow = await book(60);
+  await shop(`/api/bookings/${noShow}/approve`, {});
+  assert.equal((await driver(`/api/bookings/${noShow}/cancel`, { no_show: true })).status, 403);
+  assert.equal(
+    (await shop(`/api/bookings/${noShow}/move`, { starts_at: hour(62), reason: 'Mechanic ill' }))
+      .status,
+    200,
+  );
+  assert.equal(
+    (
+      await shop(`/api/bookings/${noShow}/cancel`, {
+        reason: 'Customer did not show up',
+        no_show: true,
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await driver('/api/bookings')).data.find((b) => b.id === noShow).state, 'no_show');
 });

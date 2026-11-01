@@ -25,6 +25,7 @@ import { wikimediaImages } from './vehicle-images.js';
 import { mergeSite, siteDefaults, siteSchema, siteStyle } from './site.js';
 import { vehicleArt } from './vehicle-art.js';
 import { buildDemoWorld, demoLifetime, demoPersonas, purgeDemoWorld } from './demo.js';
+import { REVIEW_TAGS, decorateBooking, jobColumns, jobJoins, registerJobs } from './jobs.js';
 import {
   FI_PLATE,
   SPECIALIZATIONS,
@@ -1152,19 +1153,21 @@ export async function createApp({
     );
     res.json({ ok: true });
   });
-  const bookingSelect = `SELECT b.*,g.name garage_name,g.address garage_address,g.city garage_city,c.phone,c.opening_hours,c.mechanic_name,${photoOf('g.owner_id')} garage_photo,${photoOf('b.driver_id')} driver_photo,${ratingColumns},u.name driver_name,v.make,v.model,v.registration FROM bookings b JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=b.driver_id JOIN vehicles v ON v.id=b.vehicle_id LEFT JOIN garage_contact c ON c.garage_id=g.id`;
+  const bookingSelect = `SELECT b.*,g.name garage_name,g.address garage_address,g.city garage_city,c.phone,c.opening_hours,c.mechanic_name,${photoOf('g.owner_id')} garage_photo,${photoOf('b.driver_id')} driver_photo,${ratingColumns},u.name driver_name,v.make,v.model,v.registration,${jobColumns},(SELECT COUNT(*) FROM memberships m JOIN plans p ON p.id=m.plan_id WHERE m.driver_id=b.driver_id AND p.garage_id=b.garage_id AND m.status='active') member_count FROM bookings b JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=b.driver_id JOIN vehicles v ON v.id=b.vehicle_id LEFT JOIN garage_contact c ON c.garage_id=g.id ${jobJoins}`;
   const scopedBookings = async (user) =>
-    user.role === 'driver'
+    (user.role === 'driver'
       ? await all(`${bookingSelect} WHERE b.driver_id=? ORDER BY b.starts_at DESC`, user.id)
-      : await all(`${bookingSelect} WHERE g.id=? ORDER BY b.starts_at DESC`, user.garage_id);
+      : await all(`${bookingSelect} WHERE g.id=? ORDER BY b.starts_at DESC`, user.garage_id)
+    ).map((b) => decorateBooking(b, clock(), b.member_count > 0));
   app.get('/api/bookings', async (req, res) => res.json(await scopedBookings(req.user)));
-  const bookingEvent = (bookingId, actorId, kind) =>
+  const bookingEvent = (bookingId, actorId, kind, detail = '') =>
     run(
-      'INSERT INTO booking_events(id,booking_id,actor_id,kind,at) VALUES(?,?,?,?,?)',
+      'INSERT INTO booking_events(id,booking_id,actor_id,kind,detail,at) VALUES(?,?,?,?,?,?)',
       id(),
       bookingId,
       actorId,
       kind,
+      detail,
       new Date(clock()).toISOString(),
     );
   app.get('/api/garages/:id/busy', async (req, res) => {
@@ -1182,10 +1185,23 @@ export async function createApp({
   });
   const eventTitles = {
     requested: 'New booking request',
-    confirmed: 'Booking confirmed',
-    cancelled: 'Booking cancelled',
+    confirmed: 'Booking approved',
+    'approved-new-time': 'Booking approved for a new time',
+    declined: 'Booking declined',
+    'new-time': 'New time proposed',
+    scheduled: 'Your garage scheduled an appointment',
+    'customer-approved': 'Customer approved the appointment',
+    'customer-declined': 'Customer declined the appointment',
+    stage: 'Repair progress updated',
+    ready: 'Your car is ready for pickup',
+    note: 'Mechanic note',
+    moved: 'Appointment moved',
+    cancelled: 'Appointment cancelled',
+    'no-show': 'Marked as no-show',
     completed: 'Service completed',
-    rescheduled: 'Booking moved to a new time',
+    rescheduled: 'Reschedule requested',
+    review: 'New review',
+    reply: 'The garage replied to your review',
   };
   app.get('/api/notifications', async (req, res) => {
     const isDriver = req.user.role === 'driver',
@@ -1201,7 +1217,7 @@ export async function createApp({
       req.user.id,
     );
     const events = await all(
-      `SELECT e.id,e.kind,e.at,e.booking_id,b.service,g.name garage_name,u.name driver_name FROM booking_events e JOIN bookings b ON b.id=e.booking_id JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=b.driver_id WHERE ${column}=? AND e.actor_id<>? ORDER BY e.at DESC LIMIT 20`,
+      `SELECT e.id,e.kind,e.detail,e.at,e.booking_id,b.service,g.name garage_name,u.name driver_name FROM booking_events e JOIN bookings b ON b.id=e.booking_id JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=b.driver_id WHERE ${column}=? AND e.actor_id<>? ORDER BY e.at DESC LIMIT 20`,
       scope,
       req.user.id,
     );
@@ -1225,6 +1241,7 @@ export async function createApp({
         type: e.kind,
         title: eventTitles[e.kind] || 'Booking updated',
         body: `${e.service} · ${isDriver ? e.garage_name : e.driver_name}`,
+        detail: e.detail || '',
         at: e.at,
         booking_id: e.booking_id,
       })),
@@ -1261,8 +1278,15 @@ export async function createApp({
   });
   app.post('/api/bookings/:id/messages', async (req, res) => {
     const d = parse(z.object({ body: text(2000) }), req);
-    if (!(await scopedBookings(req.user)).some((b) => b.id === req.params.id))
-      throw fail(404, 'Booking not found.');
+    const chat = (await scopedBookings(req.user)).find((b) => b.id === req.params.id);
+    if (!chat) throw fail(404, 'Booking not found.');
+    if (!chat.chat_open)
+      throw fail(
+        403,
+        req.user.role === 'driver'
+          ? 'This chat closed 24 hours after your repair. Garage members can keep chatting with their garage.'
+          : 'This chat closed 24 hours after the repair. The customer isn’t a member of your garage.',
+      );
     const key = id();
     await run(
       'INSERT INTO messages(id,booking_id,sender_id,body,created_at) VALUES(?,?,?,?,?)',
@@ -1287,6 +1311,24 @@ export async function createApp({
       throw fail(400, 'Choose a future hourly appointment within the next year.');
     return date;
   };
+  const jobs = registerJobs(app, {
+    one,
+    all,
+    run,
+    db,
+    transaction,
+    fail,
+    parse,
+    id,
+    clock,
+    scopedBookings,
+    bookingEvent,
+    appointment,
+    ownGarage,
+    driverOnly,
+    text,
+    optional,
+  });
   app.put('/api/bookings/:id/schedule', async (req, res) => {
     driverOnly(req.user);
     const date = appointment(parse(z.object({ starts_at: z.iso.datetime() }), req).starts_at);
@@ -1298,18 +1340,30 @@ export async function createApp({
     if (!b) throw fail(404, 'Booking not found.');
     if (!['pending', 'confirmed'].includes(b.status))
       throw fail(409, 'Only upcoming bookings can be rescheduled.');
+    const job = await one('SELECT stage FROM booking_jobs WHERE booking_id=?', req.params.id);
+    if (job && job.stage !== 'booked')
+      throw fail(409, 'Started appointments cannot be rescheduled.');
 
     await run(
       "UPDATE bookings SET starts_at=?,status='pending' WHERE id=?",
       date.toISOString(),
       req.params.id,
     );
+    await jobs.ensureJob(req.params.id);
+    await run("UPDATE booking_jobs SET requested_by='driver' WHERE booking_id=?", req.params.id);
     await bookingEvent(req.params.id, req.user.id, 'rescheduled');
     res.json({ ok: true });
   });
   app.put('/api/bookings/:id/review', async (req, res) => {
     driverOnly(req.user);
-    const { rating } = parse(z.object({ rating: z.number().int().min(1).max(5) }), req);
+    const { rating, tags, comment } = parse(
+      z.object({
+        rating: z.number().int().min(1).max(5),
+        tags: z.array(z.enum(REVIEW_TAGS)).max(6).default([]),
+        comment: optional(1000),
+      }),
+      req,
+    );
     const b = await one(
       "SELECT garage_id FROM bookings WHERE id=? AND driver_id=? AND status='completed'",
       req.params.id,
@@ -1317,13 +1371,16 @@ export async function createApp({
     );
     if (!b) throw fail(404, 'Only your completed services can be reviewed.');
     await run(
-      'INSERT INTO reviews(booking_id,garage_id,driver_id,rating,created_at) VALUES(?,?,?,?,?) ON CONFLICT(booking_id) DO UPDATE SET rating=excluded.rating',
+      'INSERT INTO reviews(booking_id,garage_id,driver_id,rating,tags,comment,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(booking_id) DO UPDATE SET rating=excluded.rating,tags=excluded.tags,comment=excluded.comment',
       req.params.id,
       b.garage_id,
       req.user.id,
       rating,
+      JSON.stringify([...new Set(tags)]),
+      comment,
       new Date(clock()).toISOString(),
     );
+    await bookingEvent(req.params.id, req.user.id, 'review', `${rating}/5`);
     res.json({ ok: true });
   });
   app.post('/api/bookings', async (req, res) => {
@@ -1361,6 +1418,7 @@ export async function createApp({
       date.toISOString(),
       d.notes,
     );
+    await jobs.ensureJob(key);
     await bookingEvent(key, req.user.id, 'requested');
     res.status(201).json({ id: key });
   });
@@ -1377,37 +1435,20 @@ export async function createApp({
     if (!b) throw fail(404, 'Booking not found.');
     if (req.user.role === 'driver' && d.status !== 'cancelled')
       throw fail(403, 'Only your garage can update service progress.');
-    const allowed = {
-      pending: ['confirmed', 'cancelled'],
-      confirmed: ['completed', 'cancelled'],
-      completed: [],
-      cancelled: [],
-    };
-    if (!allowed[b.status].includes(d.status))
-      throw fail(409, 'This booking cannot make that status change.');
-    if (d.status === 'completed' && (!d.summary || d.mileage === undefined))
-      throw fail(400, 'Add a service summary and mileage to complete the booking.');
-    await transaction(db, async () => {
-      await run('UPDATE bookings SET status=? WHERE id=?', d.status, b.id);
-      await bookingEvent(b.id, req.user.id, d.status);
-      if (d.status === 'completed') {
-        const vehicle = await one('SELECT mileage FROM vehicles WHERE id=?', b.vehicle_id);
-        if (d.mileage < vehicle.mileage)
-          throw fail(400, 'Mileage cannot be lower than the vehicle’s recorded mileage.');
-        await run(
-          'INSERT INTO service_records VALUES(?,?,?,?,?,?,?,?)',
-          id(),
-          b.id,
-          b.garage_id,
-          b.vehicle_id,
-          b.driver_id,
-          d.summary,
-          d.mileage,
-          new Date(clock()).toISOString(),
-        );
-        await run('UPDATE vehicles SET mileage=? WHERE id=?', d.mileage, b.vehicle_id);
-      }
-    });
+    if (d.status === 'cancelled') await jobs.cancel(req, b, {});
+    else if (d.status === 'completed') {
+      if (!d.summary || d.mileage === undefined)
+        throw fail(400, 'Add a service summary and mileage to complete the booking.');
+      await jobs.complete(req, b, { summary: d.summary, mileage: d.mileage });
+    } else {
+      if (b.status !== 'pending' || b.requested_by === 'garage')
+        throw fail(409, 'This booking cannot make that status change.');
+      await transaction(db, async () => {
+        await run("UPDATE bookings SET status='confirmed' WHERE id=?", b.id);
+        await jobs.ensureJob(b.id);
+        await bookingEvent(b.id, req.user.id, 'confirmed');
+      });
+    }
     res.json({ ok: true });
   });
   app.get('/api/service-history', async (req, res) => {
@@ -1592,12 +1633,16 @@ export async function createApp({
   });
   app.get('/api/customers', async (req, res) => {
     const g = await ownGarage(req.user);
-    res.json(
-      await all(
-        `SELECT u.id,u.name,u.email,${photoOf('u.id')} photo,COUNT(b.id) booking_count,COALESCE(n.notes,'') notes,COALESCE(n.tags,'') tags FROM users u JOIN bookings b ON b.driver_id=u.id LEFT JOIN customer_notes n ON n.driver_id=u.id AND n.garage_id=b.garage_id WHERE b.garage_id=? GROUP BY u.id ORDER BY u.name`,
-        g.id,
-      ),
+    const customers = await all(
+      `SELECT u.id,u.name,u.email,${photoOf('u.id')} photo,COUNT(b.id) booking_count,COALESCE(n.notes,'') notes,COALESCE(n.tags,'') tags FROM users u JOIN bookings b ON b.driver_id=u.id LEFT JOIN customer_notes n ON n.driver_id=u.id AND n.garage_id=b.garage_id WHERE b.garage_id=? GROUP BY u.id ORDER BY u.name`,
+      g.id,
     );
+    for (const customer of customers)
+      customer.vehicles = await all(
+        'SELECT id,make,model,year,registration FROM vehicles WHERE owner_id=? ORDER BY make,model',
+        customer.id,
+      );
+    res.json(customers);
   });
   app.put('/api/customers/:id', async (req, res) => {
     const g = await ownGarage(req.user),
