@@ -4,6 +4,7 @@ import './toasts.css';
 
 const FLASH = 'motodoc-flash';
 const EVENT = 'motodoc-toast';
+let nextToastId = 0;
 
 export function toast(message, kind = 'success') {
   if (message) window.dispatchEvent(new CustomEvent(EVENT, { detail: { message, kind } }));
@@ -18,11 +19,10 @@ export function flash(message, kind = 'success') {
 export function Toasts() {
   const [items, setItems] = useState([]);
   useEffect(() => {
-    let next = 0;
     const timers = new Set();
     const remove = (id) => setItems((list) => list.filter((item) => item.id !== id));
     const add = ({ message, kind }) => {
-      const id = ++next;
+      const id = ++nextToastId;
       setItems((list) => [
         ...list.filter((item) => item.message !== message).slice(-2),
         { id, message, kind },

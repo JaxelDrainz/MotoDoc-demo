@@ -13,26 +13,26 @@ Our app keeps its own design. The goal is the spec's features and step-by-step w
 
 | Area                             | ✅     | 🟡     | ❌     |
 | -------------------------------- | ------ | ------ | ------ |
-| 1. Accounts, sign-in, onboarding | 15     | 2      | 5      |
-| 2. Driver                        | 4      | 18     | 18     |
-| 3. Garage                        | 0      | 14     | 17     |
-| 4. Admin and Fuel Day            | 0      | 1      | 14     |
+| 1. Accounts, sign-in, onboarding | 18     | 2      | 2      |
+| 2. Driver                        | 8      | 17     | 16     |
+| 3. Garage                        | 3      | 12     | 17     |
+| 4. Admin and Fuel Day            | 15     | 0      | 0      |
 | 5. Notifications                 | 2      | 3      | 7      |
 | 6. Platform rules                | 5      | 3      | 3      |
-| **Total**                        | **26** | **41** | **64** |
+| **Total**                        | **51** | **37** | **45** |
 
 ---
 
 ## Build stages (recommended order)
 
-1. **Onboarding and accounts.** This is the gap the voice note called out. It covers step-by-step onboarding for drivers and garages (including after Google sign-up), the garage membership launch wizard, the guided tour, terms acceptance, the password rule, change password and delete account.
-2. **Booking-to-pickup workflow.** Garage approve with time and mechanic, decline with reason, propose a new time; garage-made appointments the driver approves; repair stages Booked → Started → Finished → Ready for pickup; pickup time; no-show; the 24-hour chat rule; review with text and tags; garage reply.
-3. **Garage business tools.** My Services with prices and durations; opening hours, blocked days and online/offline status; the jobs board; line-item invoices with discounts, VAT and reference number; e-invoice fields; payment reminders; the wallet; analytics; the workshop profile with specialisations.
+1. **Onboarding and accounts.** ✅ Done 2 November 2026. Step-by-step onboarding for drivers and garages (including after Google sign-up), the garage membership launch wizard, the guided tour, terms acceptance, the password rule, change password and delete account.
+2. **Booking-to-pickup workflow.** ✅ Done 2 November 2026. Garage approve with time and mechanic, decline with reason, propose a new time; garage-made appointments the driver approves; repair stages Booked → Started → Finished → Ready for pickup; pickup time; no-show; the 24-hour chat rule; review with text and tags; garage reply.
+3. **Garage business tools.** ✅ Done 2 November 2026. My Services with prices and durations; opening hours, blocked days and online/offline status; the jobs board; line-item invoices with discounts, VAT and reference number; e-invoice fields; payment reminders; the wallet; analytics; the workshop profile with specialisations.
 4. **Team & access.** ✅ Done 2 November 2026. Invite links; Manager, Mechanic and Receptionist roles; per-area access; pause and remove.
 5. **Memberships, the spec's way.** ✅ Done 2 November 2026. A Basic plan plus each garage's own yearly plan; one price per car; cancel, keep or refund; the garage switching memberships off; member updates.
 6. **Emergency marketplace.** ✅ Done 2 November 2026. Driver posts a request, garages quote, driver accepts or closes.
 7. **Admin console.** ✅ Done 2 November 2026. The 12 sections: users and suspension, garage verification, review moderation, payments, feedback, announcements, platform settings, audit log.
-8. **Fuel Day campaign.** Passes with QR, the attendant check, admin setup and the funnel.
+8. **Fuel Day campaign.** ✅ Done 2 November 2026. Passes with QR, the attendant check, admin setup, driver notification, funnel reporting and CSV export.
 9. **Notifications everywhere.** All 29 events, a full notifications page, email delivery, reply reminders run on the server, and badges.
 10. **Extras.** MotoDoc Free/Pro subscription, service recommendations, Ask MotoDoc assistant, inspections and Coming soon, Pay later, referrals, feedback.
 
@@ -105,7 +105,7 @@ Our app keeps its own design. The goal is the spec's features and step-by-step w
 | MotoDoc subscription Free / Pro (launch bonus)                                                                                                                                                                                               | ❌     |                                                                                                                                                  |
 | Profile page (name, phone, address, notes for your mechanic)                                                                                                                                                                                 | 🟡     | Account tab has a photo; no phone, address or notes.                                                                                             |
 | Settings: email important updates, email chat copies, reply reminders, language, password, delete account                                                                                                                                    | 🟡     | Language only.                                                                                                                                   |
-| Fuel Day pass (website page as well)                                                                                                                                                                                                         | ❌     |                                                                                                                                                  |
+| Fuel Day pass (website page as well)                                                                                                                                                                                                         | ✅     | Driver offer, one-pass rules, QR code, place release and used state are implemented.                                                             |
 | Coming soon (inspection booking, road tax, insurance)                                                                                                                                                                                        | ❌     |                                                                                                                                                  |
 | Leave feedback                                                                                                                                                                                                                               | ❌     |                                                                                                                                                  |
 | Dark mode, English / Finnish                                                                                                                                                                                                                 | ✅     |                                                                                                                                                  |
@@ -164,9 +164,9 @@ Our app keeps its own design. The goal is the spec's features and step-by-step w
 | Announcements (everyone / drivers / garages)                                                                      | ✅     | Delivered in MotoDoc; email waits for an email provider.                                        |
 | Platform settings (launch bonus, Pro prices, MotoDoc share 30 %, VAT 25.5 %, reply reminder windows)              | ✅     | Share and VAT feed memberships and invoices; Pro prices and reminders are used in later stages. |
 | Audit log with actor                                                                                              | ✅     |                                                                                                 |
-| Fuel Day setup (draft → live → ended, budget) and driver notification                                             | ❌     |                                                                                                 |
-| Fuel Day pass (claim rules, QR, give up place) and attendant check (`/admin/fuel-day?pass=CODE`, mark used, undo) | ❌     |                                                                                                 |
-| Fuel Day funnel (60 days, 10 % target) and CSV export                                                             | ❌     |                                                                                                 |
+| Fuel Day setup (draft → live → ended, budget) and driver notification                                             | ✅     | Live edits, capacity checks, Finnish local time and audit entries are included.                  |
+| Fuel Day pass (claim rules, QR, give up place) and attendant check (`/admin/fuel-day?pass=CODE`, mark used, undo) | ✅     | Tested end to end with driver and admin demo accounts.                                           |
+| Fuel Day funnel (60 days, 10 % target) and CSV export                                                             | ✅     | Excludes existing customers and reports quote/booking conversion against the target.             |
 
 ## 5. Notifications
 

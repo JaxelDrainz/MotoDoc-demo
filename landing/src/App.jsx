@@ -536,6 +536,7 @@ export function App() {
   if (path === '/app') return <Dashboard />;
   if (path === '/admin') return <AdminConsole />;
   if (path === '/admin/site') return <Admin />;
+  if (path === '/admin/fuel-day') return <AdminConsole />;
   if (path === '/onboarding' || path === '/onboarding/membership') return <Onboarding />;
   if (['/privacy', '/terms', '/contact'].includes(path)) return <InfoPage kind={path.slice(1)} />;
   if (path === '/reset-password') return <AuthPage mode="reset" />;

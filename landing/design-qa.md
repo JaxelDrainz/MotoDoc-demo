@@ -107,3 +107,20 @@ Verified features & workflows:
   - `npm run test:sites`: 4/4 tests passed (static asset serving, SPA fallback routing, API pass-through protection, and Sites artifact emission).
   - `npm run build`: successfully generates `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json`.
 - **Integrity**: Zero simulated external email delivery (resets safely write to local outbox in development) and zero simulated credit card processing. Pure local prototype adhering strictly to requirements.
+
+# Fuel Day campaign — 2 November 2026
+
+final result: passed
+
+The campaign UI was reviewed against the established authenticated MotoDoc dashboard system: emerald status accents, dark navy surfaces, compact operational cards, Phosphor icons, and the existing responsive navigation patterns.
+
+Verified in the in-app browser:
+
+- Driver overview promotion links directly to Fuel Day and shows the current station, allowance and remaining capacity.
+- The driver pass screen presents the station, Helsinki-local date and time, vehicle selection, capacity, four-step instructions and a single clear claim action.
+- Claiming a pass immediately replaces the form with the unique code, QR image, assigned car, ready/used status and place-release action.
+- Admin Fuel Day includes attendant lookup, valid/used/not-found states, plate confirmation, mark-used and undo actions, live budget metrics, setup controls, funnel analytics, pass history and CSV export.
+- A 390 × 844 viewport has no horizontal overflow; the document width remains within the viewport and operational controls stay accessible.
+- A React StrictMode duplicate-toast-key warning found during role-switch testing was removed by using a module-level monotonic toast identifier. A fresh driver and admin load has no console warnings or errors.
+
+Automated coverage passes for draft/live/ended states, capacity and duplicate claim rules, QR/pass lookup, use and undo, notifications, funnel attribution and CSV export. No outstanding P0, P1 or P2 finding remains in this stage.

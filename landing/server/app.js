@@ -32,6 +32,7 @@ import { registerInviteRoutes, registerTeam } from './team.js';
 import { registerMemberships } from './memberships.js';
 import { registerMarketplace } from './marketplace.js';
 import { platformSettings, registerAdmin, registerFeedback } from './admin.js';
+import { registerFuelDay } from './fuelday.js';
 import { AREA_KEYS } from '../src/team.js';
 import {
   FI_PLATE,
@@ -843,6 +844,20 @@ export async function createApp({
     next();
   });
   registerAdmin(app, { one, all, run, db, transaction, fail, parse, id, clock, isAdmin, worldOf });
+  registerFuelDay(app, {
+    one,
+    all,
+    run,
+    db,
+    transaction,
+    fail,
+    parse,
+    id,
+    clock,
+    driverOnly,
+    worldOf,
+    isAdmin,
+  });
   app.get('/api/admin/site', async (_req, res) => {
     const revisions = await all(
       'SELECT r.id,r.created_at,u.name author FROM site_revisions r LEFT JOIN users u ON u.id=r.created_by ORDER BY r.created_at DESC, r.id DESC LIMIT 30',

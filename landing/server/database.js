@@ -261,6 +261,21 @@ Direct contact with garage',1200,'basic' FROM garage_details WHERE membership_la
       'CREATE INDEX IF NOT EXISTS admin_audit_time ON admin_audit(world,at)',
     ],
   ],
+  [
+    10,
+    [
+      `CREATE TABLE IF NOT EXISTS fuel_days(
+        id TEXT PRIMARY KEY,world TEXT NOT NULL DEFAULT '',station_name TEXT NOT NULL,station_address TEXT NOT NULL,
+        date TEXT NOT NULL,start_time TEXT NOT NULL,end_time TEXT NOT NULL,amount_cents INTEGER NOT NULL,cap INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',created_at TEXT NOT NULL,created_by TEXT NOT NULL,live_at TEXT,ended_at TEXT)`,
+      'CREATE INDEX IF NOT EXISTS fuel_day_world ON fuel_days(world,date)',
+      `CREATE TABLE IF NOT EXISTS fuel_passes(
+        code TEXT PRIMARY KEY,fuel_day_id TEXT NOT NULL REFERENCES fuel_days(id) ON DELETE CASCADE,
+        driver_id TEXT NOT NULL REFERENCES users(id),vehicle_id TEXT,car_label TEXT NOT NULL,plate TEXT NOT NULL,
+        claimed_at TEXT NOT NULL,used_at TEXT,used_by TEXT NOT NULL DEFAULT '',
+        UNIQUE(fuel_day_id,driver_id),UNIQUE(fuel_day_id,plate))`,
+    ],
+  ],
 ];
 
 export function openDatabase(path) {

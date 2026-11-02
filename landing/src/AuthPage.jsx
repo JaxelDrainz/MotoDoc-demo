@@ -80,7 +80,20 @@ export function AuthPage({ mode }) {
   const googleButton = useRef(null);
   const continueToAccount = async () => {
     const { user } = await api('/auth/me');
-    window.location.assign(user.admin ? '/admin' : user.onboarded ? '/app' : '/onboarding');
+    let next = '';
+    try {
+      next = sessionStorage.getItem('motodoc-next') || '';
+      sessionStorage.removeItem('motodoc-next');
+    } catch {}
+    window.location.assign(
+      user.admin
+        ? next.startsWith('/admin')
+          ? next
+          : '/admin'
+        : user.onboarded
+          ? '/app'
+          : '/onboarding',
+    );
   };
   useEffect(() => {
     document.title = `${signup ? 'Create your account' : recovery || reset ? 'Reset your password' : 'Log in'} — MotoDoc`;

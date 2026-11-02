@@ -26,6 +26,7 @@ import { DemoBar } from './Demo.jsx';
 import { FormDialog } from './Dashboard.jsx';
 import { flash, toast } from './Toasts.jsx';
 import { ADMIN_SECTIONS } from './platform.js';
+import { AdminFuelDay } from './FuelDay.jsx';
 import './dashboard.css';
 import './admin-console.css';
 
@@ -86,7 +87,11 @@ function Rows({ items, empty, render }) {
 export function AdminConsole() {
   const [me, setMe] = useState(null),
     [denied, setDenied] = useState(''),
-    [section, setSection] = useState(() => location.hash.slice(1) || 'overview'),
+    [section, setSection] = useState(
+      () =>
+        location.hash.slice(1) ||
+        (location.pathname.startsWith('/admin/fuel-day') ? 'fuel-day' : 'overview'),
+    ),
     [loaded, setData] = useState(null),
     [dialog, setDialog] = useState(null),
     [query, setQuery] = useState(''),
@@ -98,8 +103,12 @@ export function AdminConsole() {
     api('/auth/me')
       .then(({ user }) => (user.admin ? setMe(user) : setDenied(user.email)))
       .catch((e) => {
-        if (e.status === 401) location.replace('/login');
-        else toast(e.message, 'error');
+        if (e.status === 401) {
+          try {
+            sessionStorage.setItem('motodoc-next', location.pathname + location.search);
+          } catch {}
+          location.replace('/login');
+        } else toast(e.message, 'error');
       });
     const changed = () => {
       setSection(location.hash.slice(1) || 'overview');
@@ -464,13 +473,7 @@ export function AdminConsole() {
           )}
         />
       );
-    if (key === 'fuel-day')
-      return (
-        <div className="dash-empty">
-          <GasPumpIcon size={30} />
-          <p>Fuel Day setup, pass checks and the results funnel arrive in the next stage.</p>
-        </div>
-      );
+    if (key === 'fuel-day') return <AdminFuelDay open={open} />;
     if (key === 'reviews')
       return (
         <Rows
