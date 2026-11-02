@@ -11,13 +11,7 @@ import {
 import { api } from './api.js';
 import { Status } from './DashParts.jsx';
 import { toast } from './Toasts.jsx';
-import {
-  BASIC_BENEFITS,
-  FULL_EXTRAS,
-  GARAGE_SHARE,
-  REFUND_REASONS,
-  UPDATE_AUDIENCES,
-} from './membership.js';
+import { BASIC_BENEFITS, FULL_EXTRAS, REFUND_REASONS, UPDATE_AUDIENCES } from './membership.js';
 import './memberships.css';
 
 const euro = (cents) =>
@@ -601,8 +595,8 @@ export function GarageMemberships({ data, open, user }) {
           ['Subscribers', info.stats.subscribers],
           ['Yearly price', euro(plan.price_cents)],
           [
-            `You keep (${Math.round(GARAGE_SHARE * 100)}%)`,
-            euro(Math.round(plan.price_cents * GARAGE_SHARE)),
+            `You keep (${100 - (info.stats.share ?? 30)}%)`,
+            euro(Math.round((plan.price_cents * (100 - (info.stats.share ?? 30))) / 100)),
           ],
           ['Yearly income', euro(info.stats.keep_cents)],
         ].map(([label, value]) => (

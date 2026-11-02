@@ -208,3 +208,8 @@
 :root[data-theme='dark'] .dashboard .gt-bar {
   background: #1f2b25;
 }
+.gt-verified {
+  align-self: flex-start;
+  width: fit-content;
+  margin: 2px 0 6px;
+}

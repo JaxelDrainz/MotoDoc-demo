@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { BASIC_BENEFITS, BASIC_PRICE, GARAGE_SHARE } from '../src/membership.js';
+import { BASIC_BENEFITS, BASIC_PRICE } from '../src/membership.js';
+import { platformSettings } from './admin.js';
 
 const addYears = (iso, years = 1) => {
   const date = new Date(iso);
@@ -68,7 +69,7 @@ export function registerMemberships(app, ctx) {
     return out;
   };
 
-  const planSelect = `SELECT p.*,g.name garage_name,g.city garage_city,gd.hourly_rate_cents,gd.member_rate_cents FROM plans p JOIN garages g ON g.id=p.garage_id JOIN garage_details gd ON gd.garage_id=g.id WHERE p.active=1 AND g.published=1 AND gd.membership_offering=1 AND gd.membership_launched_at IS NOT NULL AND ${worldOf('g.owner_id')}=?`;
+  const planSelect = `SELECT p.*,g.name garage_name,g.city garage_city,gd.hourly_rate_cents,gd.member_rate_cents FROM plans p JOIN garages g ON g.id=p.garage_id JOIN garage_details gd ON gd.garage_id=g.id WHERE p.active=1 AND g.published=1 AND g.verification<>'rejected' AND gd.membership_offering=1 AND gd.membership_launched_at IS NOT NULL AND ${worldOf('g.owner_id')}=?`;
 
   app.get('/api/plans', async (req, res) => {
     if (req.user.role === 'garage') {
@@ -254,6 +255,7 @@ export function registerMemberships(app, ctx) {
       g.id,
     );
     const yearly = live.reduce((sum, m) => sum + m.price_cents, 0);
+    const share = (await platformSettings(all)).motodoc_share;
     res.json({
       launched_at: details?.membership_launched_at || null,
       offering: details ? !!details.membership_offering : true,
@@ -266,7 +268,8 @@ export function registerMemberships(app, ctx) {
         on_plan: new Set(live.filter((m) => m.kind === 'garage').map((m) => m.driver_id)).size,
         on_basic: new Set(live.filter((m) => m.kind === 'basic').map((m) => m.driver_id)).size,
         yearly_cents: yearly,
-        keep_cents: Math.round(yearly * GARAGE_SHARE),
+        keep_cents: Math.round((yearly * (100 - share)) / 100),
+        share,
       },
       last_update: last,
     });

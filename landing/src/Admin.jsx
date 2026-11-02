@@ -285,7 +285,10 @@ export function Admin() {
     <div className="admin">
       <header className="admin-bar">
         <Brand />
-        <span className="admin-title">Site settings</span>
+        <a className="admin-link" href="/admin">
+          ← Admin console
+        </a>
+        <span className="admin-title">Site appearance</span>
         <div className="admin-actions">
           {dirty && <span className="admin-dirty">Unsaved changes</span>}
           <button

@@ -1910,3 +1910,109 @@ test('marketplace: post, nearby garages quote once, accept books, close, photos'
   assert((await g('/api/notifications')).data.items.some((n) => n.title === 'Quote accepted'));
   assert.equal((await d('/api/market/requests')).data[0].status, 'booked');
 });
+
+test('admin console: overview, suspend, verify, reviews, feedback, announcements, settings, audit, demo scope', async (t) => {
+  const { client } = await fixture(t, { adminEmails: 'boss@example.test' }),
+    admin = client(),
+    d = client(),
+    g = client(),
+    visitor = client();
+  await signup(admin, 'boss@example.test');
+  await signup(d, 'driver@example.test');
+  const gp = await garage(g);
+  assert.equal((await d('/api/admin/overview')).status, 403);
+
+  const overview = (await admin('/api/admin/overview')).data;
+  assert.equal(overview.tiles.drivers, 2);
+  assert.equal(overview.tiles.garages, 1);
+  assert.equal(overview.attention.find((a) => a.section === 'garages').count, 1);
+
+  const users = (await admin('/api/admin/users?q=driver@')).data;
+  assert.equal(users.length, 1);
+  const driverId = users[0].id;
+  const me = (await admin('/api/admin/users?q=boss')).data[0];
+  assert.equal(me.admin, true);
+  assert.equal((await admin(`/api/admin/users/${me.id}/suspend`, { reason: 'Test' })).status, 403);
+  assert.equal((await admin(`/api/admin/users/${driverId}/suspend`, { reason: '' })).status, 400);
+  assert.equal(
+    (await admin(`/api/admin/users/${driverId}/suspend`, { reason: 'Spam bookings' })).status,
+    200,
+  );
+  assert.equal((await d('/api/auth/me')).status, 401);
+  assert.equal(
+    (await d('/api/auth/login', { email: 'driver@example.test', password: 'testing-password-42' }))
+      .status,
+    403,
+  );
+  await admin(`/api/admin/users/${driverId}/reactivate`, {});
+  assert.equal(
+    (await d('/api/auth/login', { email: 'driver@example.test', password: 'testing-password-42' }))
+      .status,
+    200,
+  );
+
+  assert.equal(
+    (await admin(`/api/admin/garages/${gp.id}/reject`, { reason: 'No Y-tunnus' })).status,
+    200,
+  );
+  assert.equal((await d('/api/garages')).data.length, 0);
+  await admin(`/api/admin/garages/${gp.id}/verify`, {});
+  const listed = (await d('/api/garages')).data;
+  assert.equal(listed[0].verification, 'verified');
+  assert(
+    (await g('/api/notifications')).data.items.some((n) => n.title === 'Your garage is verified'),
+  );
+
+  assert.equal((await d('/api/feedback', { kind: 'problem', message: 'Bug' })).status, 400);
+  assert.equal(
+    (await d('/api/feedback', { kind: 'problem', message: 'The calendar skips a day.' })).status,
+    201,
+  );
+  const [fb] = (await admin('/api/admin/feedback')).data;
+  assert.equal(fb.status, 'new');
+  await admin(`/api/admin/feedback/${fb.id}/checked`, {});
+  assert.equal((await admin('/api/admin/feedback')).data[0].status, 'checked');
+
+  const sent = await admin('/api/admin/announcements', {
+    audience: 'garages',
+    title: 'New features',
+    message: 'Team access is now live for every garage.',
+  });
+  assert.equal(sent.data.recipients, 1);
+  assert((await g('/api/notifications')).data.items.some((n) => n.title === 'New features'));
+  assert(!(await d('/api/notifications')).data.items.some((n) => n.title === 'New features'));
+
+  const settings = (await admin('/api/admin/settings')).data;
+  assert.equal(settings.vat_rate, 25.5);
+  assert.equal(
+    (await admin('/api/admin/settings', { ...settings, motodoc_share: 25 }, 'PUT')).status,
+    200,
+  );
+  assert.equal((await admin('/api/admin/settings')).data.motodoc_share, 25);
+
+  const log = (await admin('/api/admin/audit')).data.map((a) => a.action);
+  for (const action of [
+    'Suspended account',
+    'Reactivated account',
+    'Rejected garage',
+    'Verified garage',
+    'Checked feedback',
+    'Sent announcement',
+    'Changed platform settings',
+  ])
+    assert(log.includes(action), action);
+
+  const demo = await visitor('/api/demo', { persona: 'admin' });
+  assert.equal(demo.status, 201);
+  const demoUsers = (await visitor('/api/admin/users')).data;
+  assert(!demoUsers.some((u) => u.email === 'driver@example.test'));
+  assert(demoUsers.length >= 5);
+  assert.equal((await visitor('/api/admin/audit')).data.length, 0);
+  assert.equal((await visitor('/api/admin/settings', settings, 'PUT')).status, 403);
+  const demoReview = (await visitor('/api/admin/reviews')).data[0];
+  assert.equal(
+    (await visitor(`/api/admin/reviews/${demoReview.id}/visibility`, { hidden: true })).status,
+    200,
+  );
+  assert.equal((await visitor('/api/admin/feedback')).data.length, 1);
+});

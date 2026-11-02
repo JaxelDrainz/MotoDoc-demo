@@ -31,7 +31,7 @@ Our app keeps its own design. The goal is the spec's features and step-by-step w
 4. **Team & access.** ✅ Done 2 November 2026. Invite links; Manager, Mechanic and Receptionist roles; per-area access; pause and remove.
 5. **Memberships, the spec's way.** ✅ Done 2 November 2026. A Basic plan plus each garage's own yearly plan; one price per car; cancel, keep or refund; the garage switching memberships off; member updates.
 6. **Emergency marketplace.** ✅ Done 2 November 2026. Driver posts a request, garages quote, driver accepts or closes.
-7. **Admin console.** The 12 sections: users and suspension, garage verification, review moderation, payments, feedback, announcements, platform settings, audit log.
+7. **Admin console.** ✅ Done 2 November 2026. The 12 sections: users and suspension, garage verification, review moderation, payments, feedback, announcements, platform settings, audit log.
 8. **Fuel Day campaign.** Passes with QR, the attendant check, admin setup and the funnel.
 9. **Notifications everywhere.** All 29 events, a full notifications page, email delivery, reply reminders run on the server, and badges.
 10. **Extras.** MotoDoc Free/Pro subscription, service recommendations, Ask MotoDoc assistant, inspections and Coming soon, Pay later, referrals, feedback.
@@ -150,23 +150,23 @@ Our app keeps its own design. The goal is the spec's features and step-by-step w
 
 ## 4. Admin and Fuel Day
 
-| Feature / workflow                                                                                                | Status | Notes                                                                                              |
-| ----------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------- |
-| Admin console with 12 sections                                                                                    | 🟡     | Ours is a site-settings editor (colours, text, images, translations); keep it as an extra section. |
-| Overview tiles and "Needs attention"                                                                              | ❌     |                                                                                                    |
-| Users: search, role filter, suspend / reactivate                                                                  | ❌     |                                                                                                    |
-| Garages: verify / reject, Y-tunnus check, verified badge for drivers                                              | ❌     |                                                                                                    |
-| Bookings (all, read-only)                                                                                         | ❌     |                                                                                                    |
-| Marketplace (all requests)                                                                                        | ❌     |                                                                                                    |
-| Reviews moderation (hide / restore, not counted in rating)                                                        | ❌     |                                                                                                    |
-| Payments (invoiced, paid, VAT, overdue)                                                                           | ❌     |                                                                                                    |
-| Feedback inbox (to check / seen / fixed)                                                                          | ❌     |                                                                                                    |
-| Announcements (everyone / drivers / garages)                                                                      | ❌     |                                                                                                    |
-| Platform settings (launch bonus, Pro prices, MotoDoc share 30 %, VAT 25.5 %, reply reminder windows)              | ❌     |                                                                                                    |
-| Audit log with actor                                                                                              | ❌     |                                                                                                    |
-| Fuel Day setup (draft → live → ended, budget) and driver notification                                             | ❌     |                                                                                                    |
-| Fuel Day pass (claim rules, QR, give up place) and attendant check (`/admin/fuel-day?pass=CODE`, mark used, undo) | ❌     |                                                                                                    |
-| Fuel Day funnel (60 days, 10 % target) and CSV export                                                             | ❌     |                                                                                                    |
+| Feature / workflow                                                                                                | Status | Notes                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------- |
+| Admin console with 12 sections                                                                                    | ✅     | Site appearance editor kept as a 13th section. Demo admin sees only demo data.                  |
+| Overview tiles and "Needs attention"                                                                              | ✅     |                                                                                                 |
+| Users: search, role filter, suspend / reactivate                                                                  | ✅     | Suspension signs the person out and blocks sign-in.                                             |
+| Garages: verify / reject, Y-tunnus check, verified badge for drivers                                              | ✅     | Rejected garages are hidden from drivers; verified badge shown.                                 |
+| Bookings (all, read-only)                                                                                         | ✅     |                                                                                                 |
+| Marketplace (all requests)                                                                                        | ✅     |                                                                                                 |
+| Reviews moderation (hide / restore, not counted in rating)                                                        | ✅     |                                                                                                 |
+| Payments (invoiced, paid, VAT, overdue)                                                                           | ✅     |                                                                                                 |
+| Feedback inbox (to check / seen / fixed)                                                                          | ✅     | Users send feedback from the dashboard header.                                                  |
+| Announcements (everyone / drivers / garages)                                                                      | ✅     | Delivered in MotoDoc; email waits for an email provider.                                        |
+| Platform settings (launch bonus, Pro prices, MotoDoc share 30 %, VAT 25.5 %, reply reminder windows)              | ✅     | Share and VAT feed memberships and invoices; Pro prices and reminders are used in later stages. |
+| Audit log with actor                                                                                              | ✅     |                                                                                                 |
+| Fuel Day setup (draft → live → ended, budget) and driver notification                                             | ❌     |                                                                                                 |
+| Fuel Day pass (claim rules, QR, give up place) and attendant check (`/admin/fuel-day?pass=CODE`, mark used, undo) | ❌     |                                                                                                 |
+| Fuel Day funnel (60 days, 10 % target) and CSV export                                                             | ❌     |                                                                                                 |
 
 ## 5. Notifications
 
