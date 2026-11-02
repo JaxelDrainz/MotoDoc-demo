@@ -270,7 +270,7 @@ test('reset links expire, are single use, and revoke existing sessions', async (
     400,
   );
 });
-test('membership approval, private customer notes, invoices and reminders are scoped', async (t) => {
+test('private customer notes, invoices and reminders are scoped', async (t) => {
   const { client } = await fixture(t),
     d = client(),
     g = client(),
@@ -278,15 +278,6 @@ test('membership approval, private customer notes, invoices and reminders are sc
   await signup(d, 'member@example.test');
   const gp = await garage(g);
   await garage(other, 'private@example.test');
-  const plan = (
-    await g('/api/plans', { name: 'Care plan', benefits: 'Priority booking', price_cents: 1500 })
-  ).data;
-  assert.equal((await d('/api/memberships', { plan_id: plan.id })).status, 201);
-  const m = (await d('/api/memberships')).data[0];
-  assert.equal(m.status, 'requested');
-  assert.equal((await d(`/api/memberships/${m.id}`, { status: 'active' }, 'PATCH')).status, 403);
-  assert.equal((await g(`/api/memberships/${m.id}`, { status: 'active' }, 'PATCH')).status, 200);
-  assert.equal((await other('/api/memberships')).data.length, 0);
   const v = (await vehicle(d)).data;
   const b = (
     await d('/api/bookings', {
@@ -915,7 +906,13 @@ test('demo worlds give each visitor private sample data across roles and expire'
   assert.equal(jobs.length, 7);
   assert.equal((await visitor('/api/invoices')).status, 403);
   assert.equal(
-    (await visitor('/api/plans', { name: 'x', benefits: 'y', price_cents: 1 })).status,
+    (
+      await visitor(
+        '/api/garage/membership',
+        { price: 39, hourly_rate: 80, member_rate: 70 },
+        'PUT',
+      )
+    ).status,
     403,
   );
   assert.equal((await visitor('/api/customers')).status, 200);
@@ -1073,8 +1070,10 @@ test('onboarding, terms, password rule, settings, password change and account de
     409,
   );
   const plans = (await driver('/api/plans')).data;
-  assert.equal(plans[0].price_cents, 4900);
-  assert.match(plans[0].benefits, /Coffee/);
+  const own = plans.find((p) => p.kind === 'garage');
+  assert.equal(own.price_cents, 4900);
+  assert.match(own.benefits, /Coffee/);
+  assert.equal(plans.find((p) => p.kind === 'basic').price_cents, 1200);
 
   assert.equal(
     (
@@ -1599,7 +1598,8 @@ test('team: invites, roles, per-area access, pause and remove', async (t) => {
   assert.equal((await staff('/api/team')).status, 403);
   assert.equal((await staff('/api/garage/contact', { phone: '+358401234567' }, 'PUT')).status, 403);
   assert.equal(
-    (await staff('/api/plans', { name: 'x', benefits: 'y', price_cents: 100 })).status,
+    (await staff('/api/garage/membership', { price: 39, hourly_rate: 80, member_rate: 70 }, 'PUT'))
+      .status,
     403,
   );
   assert.deepEqual((await staff('/api/service-history')).data, []);
@@ -1657,4 +1657,130 @@ test('team: invites, roles, per-area access, pause and remove', async (t) => {
     (await other(`/api/team/members/${member.id}`, { active: true }, 'PUT')).status,
     404,
   );
+});
+
+test('memberships: Basic and own plan, cars, cancel, keep, refund, offering switch, updates', async (t) => {
+  let now = Date.now();
+  const { client } = await fixture(t, { clock: () => now }),
+    d = client(),
+    g = client(),
+    other = client();
+  await signup(d, 'member@example.test');
+  await signup(other, 'other@example.test');
+  const gp = await garage(g);
+  assert.deepEqual((await d('/api/plans')).data, []);
+  await g('/api/garage/membership', {
+    price: 49,
+    hourly_rate: 75,
+    member_rate: 68,
+    perks: ['Priority booking within 5 days', 'Free annual safety check', 'Free loaner car'],
+  });
+  const plans = (await d('/api/plans')).data;
+  assert.deepEqual(
+    plans.map((p) => [p.kind, p.price_cents]),
+    [
+      ['basic', 1200],
+      ['garage', 4900],
+    ],
+  );
+  const own = plans[1];
+  const car = (await vehicle(d)).data;
+  const van = (
+    await d('/api/vehicles', {
+      make: 'Ford',
+      model: 'Transit',
+      year: 2020,
+      registration: 'VAN-1',
+      mileage: 5000,
+    })
+  ).data;
+  assert.equal((await d('/api/memberships', { plan_id: own.id, vehicle_ids: [] })).status, 400);
+  const joined = await d('/api/memberships', {
+    plan_id: own.id,
+    vehicle_ids: [car.id, van.id],
+    billing: 'instalments',
+  });
+  assert.equal(joined.status, 201);
+  assert.equal(joined.data.price_cents, 9800);
+  assert.equal(
+    (await d('/api/memberships', { plan_id: plans[0].id, vehicle_ids: [car.id] })).status,
+    409,
+  );
+  const [m] = (await d('/api/memberships')).data;
+  assert.equal(m.state, 'active');
+  assert.equal(m.billing, 'instalments');
+  assert.equal(m.vehicles.length, 2);
+  assert.equal((await d(`/api/vehicles/${car.id}`, {}, 'DELETE')).status, 409);
+  assert((await g('/api/notifications')).data.items.some((n) => n.title === 'New member'));
+
+  const summary = (await g('/api/garage/membership')).data;
+  assert.equal(summary.stats.subscribers, 1);
+  assert.equal(summary.stats.keep_cents, Math.round(9800 * 0.7));
+  assert.equal((await other(`/api/memberships/${m.id}/cancel`, {})).status, 404);
+
+  assert.equal((await d(`/api/memberships/${m.id}/cancel`, {})).status, 200);
+  assert.equal((await d('/api/memberships')).data[0].state, 'ends');
+  assert.equal((await d(`/api/memberships/${m.id}/resume`, {})).status, 200);
+  assert.equal((await d('/api/memberships')).data[0].state, 'active');
+
+  assert.equal(
+    (await g('/api/garage/membership', { price: 55, hourly_rate: 60, member_rate: 70 }, 'PUT'))
+      .status,
+    400,
+  );
+  await g('/api/garage/membership', { price: 55, hourly_rate: 80, member_rate: 70 }, 'PUT');
+  assert.equal((await d('/api/plans')).data[1].price_cents, 5500);
+  assert.equal((await d('/api/memberships')).data[0].price_cents, 9800);
+
+  assert.equal(
+    (await g('/api/garage/membership/updates', { audience: 'basic', message: 'Winter tyres!' }))
+      .status,
+    400,
+  );
+  const sent = await g('/api/garage/membership/updates', {
+    audience: 'all',
+    message: 'Winter tyre season starts Monday.',
+  });
+  assert.equal(sent.data.recipients, 1);
+  assert(
+    (await d('/api/notifications')).data.items.some((n) => n.title === 'News from your garage'),
+  );
+  assert.equal(
+    (await g('/api/garage/membership/custom', { message: 'A fleet plan for taxis please.' }))
+      .status,
+    201,
+  );
+
+  await g('/api/garage/membership/offering', { on: false }, 'PUT');
+  assert.deepEqual((await d('/api/plans')).data, []);
+  const stopped = (await d('/api/memberships')).data[0];
+  assert.equal(stopped.state, 'ends');
+  assert.equal(stopped.garage_stopped, true);
+  assert.equal((await d(`/api/memberships/${m.id}/resume`, {})).status, 409);
+  assert.equal((await g('/api/garage/profile')).data.member_rate, null);
+  await g('/api/garage/membership/offering', { on: true }, 'PUT');
+  assert.equal((await d('/api/memberships')).data[0].state, 'active');
+  const titles = (await d('/api/notifications')).data.items.map((n) => n.title);
+  assert(titles.includes('Your garage membership is ending'));
+  assert(titles.includes('Your garage membership continues'));
+  assert.equal(gp.id, (await g('/api/garage/profile')).data.id);
+
+  now += 366 * 86400000;
+  await d('/api/auth/login', { email: 'member@example.test', password: 'testing-password-42' });
+  const renewed = (await d('/api/memberships')).data[0];
+  assert.equal(renewed.status, 'active');
+  assert(renewed.renews_at > new Date(now).toISOString());
+
+  await d(`/api/memberships/${m.id}/cancel`, {});
+  now += 366 * 86400000;
+  await d('/api/auth/login', { email: 'member@example.test', password: 'testing-password-42' });
+  assert.equal((await d('/api/memberships')).data[0].state, 'ended');
+
+  const again = await d('/api/memberships', { plan_id: own.id, vehicle_ids: [car.id] });
+  assert.equal(again.status, 201);
+  const refund = await d(`/api/memberships/${again.data.id}/refund`, { reason: 'unused' });
+  assert.equal(refund.data.refund_cents, 5500);
+  assert.equal((await d('/api/memberships')).data[0].state, 'refunded');
+  await g('/api/auth/login', { email: 'garage@example.test', password: 'testing-password-42' });
+  assert((await g('/api/notifications')).data.items.some((n) => n.title === 'Refund requested'));
 });

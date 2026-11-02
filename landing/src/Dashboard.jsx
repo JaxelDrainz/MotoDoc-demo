@@ -45,6 +45,7 @@ import {
 } from './GarageTools.jsx';
 import { GuidedTour } from './Tour.jsx';
 import { NoAccess, TeamGate, TeamPanel } from './Team.jsx';
+import { DriverMemberships, GarageMemberships } from './Memberships.jsx';
 import { TAB_AREAS } from './team.js';
 import { siteFlag } from './site.jsx';
 import './dashboard.css';
@@ -288,7 +289,7 @@ function FormDialog({ config, onClose, onSave }) {
         )}
         <div className="dash-form-actions">
           <button type="button" className="dash-secondary" disabled={busy} onClick={onClose}>
-            Cancel
+            {config.cancel || 'Cancel'}
           </button>
           <button className="button button-small" disabled={busy}>
             {busy ? 'Saving…' : config.submit || 'Save'}
@@ -1643,123 +1644,12 @@ export function Dashboard() {
             </Empty>
           ))}
 
-        {selected === 'memberships' && (
-          <>
-            {isGarage && !isStaff && !data['garage/profile']?.membership_launched_at && (
-              <article className="dash-tile dash-launch">
-                <GiftIcon size={28} />
-                <div>
-                  <h2>Turn your regulars into members.</h2>
-                  <p>Lock in customers for a year. Get paid for loyalty you already earn.</p>
-                </div>
-                <a className="button button-small" href="/onboarding/membership">
-                  Set up your membership <ArrowRightIcon size={16} />
-                </a>
-              </article>
-            )}
-            <div className="dash-section-heading">
-              <h2>{isGarage ? 'Your plans' : 'Available plans'}</h2>
-            </div>
-            {data.plans.length ? (
-              <div className="dash-grid">
-                {data.plans.map((p) => (
-                  <article className="dash-tile" key={p.id}>
-                    <GiftIcon size={26} />
-                    <h3>{p.name}</h3>
-                    {p.garage_name && <small>{p.garage_name}</small>}
-                    <strong className="dash-price">
-                      {p.price_cents ? euro(p.price_cents) : 'Free'}
-                    </strong>
-                    <p>{p.benefits}</p>
-                    {!isGarage && (
-                      <button
-                        className="dash-secondary"
-                        disabled={data.memberships.some(
-                          (m) => m.plan_id === p.id && m.status !== 'cancelled',
-                        )}
-                        onClick={() =>
-                          confirm(
-                            'Request membership',
-                            'The garage will review your request. No payment is taken.',
-                            '/memberships',
-                            { plan_id: p.id },
-                            'POST',
-                          )
-                        }
-                      >
-                        {data.memberships.some(
-                          (m) => m.plan_id === p.id && m.status !== 'cancelled',
-                        )
-                          ? 'Already requested'
-                          : 'Request membership'}
-                      </button>
-                    )}
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <Empty
-                icon={GiftIcon}
-                title="No plans yet"
-                action={!isGarage && go('garages', 'Find a garage')}
-              >
-                Membership offers from listed garages will appear here.
-              </Empty>
-            )}
-            <div className="dash-section-heading">
-              <h2>{isGarage ? 'Member requests' : 'Your memberships'}</h2>
-            </div>
-            {data.memberships.length ? (
-              <div className="dash-list">
-                {data.memberships.map((m) => (
-                  <article className="dash-row" key={m.id}>
-                    <div className="dash-row-body">
-                      <h3>{m.plan_name}</h3>
-                      <p>
-                        {isGarage ? m.driver_name : m.garage_name} · {euro(m.price_cents)}
-                      </p>
-                      <Status>{m.status}</Status>
-                    </div>
-                    <div className="dash-row-actions">
-                      {isGarage && m.status === 'requested' && (
-                        <button
-                          className="dash-text-button"
-                          onClick={() =>
-                            confirm(
-                              'Approve membership',
-                              'Confirm that you have agreed the benefits and any billing arrangements with this customer.',
-                              `/memberships/${m.id}`,
-                              { status: 'active' },
-                            )
-                          }
-                        >
-                          Approve
-                        </button>
-                      )}
-                      {m.status !== 'cancelled' && (
-                        <button
-                          className="dash-text-button muted"
-                          onClick={() =>
-                            confirm(
-                              'Cancel membership',
-                              'This updates the membership record. Arrange any outstanding billing directly with the garage.',
-                              `/memberships/${m.id}`,
-                              { status: 'cancelled' },
-                            )
-                          }
-                        >
-                          Cancel
-                        </button>
-                      )}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <p className="dash-help">No memberships to show yet.</p>
-            )}
-          </>
-        )}
+        {selected === 'memberships' &&
+          (isGarage ? (
+            <GarageMemberships data={data} open={open} user={user} />
+          ) : (
+            <DriverMemberships data={data} open={open} navigate={navigate} reload={reload} />
+          ))}
 
         {selected === 'invoices' && (
           <InvoicesPanel
@@ -1945,7 +1835,7 @@ export function Dashboard() {
           onClose={() => setDialog(null)}
           onSave={async () => {
             await reload();
-            setNotice('Saved to your MotoDoc account.');
+            if (!dialog.silent) setNotice('Saved to your MotoDoc account.');
           }}
         />
       )}

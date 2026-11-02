@@ -357,7 +357,7 @@ export function registerGarageOps(app, ctx) {
   const publicInfo = async (garageId) => {
     const sched = await schedule(garageId);
     const details = await one(
-      'SELECT hourly_rate_cents,member_rate_cents,specializations,main_focus,business_id FROM garage_details WHERE garage_id=?',
+      'SELECT hourly_rate_cents,member_rate_cents,specializations,main_focus,business_id,membership_offering,membership_launched_at FROM garage_details WHERE garage_id=?',
       garageId,
     );
     return {
@@ -366,7 +366,11 @@ export function registerGarageOps(app, ctx) {
       online: sched.online,
       open_now: openNow(sched, clock()),
       hourly_rate: details?.hourly_rate_cents ? details.hourly_rate_cents / 100 : null,
-      member_rate: details?.member_rate_cents ? details.member_rate_cents / 100 : null,
+      member_rate:
+        details?.member_rate_cents && details.membership_offering
+          ? details.member_rate_cents / 100
+          : null,
+      memberships: !!(details?.membership_launched_at && details.membership_offering),
       specializations: details ? JSON.parse(details.specializations || '[]') : [],
       main_focus: details?.main_focus || '',
       verified_business: !!details?.business_id,
