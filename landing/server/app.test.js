@@ -76,6 +76,18 @@ async function garage(c, email = 'garage@example.test') {
     },
     'PUT',
   );
+  await c(
+    '/api/garage/hours',
+    {
+      hours: Object.fromEntries(
+        ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d) => [
+          d,
+          { open: true, from: '00:00', to: '24:00' },
+        ]),
+      ),
+    },
+    'PUT',
+  );
   return (await c('/api/garage/profile')).data;
 }
 const future = () => {
@@ -1306,4 +1318,222 @@ test('booking to pickup: approve, decline, garage-made appointments, stages, pic
     200,
   );
   assert.equal((await driver('/api/bookings')).data.find((b) => b.id === noShow).state, 'no_show');
+});
+
+test('services menu, opening hours, blocked days and online status control bookings', async (t) => {
+  let now = Date.parse('2026-11-02T06:30:00Z');
+  const { client } = await fixture(t, { clock: () => now }),
+    shop = client(),
+    driver = client();
+  await garage(shop);
+  await signup(driver, 'slots@example.test');
+  const car = (await vehicle(driver)).data.id;
+  const weekdays = Object.fromEntries(
+    ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d) => [
+      d,
+      { open: !['sat', 'sun'].includes(d), from: '09:00', to: '17:00' },
+    ]),
+  );
+  assert.equal(
+    (
+      await shop(
+        '/api/garage/hours',
+        { hours: { ...weekdays, mon: { open: true, from: '17:00', to: '09:00' } } },
+        'PUT',
+      )
+    ).status,
+    400,
+  );
+  assert.equal((await shop('/api/garage/hours', { hours: weekdays }, 'PUT')).status, 200);
+  const g = (await driver('/api/garages')).data[0];
+  assert.equal(g.online, true);
+  assert.equal(g.hours.sat.open, false);
+
+  const days = (await driver(`/api/garages/${g.id}/availability?days=7`)).data;
+  assert.equal(days[0].date, '2026-11-02');
+  assert.equal(days[0].status, 'open');
+  assert.equal(days[0].slots[0], '2026-11-02T07:00:00.000Z');
+  assert(!days[0].slots.includes('2026-11-02T10:00:00.000Z'));
+  assert.equal(days.find((d) => d.date === '2026-11-07').status, 'closed');
+
+  const book = (starts_at) =>
+    driver('/api/bookings', { garage_id: g.id, vehicle_id: car, service: 'Oil change', starts_at });
+  assert.equal((await book('2026-11-07T08:00:00.000Z')).status, 400);
+  assert.equal((await book('2026-11-03T05:00:00.000Z')).status, 400);
+  assert.equal((await book('2026-11-03T07:00:00.000Z')).status, 201);
+  const after = (await driver(`/api/garages/${g.id}/availability?days=2`)).data;
+  assert(!after[1].slots.includes('2026-11-03T07:00:00.000Z'));
+
+  assert.equal(
+    (await shop('/api/garage/blocked', { date: '2026-11-04', reason: 'Training day' })).status,
+    201,
+  );
+  assert.equal((await shop('/api/garage/blocked', { date: '2026-10-01' })).status, 400);
+  const blocked = (await driver(`/api/garages/${g.id}/availability?days=3`)).data[2];
+  assert.equal(blocked.status, 'blocked');
+  assert.equal(blocked.reason, 'Training day');
+  assert.equal((await book('2026-11-04T08:00:00.000Z')).status, 400);
+  assert.equal((await shop('/api/garage/blocked/2026-11-04', {}, 'DELETE')).status, 200);
+  assert.equal((await book('2026-11-04T08:00:00.000Z')).status, 201);
+
+  assert.equal((await shop('/api/garage/online', { online: false }, 'PUT')).status, 200);
+  assert.equal(
+    (await driver(`/api/garages/${g.id}/availability?days=1`)).data[0].status,
+    'offline',
+  );
+  assert.equal((await book('2026-11-05T08:00:00.000Z')).status, 400);
+  await shop('/api/garage/online', { online: true }, 'PUT');
+
+  const menu = (await shop('/api/garage/services')).data;
+  assert.deepEqual(
+    menu.map((s) => s.name),
+    ['Oil change'],
+  );
+  assert.equal(
+    (await shop('/api/garage/services', { name: 'Brakes', price_min: 90, price_max: 50 })).status,
+    400,
+  );
+  const added = await shop('/api/garage/services', {
+    name: 'Brakes',
+    price_min: 50,
+    price_max: 90,
+    minutes: 60,
+  });
+  assert.equal(added.status, 201);
+  assert.equal((await shop('/api/garage/services', { name: 'brakes' })).status, 409);
+  let listed = (await driver('/api/garages')).data[0];
+  assert.deepEqual(listed.services, ['Oil change', 'Brakes']);
+  assert.equal(listed.menu.find((s) => s.name === 'Brakes').price_max_cents, 9000);
+  await shop(`/api/garage/services/${added.data.id}`, { name: 'Brakes', active: false }, 'PUT');
+  listed = (await driver('/api/garages')).data[0];
+  assert.deepEqual(listed.services, ['Oil change']);
+  const hidden = await driver('/api/bookings', {
+    garage_id: g.id,
+    vehicle_id: car,
+    service: 'Brakes',
+    starts_at: '2026-11-05T09:00:00.000Z',
+  });
+  assert.equal(hidden.status, 400);
+  assert.equal((await shop(`/api/garage/services/${added.data.id}`, {}, 'DELETE')).status, 200);
+});
+
+test('invoices: line items, discounts, VAT, numbering, Finnish reference, e-invoice, reminders and payment', async (t) => {
+  const { client } = await fixture(t),
+    shop = client(),
+    driver = client();
+  await garage(shop);
+  await signup(driver, 'pay@example.test');
+  const car = (await vehicle(driver)).data.id;
+  const g = (await driver('/api/garages')).data[0];
+  const done = async (hours) => {
+    const start = new Date(Date.now() + hours * 3600000);
+    start.setUTCMinutes(0, 0, 0);
+    const b = (
+      await driver('/api/bookings', {
+        garage_id: g.id,
+        vehicle_id: car,
+        service: 'Oil change',
+        starts_at: start.toISOString(),
+      })
+    ).data.id;
+    await shop(`/api/bookings/${b}/approve`, {});
+    await shop(`/api/bookings/${b}/complete`, {
+      summary: 'Tyres and alignment',
+      mileage: 13000 + hours,
+    });
+    return b;
+  };
+  const first = await done(30);
+  const body = {
+    booking_id: first,
+    service_description: 'Tyre change and wheel alignment for winter.',
+    mileage: 13030,
+    lines: [
+      { description: 'Tyre change', quantity: 1, unit_cents: 6000, discount_pct: 10 },
+      { description: 'Wheel alignment', quantity: 1, unit_cents: 4500 },
+    ],
+    discount: { type: 'amount', value: 500, reason: 'Loyal customer' },
+  };
+  assert.equal(
+    (await shop('/api/invoices', { ...body, service_description: 'Short' })).status,
+    400,
+  );
+  assert.equal(
+    (await shop('/api/invoices', { ...body, lines: [{ description: 'Free', unit_cents: 0 }] }))
+      .status,
+    400,
+  );
+  assert.equal(
+    (await shop('/api/invoices', { ...body, discount: { type: 'amount', value: 20000 } })).status,
+    400,
+  );
+  assert.equal(
+    (
+      await shop('/api/invoices', {
+        ...body,
+        business: {
+          business_id: '1234567-8',
+          einvoice_address: '003712345678',
+          operator: 'Maventa',
+        },
+      })
+    ).status,
+    400,
+  );
+  const created = await shop('/api/invoices', body);
+  assert.equal(created.status, 201);
+  const year = new Date().getFullYear();
+  assert.equal(created.data.number, `INV-${year}-001`);
+  assert.equal((await shop('/api/invoices', body)).status, 409);
+
+  const [mine] = (await driver('/api/invoices')).data;
+  assert.equal(mine.totals.total, 9400);
+  assert.equal(mine.totals.net, 7490);
+  assert.equal(mine.totals.vat, 1910);
+  assert.equal(mine.totals.savings, 1100);
+  assert.equal(mine.lines[0].total, 5400);
+  assert.equal(mine.reference.replace(/\s/g, '').slice(0, -1), `${year}001`);
+  assert.equal(mine.state, 'unpaid');
+  assert.equal(mine.registration, 'TEST-123');
+  assert((await driver('/api/notifications')).data.items.some((n) => n.title === 'New invoice'));
+
+  const second = await done(54);
+  const business = await shop('/api/invoices', {
+    booking_id: second,
+    service_description: 'Annual service with brake fluid change.',
+    lines: [{ description: 'Annual service', unit_cents: 18900 }],
+    discount: { type: 'percent', value: 10, reason: 'Campaign' },
+    business: {
+      business_id: '2345678-0',
+      einvoice_address: 'FI12 3456 7890 1234 56',
+      operator: 'Maventa',
+    },
+  });
+  assert.equal(business.data.number, `INV-${year}-002`);
+  const biz = (await shop('/api/invoices')).data.find((i) => i.id === business.data.id);
+  assert.equal(biz.delivery, 'einvoice');
+  assert.equal(biz.einvoice_address, 'FI1234567890123456');
+  assert.equal(biz.totals.total, 17010);
+
+  assert.equal(
+    (await shop(`/api/invoices/${created.data.id}/remind`, { note: 'Due soon' })).data.reminders,
+    1,
+  );
+  assert(
+    (await driver('/api/notifications')).data.items.some((n) => n.title === 'Payment reminder'),
+  );
+  assert.equal(
+    (
+      await shop(
+        `/api/invoices/${created.data.id}`,
+        { status: 'paid', payment_reference: 'Bank 2211' },
+        'PATCH',
+      )
+    ).status,
+    200,
+  );
+  const paid = (await driver('/api/invoices')).data.find((i) => i.id === created.data.id);
+  assert.equal(paid.state, 'paid');
+  assert.equal(paid.paid_method, 'bank_transfer');
+  assert.equal((await shop(`/api/invoices/${created.data.id}/remind`, {})).status, 404);
 });

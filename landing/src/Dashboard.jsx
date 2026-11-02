@@ -21,6 +21,8 @@ import {
   PlusIcon,
   WrenchIcon,
   LockKeyIcon,
+  ListChecksIcon,
+  ChartBarIcon,
   QuestionIcon,
 } from '@phosphor-icons/react';
 import { api } from './api.js';
@@ -30,6 +32,16 @@ import { flash, toast } from './Toasts.jsx';
 import { DemoBar } from './Demo.jsx';
 import { AccountSettings } from './Settings.jsx';
 import { JobDetails, JobStatus, jobActions, toLocalInput } from './Jobs.jsx';
+import { InvoicesPanel } from './Invoices.jsx';
+import { AnalyticsPanel } from './GarageTools.jsx';
+import { SPECIALIZATIONS } from './finland.js';
+import {
+  AvailabilityCard,
+  ServicesPanel,
+  durationText,
+  priceText,
+  specLabel,
+} from './GarageTools.jsx';
 import { GuidedTour } from './Tour.jsx';
 import { siteFlag } from './site.jsx';
 import './dashboard.css';
@@ -48,6 +60,7 @@ const time = (value) =>
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'Europe/Helsinki',
   });
 const tomorrow = () => {
   const d = new Date();
@@ -625,19 +638,27 @@ export function Dashboard() {
   const nav = [
     ['overview', HouseIcon, 'Overview'],
     ...(isGarage
-      ? [['profile', StorefrontIcon, 'Garage profile']]
+      ? [
+          ['profile', StorefrontIcon, 'Garage profile'],
+          ['services', WrenchIcon, 'Services'],
+        ]
       : [
           ['vehicles', CarIcon, 'My vehicles'],
           ['garages', StorefrontIcon, 'Find a garage'],
         ]),
     ['bookings', CalendarBlankIcon, 'Bookings'],
+    ...(isGarage ? [['jobs', ListChecksIcon, 'Jobs']] : []),
     ['history', ClockCounterClockwiseIcon, 'Service history'],
     ...(isGarage ? [['customers', UsersIcon, 'Customers']] : []),
     ['memberships', GiftIcon, 'Memberships'],
     ['invoices', ReceiptIcon, 'Invoices'],
+    ...(isGarage ? [['analytics', ChartBarIcon, 'Analytics']] : []),
     ['reminders', BellIcon, 'Reminders'],
     ['account', LockKeyIcon, 'Account'],
-  ].filter(([key]) => !isMechanic || !['profile', 'memberships', 'invoices'].includes(key));
+  ].filter(
+    ([key]) =>
+      !isMechanic || !['profile', 'services', 'memberships', 'invoices', 'analytics'].includes(key),
+  );
   const selected = nav.some((n) => n[0] === view) ? view : 'overview';
   const quick = isGarage
     ? { overview: 'Overview', bookings: 'Bookings', customers: 'Customers', profile: 'Profile' }
@@ -693,7 +714,10 @@ export function Dashboard() {
           name: 'service',
           label: 'Service',
           required: true,
-          options: g.services.map((s) => ({ value: s, label: s })),
+          options: (g.menu?.length ? g.menu : g.services.map((name) => ({ name }))).map((s) => ({
+            value: s.name,
+            label: s.id ? `${s.name} · ${priceText(s)} · ${durationText(s)}` : s.name,
+          })),
         },
         {
           name: 'starts_at',
@@ -725,7 +749,6 @@ export function Dashboard() {
         { name: 'city', label: 'City', required: true },
         { name: 'address', label: 'Address', required: true },
         { name: 'description', label: 'About your garage', type: 'textarea', maxLength: 1500 },
-        { name: 'services', label: 'Services, separated by commas', required: true },
         {
           name: 'published',
           label: 'Visibility',
@@ -741,11 +764,60 @@ export function Dashboard() {
           '/garage/profile',
           {
             ...d,
-            services: d.services
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean),
+            services: g.services.length ? g.services : ['Oil change'],
             published: d.published === 'true',
+          },
+          'PUT',
+        ),
+    });
+  }
+  function workshop() {
+    const g = data['garage/profile'];
+    open({
+      title: 'Workshop details',
+      note: 'Shown on your garage card and invoices. Drivers can filter garages by specialisation.',
+      values: {
+        business_id: g.business_id,
+        hourly_rate: g.hourly_rate ?? '',
+        specializations: g.specializations,
+        main_focus: g.main_focus,
+      },
+      fields: [
+        {
+          name: 'business_id',
+          label: 'Business ID (Y-tunnus)',
+          maxLength: 9,
+          placeholder: '1234567-1',
+        },
+        {
+          name: 'hourly_rate',
+          label: 'Hourly rate (€, incl. VAT)',
+          type: 'number',
+          min: 1,
+          step: 1,
+          required: true,
+        },
+        {
+          name: 'specializations',
+          label: 'Specialisations',
+          type: 'checkboxes',
+          options: SPECIALIZATIONS.map(([value, label]) => ({ value, label })),
+        },
+        {
+          name: 'main_focus',
+          label: 'Your main focus',
+          required: true,
+          options: SPECIALIZATIONS.map(([value, label]) => ({ value, label })),
+        },
+      ],
+      save: (d) =>
+        act(
+          '/garage/details',
+          {
+            business_id: d.business_id,
+            hourly_rate: Number(d.hourly_rate),
+            specializations: d.specializations,
+            main_focus: d.main_focus,
           },
           'PUT',
         ),
@@ -760,7 +832,6 @@ export function Dashboard() {
       fields: [
         { name: 'mechanic_name', label: 'Mechanic drivers will meet', maxLength: 100 },
         { name: 'phone', label: 'Phone number', type: 'tel', maxLength: 30 },
-        { name: 'opening_hours', label: 'Opening hours', maxLength: 200 },
       ],
       save: (d) => act('/garage/contact', d, 'PUT'),
     });
@@ -790,45 +861,6 @@ export function Dashboard() {
       ],
       submit: 'Send message',
       save: (d) => act(`/bookings/${b.id}/messages`, d),
-    });
-  }
-  function createInvoice() {
-    const available = data.bookings.filter(
-      (b) => b.status === 'completed' && !data.invoices.some((i) => i.booking_id === b.id),
-    );
-    open({
-      title: 'Create an invoice',
-      note: 'Amounts are recorded in EUR. This creates an invoice record; it does not charge a customer.',
-      fields: [
-        {
-          name: 'booking_id',
-          label: 'Completed booking',
-          required: true,
-          options: available.map((b) => ({
-            value: b.id,
-            label: `${b.driver_name} · ${b.service} · ${b.registration}`,
-          })),
-        },
-        {
-          name: 'description',
-          label: 'Invoice description',
-          type: 'textarea',
-          required: true,
-          maxLength: 1000,
-        },
-        {
-          name: 'amount',
-          label: 'Amount (EUR)',
-          type: 'number',
-          min: 0.01,
-          max: 1000000,
-          step: 0.01,
-          required: true,
-        },
-        { name: 'due_date', label: 'Due date', type: 'date', required: true },
-      ],
-      save: ({ amount, ...d }) =>
-        act('/invoices', { ...d, amount_cents: Math.round(Number(amount) * 100) }),
     });
   }
   const quickAction = async (path, body, message) => {
@@ -1110,6 +1142,7 @@ export function Dashboard() {
 
         {selected === 'overview' && (
           <>
+            {isGarage && <AvailabilityCard canEdit={!isMechanic} />}
             <div className="dash-stats">
               {[
                 [CalendarBlankIcon, 'Upcoming bookings', data.overview.upcoming],
@@ -1258,14 +1291,14 @@ export function Dashboard() {
               />
             </label>
             {data.garages.filter((g) =>
-              `${g.name} ${g.city} ${g.services.join(' ')}`
+              `${g.name} ${g.city} ${g.services.join(' ')} ${(g.specializations || []).map(specLabel).join(' ')}`
                 .toLowerCase()
                 .includes(search.toLowerCase()),
             ).length ? (
               <div className="dash-grid">
                 {data.garages
                   .filter((g) =>
-                    `${g.name} ${g.city} ${g.services.join(' ')}`
+                    `${g.name} ${g.city} ${g.services.join(' ')} ${(g.specializations || []).map(specLabel).join(' ')}`
                       .toLowerCase()
                       .includes(search.toLowerCase()),
                   )
@@ -1284,10 +1317,37 @@ export function Dashboard() {
                         {g.address}, {g.city}
                       </p>
                       <p>{g.description}</p>
+                      <div className="gt-garage-meta">
+                        <span className={`gt-pill ${g.open_now && g.online ? 'open' : ''}`}>
+                          {!g.online
+                            ? 'Not taking bookings'
+                            : g.open_now
+                              ? 'Open now'
+                              : 'Closed now'}
+                        </span>
+                        {g.hourly_rate && <span>{`€${g.hourly_rate}/h`}</span>}
+                        {g.member_rate && (
+                          <span className="gt-member-rate">{`Member €${g.member_rate}/h`}</span>
+                        )}
+                      </div>
+                      {g.specializations?.length > 0 && (
+                        <div className="dash-chips gt-specs">
+                          {[g.main_focus, ...g.specializations.filter((k) => k !== g.main_focus)]
+                            .filter(Boolean)
+                            .slice(0, 3)
+                            .map((k) => (
+                              <span key={k}>{specLabel(k)}</span>
+                            ))}
+                        </div>
+                      )}
                       <div className="dash-chips">
-                        {g.services.map((s) => (
-                          <span key={s}>{s}</span>
-                        ))}
+                        {(g.menu?.length ? g.menu : g.services.map((name) => ({ name }))).map(
+                          (s) => (
+                            <span key={s.name}>
+                              {s.id ? `${s.name} · ${priceText(s)}` : s.name}
+                            </span>
+                          ),
+                        )}
                       </div>
                       <button className="button button-small" onClick={() => book(g)}>
                         {data.vehicles.length ? 'Book a service' : 'Add a vehicle to book'}{' '}
@@ -1316,6 +1376,59 @@ export function Dashboard() {
           </>
         )}
 
+        {selected === 'services' && <ServicesPanel open={open} canEdit={!isMechanic} />}
+
+        {selected === 'analytics' && <AnalyticsPanel data={data} />}
+
+        {selected === 'jobs' &&
+          (() => {
+            const groups = [
+              ['confirmed', 'Booked'],
+              ['in_progress', 'Started'],
+              ['finished', 'Finished'],
+              ['ready', 'Ready for pickup'],
+            ].map(([state, label]) => [
+              label,
+              data.bookings
+                .filter((b) => b.state === state)
+                .sort((a, b) => (a.starts_at < b.starts_at ? -1 : 1)),
+            ]);
+            const active = groups.slice(0, 3).reduce((n, [, list]) => n + list.length, 0);
+            return (
+              <>
+                <div className="dash-stats">
+                  {[
+                    ['Active jobs', active],
+                    ...groups.map(([label, list]) => [label, list.length]),
+                  ].map(([label, value]) => (
+                    <article key={label}>
+                      <p>{label}</p>
+                      <strong>{value}</strong>
+                    </article>
+                  ))}
+                </div>
+                {groups.some(([, list]) => list.length) ? (
+                  groups
+                    .filter(([, list]) => list.length)
+                    .map(([label, list]) => (
+                      <section key={label}>
+                        <h3 className="dash-subheading">{label}</h3>
+                        {rows(list)}
+                      </section>
+                    ))
+                ) : (
+                  <Empty
+                    icon={ListChecksIcon}
+                    title="No approved jobs yet"
+                    action={go('bookings', 'Go to bookings')}
+                  >
+                    Approve a booking request to start one.
+                  </Empty>
+                )}
+              </>
+            );
+          })()}
+
         {selected === 'profile' && (
           <>
             <div className="dash-section-heading">
@@ -1338,23 +1451,45 @@ export function Dashboard() {
                   <span key={s}>{s}</span>
                 ))}
               </div>
-              <h3>Contact details</h3>
+              <h3>Workshop details</h3>
               <p>
                 {[
-                  data['garage/profile'].mechanic_name,
-                  data['garage/profile'].phone,
-                  data['garage/profile'].opening_hours,
+                  data['garage/profile'].business_id &&
+                    `Business ID ${data['garage/profile'].business_id}`,
+                  data['garage/profile'].hourly_rate && `€${data['garage/profile'].hourly_rate}/h`,
+                  data['garage/profile'].member_rate &&
+                    `Member €${data['garage/profile'].member_rate}/h`,
                 ]
                   .filter(Boolean)
-                  .join(' · ') ||
-                  'Add a phone number, opening hours, and the mechanic drivers will meet.'}
+                  .join(' · ') || 'Add your Business ID and hourly rate.'}
+              </p>
+              <div className="dash-chips gt-specs">
+                {[
+                  data['garage/profile'].main_focus,
+                  ...(data['garage/profile'].specializations || []).filter(
+                    (k) => k !== data['garage/profile'].main_focus,
+                  ),
+                ]
+                  .filter(Boolean)
+                  .map((k) => (
+                    <span key={k}>{specLabel(k)}</span>
+                  ))}
+              </div>
+              <button className="dash-text-button" onClick={workshop}>
+                Edit workshop details
+              </button>
+              <h3>Contact details</h3>
+              <p>
+                {[data['garage/profile'].mechanic_name, data['garage/profile'].phone]
+                  .filter(Boolean)
+                  .join(' · ') || 'Add a phone number and the mechanic drivers will meet.'}
               </p>
               <button className="dash-text-button" onClick={contact}>
                 Edit contact details
               </button>
               <p className="dash-help">
-                Listing your profile makes it visible to drivers in this MotoDoc app. Bookings are
-                hourly requests, with one active booking per hour.
+                Listing your profile makes it visible to drivers. They can book free hours inside
+                your opening hours, which you set on the Overview page.
               </p>
             </article>
           </>
@@ -1610,96 +1745,12 @@ export function Dashboard() {
         )}
 
         {selected === 'invoices' && (
-          <>
-            <div className="dash-section-heading">
-              <h2>Service invoices</h2>
-              {isGarage && (
-                <button
-                  className="button button-small"
-                  disabled={
-                    !data.bookings.some(
-                      (b) =>
-                        b.status === 'completed' &&
-                        !data.invoices.some((i) => i.booking_id === b.id),
-                    )
-                  }
-                  onClick={createInvoice}
-                >
-                  Create invoice <PlusIcon size={16} />
-                </button>
-              )}
-            </div>
-            <p className="dash-help">
-              Payments are arranged directly with the garage. MotoDoc records invoices and payments
-              received; it does not process a charge.
-            </p>
-            {data.invoices.length ? (
-              <div className="dash-list">
-                {data.invoices.map((i) => (
-                  <article className="dash-row" key={i.id}>
-                    <div className="dash-row-icon">
-                      <ReceiptIcon size={24} />
-                    </div>
-                    <div className="dash-row-body">
-                      <h3>{i.description}</h3>
-                      <p>
-                        {isGarage ? i.driver_name : i.garage_name} · Due {date(i.due_date)}
-                      </p>
-                      <Status>{i.status}</Status>
-                      {i.payment_reference && <p>Payment reference: {i.payment_reference}</p>}
-                    </div>
-                    <strong>{euro(i.amount_cents)}</strong>
-                    {isGarage && i.status === 'unpaid' && (
-                      <div className="dash-row-actions">
-                        <button
-                          className="dash-text-button"
-                          onClick={() =>
-                            open({
-                              title: 'Record received payment',
-                              note: 'Only record a payment already received outside MotoDoc. This does not charge the customer.',
-                              fields: [
-                                {
-                                  name: 'payment_reference',
-                                  label: 'Payment reference',
-                                  required: true,
-                                  maxLength: 200,
-                                },
-                              ],
-                              save: (d) =>
-                                act(`/invoices/${i.id}`, { ...d, status: 'paid' }, 'PATCH'),
-                            })
-                          }
-                        >
-                          Record payment
-                        </button>
-                        <button
-                          className="dash-text-button muted"
-                          onClick={() =>
-                            confirm(
-                              'Void invoice',
-                              'The invoice will remain in your records, marked void.',
-                              `/invoices/${i.id}`,
-                              { status: 'void' },
-                            )
-                          }
-                        >
-                          Void
-                        </button>
-                      </div>
-                    )}
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <Empty
-                icon={ReceiptIcon}
-                title="No invoices yet"
-                action={go('bookings', 'View bookings')}
-              >
-                Invoices can be created after a booking has been completed.
-              </Empty>
-            )}
-          </>
+          <InvoicesPanel
+            invoices={data.invoices}
+            bookings={data.bookings}
+            isGarage={isGarage}
+            reload={reload}
+          />
         )}
 
         {selected === 'reminders' && (

@@ -67,6 +67,7 @@ const when = (iso) =>
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'Europe/Helsinki',
   }).format(new Date(iso));
 const detailText = (detail) =>
   String(detail || '')

@@ -69,6 +69,7 @@ export function registerJobs(app, ctx) {
     driverOnly,
     text,
     optional,
+    checkSlot,
   } = ctx;
   const now = () => new Date(clock()).toISOString();
   const ensureJob = (bookingId, requestedBy = 'driver') =>
@@ -108,6 +109,7 @@ export function registerJobs(app, ctx) {
       throw fail(409, 'Only a waiting request can be approved.');
     const moved = d.starts_at && Date.parse(d.starts_at) !== Date.parse(b.starts_at);
     const startsAt = moved ? appointment(d.starts_at).toISOString() : b.starts_at;
+    if (moved) await checkSlot(b.garage_id, startsAt);
     await transaction(db, async () => {
       await run("UPDATE bookings SET status='confirmed',starts_at=? WHERE id=?", startsAt, b.id);
       await setJob(b.id, { mechanic: d.mechanic || b.mechanic || '' });
@@ -140,6 +142,7 @@ export function registerJobs(app, ctx) {
     if (b.status !== 'pending' || b.requested_by === 'garage')
       throw fail(409, 'Only a waiting request can get a new time.');
     const startsAt = appointment(d.starts_at).toISOString();
+    await checkSlot(b.garage_id, startsAt);
     await transaction(db, async () => {
       await run("UPDATE bookings SET status='confirmed',starts_at=? WHERE id=?", startsAt, b.id);
       await ensureJob(b.id);
@@ -181,6 +184,7 @@ export function registerJobs(app, ctx) {
     if (!JSON.parse(garage.services).includes(d.service))
       throw fail(400, 'Choose one of your services.');
     const date = appointment(d.starts_at);
+    await checkSlot(garage.id, date.toISOString());
     const key = id();
     await transaction(db, async () => {
       await run(
@@ -313,6 +317,7 @@ export function registerJobs(app, ctx) {
     if (b.status !== 'confirmed') throw fail(409, 'Only approved appointments can be moved.');
     notStarted(b);
     const startsAt = appointment(d.starts_at).toISOString();
+    await checkSlot(b.garage_id, startsAt);
     await transaction(db, async () => {
       await run('UPDATE bookings SET starts_at=? WHERE id=?', startsAt, b.id);
       await bookingEvent(
