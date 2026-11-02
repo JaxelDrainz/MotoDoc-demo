@@ -13,7 +13,7 @@ const CHAT_HOURS = 24;
 const PICKUP_HOURS = 12;
 
 export const jobColumns =
-  "COALESCE(j.requested_by,'driver') requested_by,COALESCE(j.stage,'booked') stage,COALESCE(j.mechanic,'') mechanic,j.pickup_at,COALESCE(j.pickup_note,'') pickup_note,j.completed_at,COALESCE(j.no_show,0) no_show,COALESCE(j.declined,0) declined,COALESCE(j.cancel_reason,'') cancel_reason,COALESCE(j.cancelled_by,'') cancelled_by,j.cost_cents,COALESCE(j.parts,'') parts,rv.rating review_rating,rv.comment review_comment,rv.tags review_tags,rv.reply review_reply,rv.reply_at review_reply_at";
+  "COALESCE(j.requested_by,'driver') requested_by,COALESCE(j.stage,'booked') stage,COALESCE(j.mechanic,'') mechanic,j.pickup_at,COALESCE(j.pickup_note,'') pickup_note,j.completed_at,COALESCE(j.no_show,0) no_show,COALESCE(j.declined,0) declined,COALESCE(j.cancel_reason,'') cancel_reason,COALESCE(j.cancelled_by,'') cancelled_by,j.cost_cents,COALESCE(j.parts,'') parts,COALESCE(j.source,'') source,j.quote_cents,j.quote_minutes,rv.rating review_rating,rv.comment review_comment,rv.tags review_tags,rv.reply review_reply,rv.reply_at review_reply_at";
 export const jobJoins =
   'LEFT JOIN booking_jobs j ON j.booking_id=b.id LEFT JOIN reviews rv ON rv.booking_id=b.id';
 

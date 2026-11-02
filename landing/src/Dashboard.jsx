@@ -25,6 +25,7 @@ import {
   ChartBarIcon,
   QuestionIcon,
   UsersThreeIcon,
+  LifebuoyIcon,
 } from '@phosphor-icons/react';
 import { api } from './api.js';
 import { Brand } from './Brand.jsx';
@@ -46,6 +47,8 @@ import {
 import { GuidedTour } from './Tour.jsx';
 import { NoAccess, TeamGate, TeamPanel } from './Team.jsx';
 import { DriverMemberships, GarageMemberships } from './Memberships.jsx';
+import { DriverMarketplace, GarageMarketplace } from './Marketplace.jsx';
+import { durationLabel } from './marketplace.js';
 import { TAB_AREAS } from './team.js';
 import { siteFlag } from './site.jsx';
 import './dashboard.css';
@@ -656,6 +659,7 @@ export function Dashboard() {
           ['garages', StorefrontIcon, 'Find a garage'],
         ]),
     ['bookings', CalendarBlankIcon, 'Bookings'],
+    ['marketplace', LifebuoyIcon, 'Marketplace'],
     ...(isGarage ? [['jobs', ListChecksIcon, 'Jobs']] : []),
     ['history', ClockCounterClockwiseIcon, 'Service history'],
     ...(isGarage ? [['customers', UsersIcon, 'Customers']] : []),
@@ -960,6 +964,11 @@ export function Dashboard() {
               <div className="dash-row-title">
                 <h3>{b.service}</h3>
                 <JobStatus booking={b} isGarage={isGarage} />
+                {b.source === 'marketplace' && b.quote_cents != null && (
+                  <span className="mk-pill strong">
+                    {`Agreed quote ${euro(b.quote_cents)} · ${durationLabel(b.quote_minutes)}`}
+                  </span>
+                )}
               </div>
               <p>
                 {isGarage ? b.driver_name : b.garage_name} · {b.make} {b.model} · {b.registration}
@@ -1131,11 +1140,13 @@ export function Dashboard() {
                       ? 'Your service costs, all in one place.'
                       : selected === 'reminders'
                         ? 'A little help remembering what’s next.'
-                        : selected === 'team'
-                          ? 'Who works with you, and what each person can see and do.'
-                          : selected === 'no-access'
-                            ? 'This part of the garage account isn’t shared with you.'
-                            : 'Keep the details that matter together.'}
+                        : selected === 'marketplace'
+                          ? 'Emergency help from nearby garages, with prices up front.'
+                          : selected === 'team'
+                            ? 'Who works with you, and what each person can see and do.'
+                            : selected === 'no-access'
+                              ? 'This part of the garage account isn’t shared with you.'
+                              : 'Keep the details that matter together.'}
             </p>
           </div>
           <span className="dash-connected">
@@ -1394,6 +1405,12 @@ export function Dashboard() {
 
         {selected === 'services' && <ServicesPanel open={open} canEdit={allowed('services')} />}
         {selected === 'team' && <TeamPanel open={open} user={user} />}
+        {selected === 'marketplace' &&
+          (isGarage ? (
+            <GarageMarketplace open={open} data={data} />
+          ) : (
+            <DriverMarketplace data={data} user={user} open={open} reload={reload} />
+          ))}
         {selected === 'no-access' && <NoAccess />}
 
         {selected === 'analytics' && <AnalyticsPanel data={data} />}
