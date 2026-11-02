@@ -30,6 +30,7 @@ import { registerGarageOps } from './garage-ops.js';
 import { registerInvoices } from './invoices.js';
 import { registerInviteRoutes, registerTeam } from './team.js';
 import { registerMemberships } from './memberships.js';
+import { registerMarketplace } from './marketplace.js';
 import { AREA_KEYS } from '../src/team.js';
 import {
   FI_PLATE,
@@ -250,7 +251,12 @@ export async function createApp({
       next();
     },
     (req, res, next) =>
-      express.json({ limit: req.path.startsWith('/admin/') ? '1500kb' : '24kb' })(req, res, next),
+      express.json({
+        limit:
+          req.path.startsWith('/admin/') || /^\/market\/requests\/[^/]+\/photos$/.test(req.path)
+            ? '1500kb'
+            : '24kb',
+      })(req, res, next),
   );
   app.get('/api/health', async (_req, res) => res.json({ ok: true }));
   const admins = new Set(
@@ -1268,6 +1274,7 @@ export async function createApp({
     invoice: 'New invoice',
     'payment-reminder': 'Payment reminder',
     'invoice-paid': 'Invoice paid',
+    'quote-accepted': 'Quote accepted',
   };
   app.get('/api/notifications', async (req, res) => {
     const isDriver = req.user.role === 'driver',
@@ -1458,6 +1465,28 @@ export async function createApp({
     driverOnly,
     text,
     optional,
+  });
+  registerMarketplace(app, {
+    one,
+    all,
+    run,
+    db,
+    transaction,
+    fail,
+    parse,
+    id,
+    clock,
+    ownGarage,
+    driverOnly,
+    world,
+    worldOf,
+    text,
+    optional,
+    dateSchema,
+    checkSlot: (...args) => ops.checkSlot(...args),
+    jobs,
+    bookingEvent,
+    rateLimit,
   });
   app.put('/api/bookings/:id/schedule', async (req, res) => {
     driverOnly(req.user);

@@ -170,6 +170,57 @@ export async function buildDemoWorld({ run, clock, world }) {
       plate,
       mileage,
     );
+  const squeak = id(),
+    warning = id();
+  for (const [key, driverId, vehicleId, service, kind, urgency, days, text, mileage, posted] of [
+    [
+      squeak,
+      basic,
+      octavia,
+      'Brake check',
+      'service',
+      'week',
+      3,
+      'The brakes squeak when I slow down, mostly in the mornings. Could you check them this week?',
+      128400,
+      -5 * 3600000,
+    ],
+    [
+      warning,
+      member,
+      golf,
+      'Engine warning light',
+      'diagnosis',
+      'urgent',
+      1,
+      'The engine light came on this morning and the car feels a bit slower. No strange noises.',
+      31800,
+      -26 * 3600000,
+    ],
+  ])
+    await run(
+      'INSERT INTO market_requests(id,driver_id,vehicle_id,service,kind,urgency,preferred_date,area,description,mileage,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+      key,
+      driverId,
+      vehicleId,
+      service,
+      kind,
+      urgency,
+      dateOnly(days),
+      'Helsinki',
+      text,
+      mileage,
+      at(posted),
+    );
+  await run(
+    'INSERT INTO market_quotes(id,request_id,garage_id,price_cents,starts_at,minutes,notes,created_at) VALUES(?,?,?,9500,?,60,?,?)',
+    id(),
+    warning,
+    garage,
+    slot(1, 12),
+    'Includes a full fault-code read and a written summary. Repairs quoted separately.',
+    at(-20 * 3600000),
+  );
   const membership = id();
   await run(
     "INSERT INTO memberships(id,driver_id,plan_id,status,price_cents,billing,member_since,renews_at,created_at) VALUES(?,?,?,'active',4900,'yearly',?,?,?)",
@@ -440,6 +491,9 @@ const users = '(SELECT user_id FROM demo_users WHERE world=?)';
 const garages = `(SELECT id FROM garages WHERE owner_id IN ${users})`;
 const bookings = `(SELECT id FROM bookings WHERE driver_id IN ${users} OR garage_id IN ${garages})`;
 const purgeSteps = [
+  `DELETE FROM market_photos WHERE request_id IN (SELECT id FROM market_requests WHERE driver_id IN ${users})`,
+  `DELETE FROM market_quotes WHERE request_id IN (SELECT id FROM market_requests WHERE driver_id IN ${users}) OR garage_id IN ${garages}`,
+  `DELETE FROM market_requests WHERE driver_id IN ${users}`,
   `DELETE FROM messages WHERE booking_id IN ${bookings}`,
   `DELETE FROM booking_events WHERE booking_id IN ${bookings}`,
   `DELETE FROM booking_jobs WHERE booking_id IN ${bookings}`,

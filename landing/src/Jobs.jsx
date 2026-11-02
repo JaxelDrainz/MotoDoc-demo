@@ -22,6 +22,7 @@ const STATE = {
 };
 const EVENTS = {
   requested: 'Request sent',
+  'quote-accepted': 'Quote accepted',
   confirmed: 'Booking approved',
   'approved-new-time': 'Approved for a new time',
   declined: 'Request declined',

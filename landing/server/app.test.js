@@ -39,7 +39,9 @@ async function fixture(t, options = {}) {
         cookie = response.headers.get('set-cookie').split(';')[0];
       return {
         status: response.status,
-        data: await response.json(),
+        data: (response.headers.get('content-type') || '').includes('json')
+          ? await response.json()
+          : await response.arrayBuffer(),
         cookie: response.headers.get('set-cookie'),
       };
     };
@@ -1783,4 +1785,128 @@ test('memberships: Basic and own plan, cars, cancel, keep, refund, offering swit
   assert.equal((await d('/api/memberships')).data[0].state, 'refunded');
   await g('/api/auth/login', { email: 'garage@example.test', password: 'testing-password-42' });
   assert((await g('/api/notifications')).data.items.some((n) => n.title === 'Refund requested'));
+});
+
+test('marketplace: post, nearby garages quote once, accept books, close, photos', async (t) => {
+  const { client } = await fixture(t),
+    d = client(),
+    g = client(),
+    far = client(),
+    stranger = client();
+  await signup(d, 'help@example.test');
+  await signup(stranger, 'stranger@example.test');
+  const gp = await garage(g);
+  await garage(far, 'far@example.test');
+  await far(
+    '/api/garage/profile',
+    {
+      name: 'Far Garage',
+      city: 'Oulu',
+      address: 'North road 1, 90100 Oulu',
+      description: 'Far away',
+      services: ['Oil change'],
+      published: true,
+    },
+    'PUT',
+  );
+  const car = (await vehicle(d)).data;
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const base = {
+    vehicle_id: car.id,
+    service: 'Brake check',
+    urgency: 'urgent',
+    preferred_date: tomorrow,
+    area: 'Tampere',
+    description: 'Squeaky brakes.',
+    mileage: 12100,
+  };
+  assert.equal(
+    (await d('/api/market/requests', { ...base, preferred_date: '2020-01-01' })).status,
+    400,
+  );
+  assert.equal((await d('/api/market/requests', { ...base, description: '' })).status, 400);
+  const posted = await d('/api/market/requests', base);
+  assert.equal(posted.status, 201);
+  assert.equal(posted.data.garages, 1);
+  const rid = posted.data.id;
+  assert(
+    (await g('/api/notifications')).data.items.some((n) => n.title === 'New marketplace request'),
+  );
+  assert.equal((await far('/api/market/garage')).data.length, 0);
+  const seen = (await g('/api/market/garage')).data;
+  assert.equal(seen[0].tab, 'to_quote');
+  assert.equal(seen[0].registration, 'TEST-123');
+
+  const pixel =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  const photo = await d(`/api/market/requests/${rid}/photos`, { data: pixel });
+  assert.equal(photo.status, 201);
+  assert.equal(
+    (await d(`/api/market/requests/${rid}/photos`, { data: 'data:text/html;base64,PGI+' })).status,
+    400,
+  );
+  assert.equal((await g(photo.data.url)).status, 200);
+  assert.equal((await stranger(photo.data.url)).status, 404);
+
+  const start = new Date(Date.now() + 2 * 86400000);
+  start.setUTCHours(9, 0, 0, 0);
+  assert.equal(
+    (
+      await far(`/api/market/requests/${rid}/quotes`, {
+        price: 80,
+        minutes: 60,
+        starts_at: start.toISOString(),
+      })
+    ).status,
+    404,
+  );
+  assert.equal(
+    (
+      await g(`/api/market/requests/${rid}/quotes`, {
+        price: 0,
+        minutes: 60,
+        starts_at: start.toISOString(),
+      })
+    ).status,
+    400,
+  );
+  const quote = {
+    price: 89.5,
+    minutes: 120,
+    starts_at: start.toISOString(),
+    notes: 'Pads + check',
+  };
+  assert.equal((await g(`/api/market/requests/${rid}/quotes`, quote)).status, 201);
+  assert.equal((await g(`/api/market/requests/${rid}/quotes`, quote)).status, 409);
+  assert.equal((await g('/api/market/garage')).data[0].tab, 'sent');
+
+  const mine = (await d('/api/market/requests')).data[0];
+  assert.equal(mine.quotes.length, 1);
+  assert.equal(mine.quotes[0].price_cents, 8950);
+  assert.equal(mine.photos.length, 1);
+  assert((await d('/api/notifications')).data.items.some((n) => n.title === 'New quote'));
+  assert.equal((await stranger(`/api/market/quotes/${mine.quotes[0].id}/accept`, {})).status, 404);
+
+  assert.equal((await d(`/api/market/requests/${rid}/close`, {})).status, 200);
+  assert.equal(
+    (await g(`/api/market/requests/${rid}/quotes`, { ...quote, price: 70 })).status,
+    409,
+  );
+  assert(
+    (await g('/api/notifications')).data.items.some(
+      (n) => n.title === 'Marketplace request closed',
+    ),
+  );
+
+  const accepted = await d(`/api/market/quotes/${mine.quotes[0].id}/accept`, {});
+  assert.equal(accepted.status, 201);
+  assert.equal((await d(`/api/market/quotes/${mine.quotes[0].id}/accept`, {})).status, 409);
+  const booking = (await d('/api/bookings')).data.find((b) => b.id === accepted.data.booking_id);
+  assert.equal(booking.status, 'confirmed');
+  assert.equal(booking.source, 'marketplace');
+  assert.equal(booking.quote_cents, 8950);
+  assert.equal(booking.garage_id, gp.id);
+  assert.equal((await g('/api/market/garage')).data[0].tab, 'won');
+  assert((await g('/api/notifications')).data.items.some((n) => n.title === 'Quote accepted'));
+  assert.equal((await d('/api/market/requests')).data[0].status, 'booked');
 });

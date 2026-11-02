@@ -218,6 +218,28 @@ Inspection & service reminders
 Direct contact with garage',1200,'basic' FROM garage_details WHERE membership_launched_at IS NOT NULL`,
     ],
   ],
+  [
+    8,
+    [
+      `CREATE TABLE IF NOT EXISTS market_requests(
+        id TEXT PRIMARY KEY,driver_id TEXT NOT NULL REFERENCES users(id),vehicle_id TEXT NOT NULL REFERENCES vehicles(id),
+        service TEXT NOT NULL,kind TEXT NOT NULL DEFAULT 'service',urgency TEXT NOT NULL DEFAULT 'week',
+        preferred_date TEXT NOT NULL,area TEXT NOT NULL,description TEXT NOT NULL,mileage INTEGER,
+        status TEXT NOT NULL DEFAULT 'open',created_at TEXT NOT NULL,closed_at TEXT,booking_id TEXT)`,
+      'CREATE INDEX IF NOT EXISTS market_open ON market_requests(status,created_at)',
+      `CREATE TABLE IF NOT EXISTS market_photos(
+        id TEXT PRIMARY KEY,request_id TEXT NOT NULL REFERENCES market_requests(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL,mime TEXT NOT NULL,data TEXT NOT NULL)`,
+      `CREATE TABLE IF NOT EXISTS market_quotes(
+        id TEXT PRIMARY KEY,request_id TEXT NOT NULL REFERENCES market_requests(id) ON DELETE CASCADE,
+        garage_id TEXT NOT NULL REFERENCES garages(id),price_cents INTEGER NOT NULL,starts_at TEXT NOT NULL,
+        minutes INTEGER NOT NULL,notes TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'sent',
+        created_at TEXT NOT NULL,UNIQUE(request_id,garage_id))`,
+      "ALTER TABLE booking_jobs ADD COLUMN source TEXT NOT NULL DEFAULT ''",
+      'ALTER TABLE booking_jobs ADD COLUMN quote_cents INTEGER',
+      'ALTER TABLE booking_jobs ADD COLUMN quote_minutes INTEGER',
+    ],
+  ],
 ];
 
 export function openDatabase(path) {
