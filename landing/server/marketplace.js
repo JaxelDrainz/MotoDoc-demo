@@ -36,7 +36,7 @@ export function registerMarketplace(app, ctx) {
   const garagesFor = async (request, worldId) =>
     (
       await all(
-        `SELECT g.id,g.owner_id,g.name,g.city,g.address FROM garages g LEFT JOIN garage_details gd ON gd.garage_id=g.id WHERE g.published=1 AND COALESCE(gd.online,1)=1 AND ${worldOf('g.owner_id')}=?`,
+        `SELECT g.id,g.owner_id,g.name,g.city,g.address FROM garages g LEFT JOIN garage_details gd ON gd.garage_id=g.id WHERE g.published=1 AND g.verification<>'rejected' AND COALESCE(gd.online,1)=1 AND ${worldOf('g.owner_id')}=?`,
         worldId,
       )
     ).filter((g) => nearby(request.area, g));

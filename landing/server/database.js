@@ -240,6 +240,27 @@ Direct contact with garage',1200,'basic' FROM garage_details WHERE membership_la
       'ALTER TABLE booking_jobs ADD COLUMN quote_minutes INTEGER',
     ],
   ],
+  [
+    9,
+    [
+      'ALTER TABLE users ADD COLUMN suspended_at TEXT',
+      "ALTER TABLE users ADD COLUMN suspended_reason TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE garages ADD COLUMN verification TEXT NOT NULL DEFAULT 'pending'",
+      'ALTER TABLE garages ADD COLUMN verified_at TEXT',
+      "ALTER TABLE garages ADD COLUMN verification_note TEXT NOT NULL DEFAULT ''",
+      `CREATE TABLE IF NOT EXISTS feedback(
+        id TEXT PRIMARY KEY,user_id TEXT REFERENCES users(id) ON DELETE SET NULL,kind TEXT NOT NULL,
+        message TEXT NOT NULL,page TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'new',created_at TEXT NOT NULL)`,
+      `CREATE TABLE IF NOT EXISTS announcements(
+        id TEXT PRIMARY KEY,world TEXT NOT NULL DEFAULT '',audience TEXT NOT NULL,title TEXT NOT NULL,
+        message TEXT NOT NULL,recipients INTEGER NOT NULL,sent_at TEXT NOT NULL,sent_by TEXT NOT NULL)`,
+      'CREATE TABLE IF NOT EXISTS platform_settings(key TEXT PRIMARY KEY,value TEXT NOT NULL)',
+      `CREATE TABLE IF NOT EXISTS admin_audit(
+        id TEXT PRIMARY KEY,world TEXT NOT NULL DEFAULT '',admin_id TEXT NOT NULL,admin_name TEXT NOT NULL,
+        action TEXT NOT NULL,target TEXT NOT NULL DEFAULT '',detail TEXT NOT NULL DEFAULT '',at TEXT NOT NULL)`,
+      'CREATE INDEX IF NOT EXISTS admin_audit_time ON admin_audit(world,at)',
+    ],
+  ],
 ];
 
 export function openDatabase(path) {

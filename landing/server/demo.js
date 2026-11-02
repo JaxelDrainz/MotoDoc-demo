@@ -170,6 +170,18 @@ export async function buildDemoWorld({ run, clock, world }) {
       plate,
       mileage,
     );
+  await run(
+    "UPDATE garages SET verification='verified',verified_at=? WHERE id=?",
+    at(-140 * day),
+    garage,
+  );
+  await run(
+    "INSERT INTO feedback(id,user_id,kind,message,page,created_at) VALUES(?,?,'idea',?,'#memberships',?)",
+    id(),
+    member,
+    'It would be great to see the membership renewal date on the home screen too.',
+    at(-3 * 3600000),
+  );
   const squeak = id(),
     warning = id();
   for (const [key, driverId, vehicleId, service, kind, urgency, days, text, mileage, posted] of [
@@ -522,7 +534,10 @@ const purgeSteps = [
   ...['sessions', 'resets', 'photos', 'notification_reads', 'user_settings'].map(
     (table) => `DELETE FROM ${table} WHERE user_id IN ${users}`,
   ),
+  `DELETE FROM feedback WHERE user_id IN ${users}`,
   `DELETE FROM users WHERE id IN ${users}`,
+  'DELETE FROM announcements WHERE world=?',
+  'DELETE FROM admin_audit WHERE world=?',
   'DELETE FROM demo_users WHERE world=?',
 ];
 

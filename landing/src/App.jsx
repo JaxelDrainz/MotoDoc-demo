@@ -4,6 +4,7 @@ import { Dashboard } from './Dashboard.jsx';
 import { Brand } from './Brand.jsx';
 import { InfoPage, Proof } from './Pages.jsx';
 import { Admin } from './Admin.jsx';
+import { AdminConsole } from './AdminConsole.jsx';
 import { Onboarding } from './Onboarding.jsx';
 import { Lines, useSite } from './site.jsx';
 import {
@@ -533,7 +534,8 @@ function LandingPage() {
 export function App() {
   const path = window.location.pathname.replace(/\/$/, '');
   if (path === '/app') return <Dashboard />;
-  if (path === '/admin') return <Admin />;
+  if (path === '/admin') return <AdminConsole />;
+  if (path === '/admin/site') return <Admin />;
   if (path === '/onboarding' || path === '/onboarding/membership') return <Onboarding />;
   if (['/privacy', '/terms', '/contact'].includes(path)) return <InfoPage kind={path.slice(1)} />;
   if (path === '/reset-password') return <AuthPage mode="reset" />;

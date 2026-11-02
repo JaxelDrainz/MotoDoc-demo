@@ -31,6 +31,7 @@ import { registerInvoices } from './invoices.js';
 import { registerInviteRoutes, registerTeam } from './team.js';
 import { registerMemberships } from './memberships.js';
 import { registerMarketplace } from './marketplace.js';
+import { platformSettings, registerAdmin, registerFeedback } from './admin.js';
 import { AREA_KEYS } from '../src/team.js';
 import {
   FI_PLATE,
@@ -87,6 +88,7 @@ const userView = (u) => ({
   phone: u.phone || '',
   address: u.address || '',
   termsAccepted: !!u.terms_accepted_at,
+  suspended: !!u.suspended_at,
   hasPassword: !!u.password_hash && !String(u.password_hash).startsWith('oauth:'),
   prefs: {
     emailUpdates:
@@ -101,7 +103,7 @@ const photoOf = (column) =>
 
 const worldOf = (column) => `COALESCE((SELECT world FROM demo_users WHERE user_id=${column}),'')`;
 const userSelect = `SELECT u.*,${photoOf('u.id')} photo,COALESCE((SELECT id FROM garages WHERE owner_id=u.id),(SELECT garage_id FROM garage_staff WHERE user_id=u.id)) garage_id,(SELECT role FROM garage_staff WHERE user_id=u.id) staff_role,(SELECT permissions FROM garage_staff WHERE user_id=u.id) staff_permissions,(SELECT active FROM garage_staff WHERE user_id=u.id) staff_active,(SELECT world FROM demo_users WHERE user_id=u.id) demo_world,(SELECT persona FROM demo_users WHERE user_id=u.id) demo_persona,us.phone,us.address,us.email_updates,us.email_chat,us.request_sound,us.terms_accepted_at,us.onboarded_at FROM users u LEFT JOIN user_settings us ON us.user_id=u.id`;
-const ratingColumns = `(SELECT ROUND(AVG(rating),1) FROM reviews WHERE garage_id=g.id) rating,(SELECT COUNT(*) FROM reviews WHERE garage_id=g.id) review_count`;
+const ratingColumns = `(SELECT ROUND(AVG(rating),1) FROM reviews WHERE garage_id=g.id AND hidden=0) rating,(SELECT COUNT(*) FROM reviews WHERE garage_id=g.id AND hidden=0) review_count,g.verification`;
 const garageView = (g) => ({ ...g, services: JSON.parse(g.services), published: !!g.published });
 const fail = (status, message) => Object.assign(new Error(message), { status });
 
@@ -408,6 +410,8 @@ export async function createApp({
       user?.password_hash || `scrypt:32768:8:3:${'0'.repeat(32)}:${'0'.repeat(128)}`,
     );
     if (!user || !valid) throw fail(401, 'Email or password is incorrect.');
+    if (user.suspended_at)
+      throw fail(403, 'Your account is suspended. Contact MotoDoc if you think this is a mistake.');
     if (!user.password_hash.startsWith('scrypt:'))
       await run(
         'UPDATE users SET password_hash=? WHERE id=?',
@@ -541,6 +545,10 @@ export async function createApp({
         clock(),
       ));
     if (!req.user) return res.status(401).json({ error: 'Please log in to continue.' });
+    if (req.user.suspended_at && !['/auth/me', '/auth/logout'].includes(req.path))
+      return res.status(403).json({
+        error: 'Your account is suspended. Contact MotoDoc if you think this is a mistake.',
+      });
     if (
       req.user.staff_role &&
       Number(req.user.staff_active) !== 1 &&
@@ -823,13 +831,18 @@ export async function createApp({
   app.use('/api/admin', (req, _res, next) => {
     if (!isAdmin(req.user))
       throw fail(403, 'Only MotoDoc administrators can change site settings.');
-    if (req.user.demo_persona === 'admin' && req.method !== 'GET')
+    if (
+      req.user.demo_persona === 'admin' &&
+      req.method !== 'GET' &&
+      /^\/(site|revisions|assets|settings)/.test(req.path)
+    )
       throw fail(
         403,
         'This is the demo admin. You can look around, but changes are not saved to the live site.',
       );
     next();
   });
+  registerAdmin(app, { one, all, run, db, transaction, fail, parse, id, clock, isAdmin, worldOf });
   app.get('/api/admin/site', async (_req, res) => {
     const revisions = await all(
       'SELECT r.id,r.created_at,u.name author FROM site_revisions r LEFT JOIN users u ON u.id=r.created_by ORDER BY r.created_at DESC, r.id DESC LIMIT 30',
@@ -1124,7 +1137,7 @@ export async function createApp({
   app.get('/api/garages', async (req, res) => {
     const list = (
       await all(
-        `SELECT g.id,g.name,g.city,g.address,g.description,g.services,g.published,${ratingColumns} FROM garages g WHERE g.published=1 AND ${worldOf('g.owner_id')}=? ORDER BY g.name`,
+        `SELECT g.id,g.name,g.city,g.address,g.description,g.services,g.published,${ratingColumns} FROM garages g WHERE g.published=1 AND g.verification<>'rejected' AND ${worldOf('g.owner_id')}=? ORDER BY g.name`,
         world(req.user),
       )
     ).map(garageView);
@@ -1414,6 +1427,7 @@ export async function createApp({
     optional,
   });
   registerTeam(app, teamCtx);
+  registerFeedback(app, { run, parse, id, clock });
   registerMemberships(app, {
     one,
     all,
@@ -1562,7 +1576,7 @@ export async function createApp({
       throw fail(404, 'Vehicle not found.');
     await ops.checkSlot(d.garage_id, date.toISOString());
     const garage = await one(
-      `SELECT * FROM garages g WHERE g.id=? AND g.published=1 AND ${worldOf('g.owner_id')}=?`,
+      `SELECT * FROM garages g WHERE g.id=? AND g.published=1 AND g.verification<>'rejected' AND ${worldOf('g.owner_id')}=?`,
       d.garage_id,
       world(req.user),
     );

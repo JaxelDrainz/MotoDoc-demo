@@ -320,12 +320,20 @@ export function TeamGate({ user, onLogout }) {
     <main className="team-gate">
       <Brand />
       <div className="team-state">
-        {paused ? <PauseCircleIcon size={38} /> : <UserMinusIcon size={38} />}
-        <h1>{paused ? 'Your access is paused' : 'You’re no longer on this team'}</h1>
+        {paused || user.suspended ? <PauseCircleIcon size={38} /> : <UserMinusIcon size={38} />}
+        <h1>
+          {user.suspended
+            ? 'Your account is suspended'
+            : paused
+              ? 'Your access is paused'
+              : 'You’re no longer on this team'}
+        </h1>
         <p>
-          {paused
-            ? 'The garage owner has paused your access for now. Ask them to turn it back on.'
-            : 'The garage owner removed you from the team. Ask them for a new invite if this is a mistake.'}
+          {user.suspended
+            ? 'MotoDoc has suspended this account. Contact us at info@motodoc.app if you think this is a mistake.'
+            : paused
+              ? 'The garage owner has paused your access for now. Ask them to turn it back on.'
+              : 'The garage owner removed you from the team. Ask them for a new invite if this is a mistake.'}
         </p>
         <button className="button button-small" onClick={onLogout}>
           Log out

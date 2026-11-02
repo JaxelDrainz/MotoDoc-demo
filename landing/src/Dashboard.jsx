@@ -26,6 +26,7 @@ import {
   QuestionIcon,
   UsersThreeIcon,
   LifebuoyIcon,
+  ChatTextIcon,
 } from '@phosphor-icons/react';
 import { api } from './api.js';
 import { Brand } from './Brand.jsx';
@@ -50,6 +51,7 @@ import { DriverMemberships, GarageMemberships } from './Memberships.jsx';
 import { DriverMarketplace, GarageMarketplace } from './Marketplace.jsx';
 import { durationLabel } from './marketplace.js';
 import { TAB_AREAS } from './team.js';
+import { FEEDBACK_KINDS } from './platform.js';
 import { siteFlag } from './site.jsx';
 import './dashboard.css';
 
@@ -111,7 +113,7 @@ const vehicleFields = [
   { name: 'mileage', label: 'Mileage (km)', type: 'number', min: 0, max: 5000000, required: true },
 ];
 
-function FormDialog({ config, onClose, onSave }) {
+export function FormDialog({ config, onClose, onSave }) {
   const ref = useRef(null),
     opener = useRef(document.activeElement);
   const [busy, setBusy] = useState(false),
@@ -619,7 +621,7 @@ export function Dashboard() {
         if (!active) return;
         if (!u.onboarded) return location.replace('/onboarding');
         setUser(u);
-        if (['paused', 'removed'].includes(u.teamStatus)) return;
+        if (u.suspended || ['paused', 'removed'].includes(u.teamStatus)) return;
         await load(u);
       })
       .catch((e) => {
@@ -1013,7 +1015,7 @@ export function Dashboard() {
     );
   }
 
-  if (user && ['paused', 'removed'].includes(user.teamStatus))
+  if (user && (user.suspended || ['paused', 'removed'].includes(user.teamStatus)))
     return <TeamGate user={user} onLogout={logout} />;
   if (!user || !data) {
     if (error || !loading)
@@ -1096,6 +1098,42 @@ export function Dashboard() {
               <QuestionIcon size={20} />
             </button>
           )}
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Leave feedback"
+            title="Leave feedback"
+            onClick={() =>
+              open({
+                silent: true,
+                title: 'Leave feedback',
+                note: 'Report a problem or share an idea. The MotoDoc team reads every message.',
+                values: { kind: 'problem' },
+                fields: [
+                  {
+                    name: 'kind',
+                    label: 'What is it about?',
+                    required: true,
+                    options: FEEDBACK_KINDS.map(([value, label]) => ({ value, label })),
+                  },
+                  {
+                    name: 'message',
+                    label: 'Message',
+                    type: 'textarea',
+                    required: true,
+                    maxLength: 2000,
+                  },
+                ],
+                submit: 'Send feedback',
+                save: async (d) => {
+                  await api('/feedback', { method: 'POST', body: { ...d, page: `#${selected}` } });
+                  toast('Thanks! Your feedback reached the MotoDoc team.');
+                },
+              })
+            }
+          >
+            <ChatTextIcon size={20} />
+          </button>
           <div>
             <strong>{user.name}</strong>
             <small>{user.email}</small>
@@ -1333,6 +1371,9 @@ export function Dashboard() {
                     <article className="dash-tile" key={g.id}>
                       <StorefrontIcon size={29} />
                       <h3>{g.name}</h3>
+                      {g.verification === 'verified' && (
+                        <span className="gt-pill open gt-verified">Verified by MotoDoc</span>
+                      )}
                       {g.review_count > 0 && (
                         <span className="dash-rating">
                           <StarIcon size={13} weight="fill" />

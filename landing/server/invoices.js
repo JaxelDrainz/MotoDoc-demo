@@ -1,12 +1,7 @@
 import { z } from 'zod';
 import { validBusinessId } from '../src/finland.js';
-import {
-  EINVOICE_ADDRESS,
-  OPERATORS,
-  VAT_RATE,
-  invoiceTotals,
-  referenceNumber,
-} from '../src/invoiceMath.js';
+import { EINVOICE_ADDRESS, OPERATORS, invoiceTotals, referenceNumber } from '../src/invoiceMath.js';
+import { platformSettings } from './admin.js';
 
 export function registerInvoices(app, ctx) {
   const {
@@ -90,7 +85,7 @@ export function registerInvoices(app, ctx) {
         reason: optional(60),
       })
       .default({ type: 'none', value: 0, reason: '' }),
-    vat_rate: z.number().min(0).max(50).default(VAT_RATE),
+    vat_rate: z.number().min(0).max(50).optional(),
     due_date: dateSchema.optional(),
     notes: optional(1000),
     business: z
@@ -105,6 +100,7 @@ export function registerInvoices(app, ctx) {
   app.post('/api/invoices', async (req, res) => {
     const g = await ownerGarage(req.user, 'invoicing');
     const d = parse(invoiceSchema, req);
+    d.vat_rate ??= (await platformSettings(all)).vat_rate;
     const b = await one(
       "SELECT * FROM bookings WHERE id=? AND garage_id=? AND status='completed'",
       d.booking_id,
