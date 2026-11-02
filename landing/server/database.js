@@ -180,6 +180,44 @@ export const migrations = [
       'CREATE INDEX IF NOT EXISTS team_invite_garage ON team_invites(garage_id,status)',
     ],
   ],
+  [
+    7,
+    [
+      "ALTER TABLE plans ADD COLUMN kind TEXT NOT NULL DEFAULT 'garage'",
+      'ALTER TABLE memberships ADD COLUMN price_cents INTEGER NOT NULL DEFAULT 0',
+      "ALTER TABLE memberships ADD COLUMN billing TEXT NOT NULL DEFAULT 'yearly'",
+      'ALTER TABLE memberships ADD COLUMN member_since TEXT',
+      'ALTER TABLE memberships ADD COLUMN renews_at TEXT',
+      'ALTER TABLE memberships ADD COLUMN auto_renew INTEGER NOT NULL DEFAULT 1',
+      'ALTER TABLE memberships ADD COLUMN garage_stopped INTEGER NOT NULL DEFAULT 0',
+      'ALTER TABLE memberships ADD COLUMN ended_at TEXT',
+      'ALTER TABLE memberships ADD COLUMN refund_cents INTEGER',
+      "ALTER TABLE memberships ADD COLUMN refund_reason TEXT NOT NULL DEFAULT ''",
+      'ALTER TABLE memberships ADD COLUMN refund_at TEXT',
+      'ALTER TABLE garage_details ADD COLUMN membership_offering INTEGER NOT NULL DEFAULT 1',
+      `CREATE TABLE IF NOT EXISTS membership_vehicles(
+        membership_id TEXT NOT NULL REFERENCES memberships(id) ON DELETE CASCADE,
+        vehicle_id TEXT NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,PRIMARY KEY(membership_id,vehicle_id))`,
+      `CREATE TABLE IF NOT EXISTS notices(
+        id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,kind TEXT NOT NULL,
+        title TEXT NOT NULL,body TEXT NOT NULL DEFAULT '',at TEXT NOT NULL,link TEXT NOT NULL DEFAULT '')`,
+      'CREATE INDEX IF NOT EXISTS notice_user ON notices(user_id,at)',
+      `CREATE TABLE IF NOT EXISTS member_updates(
+        id TEXT PRIMARY KEY,garage_id TEXT NOT NULL REFERENCES garages(id) ON DELETE CASCADE,audience TEXT NOT NULL,
+        message TEXT NOT NULL,recipients INTEGER NOT NULL,sent_at TEXT NOT NULL,sent_by TEXT NOT NULL)`,
+      `CREATE TABLE IF NOT EXISTS custom_plan_requests(
+        id TEXT PRIMARY KEY,garage_id TEXT NOT NULL REFERENCES garages(id) ON DELETE CASCADE,message TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'new',created_at TEXT NOT NULL,created_by TEXT NOT NULL)`,
+      "UPDATE memberships SET status='active' WHERE status='requested'",
+      "UPDATE memberships SET member_since=COALESCE(created_at,datetime('now')),price_cents=(SELECT price_cents FROM plans WHERE id=memberships.plan_id)",
+      "UPDATE memberships SET renews_at=strftime('%Y-%m-%dT%H:%M:%fZ',member_since,'+1 year')",
+      "UPDATE memberships SET auto_renew=0,ended_at=member_since WHERE status='cancelled'",
+      'INSERT OR IGNORE INTO membership_vehicles(membership_id,vehicle_id) SELECT m.id,v.id FROM memberships m JOIN vehicles v ON v.owner_id=m.driver_id',
+      `INSERT INTO plans(id,garage_id,name,benefits,price_cents,kind) SELECT lower(hex(randomblob(16))),garage_id,'Basic','All your service history in one place
+Inspection & service reminders
+Direct contact with garage',1200,'basic' FROM garage_details WHERE membership_launched_at IS NOT NULL`,
+    ],
+  ],
 ];
 
 export function openDatabase(path) {

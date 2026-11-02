@@ -29,6 +29,7 @@ import { REVIEW_TAGS, decorateBooking, jobColumns, jobJoins, registerJobs } from
 import { registerGarageOps } from './garage-ops.js';
 import { registerInvoices } from './invoices.js';
 import { registerInviteRoutes, registerTeam } from './team.js';
+import { registerMemberships } from './memberships.js';
 import { AREA_KEYS } from '../src/team.js';
 import {
   FI_PLATE,
@@ -603,6 +604,7 @@ export async function createApp({
       main_focus: row?.main_focus || '',
       hours: row?.hours ? JSON.parse(row.hours) : null,
       membership_launched_at: row?.membership_launched_at || null,
+      membership_offering: row ? !!row.membership_offering : true,
     };
   };
   app.post('/api/onboarding', async (req, res) => {
@@ -736,49 +738,6 @@ export async function createApp({
     });
     res.json({ next: garage ? '/onboarding/membership' : '/app' });
   });
-  app.post('/api/garage/membership', async (req, res) => {
-    const g = await ownerGarage(req.user, 'memberships');
-    const d = parse(
-      z
-        .object({
-          price: z.number().int().min(29).max(59),
-          hourly_rate: z.number().positive().max(1000),
-          member_rate: z.number().positive().max(1000),
-          perks: z
-            .array(z.string().trim().min(3).max(80))
-            .min(3, 'Choose at least 3 perks.')
-            .max(6),
-          own_perk: z.string().trim().max(60).default(''),
-        })
-        .refine((v) => v.member_rate <= v.hourly_rate, {
-          message: 'The member hourly rate can’t be higher than your normal hourly rate.',
-          path: ['member_rate'],
-        }),
-      req,
-    );
-    if ((await garageDetails(g.id)).membership_launched_at)
-      throw fail(409, 'Your membership is already live.');
-    const perks = [...d.perks, ...(d.own_perk ? [d.own_perk] : [])];
-    await transaction(db, async () => {
-      await run(
-        'INSERT INTO plans(id,garage_id,name,benefits,price_cents) VALUES(?,?,?,?,?)',
-        id(),
-        g.id,
-        `${g.name} membership`,
-        perks.join('\n'),
-        d.price * 100,
-      );
-      await run(
-        `INSERT INTO garage_details(garage_id,hourly_rate_cents,member_rate_cents,membership_launched_at) VALUES(?,?,?,?)
-         ON CONFLICT(garage_id) DO UPDATE SET hourly_rate_cents=excluded.hourly_rate_cents,member_rate_cents=excluded.member_rate_cents,membership_launched_at=excluded.membership_launched_at`,
-        g.id,
-        Math.round(d.hourly_rate * 100),
-        Math.round(d.member_rate * 100),
-        now(),
-      );
-    });
-    res.status(201).json({ ok: true });
-  });
   app.put('/api/account/settings', async (req, res) => {
     const d = parse(
       z.object({
@@ -840,6 +799,7 @@ export async function createApp({
         'resets',
         'photos',
         'notification_reads',
+        'notices',
         'reminders',
         'garage_staff',
         'user_settings',
@@ -1144,6 +1104,14 @@ export async function createApp({
       throw fail(404, 'Vehicle not found.');
     if (await one('SELECT id FROM bookings WHERE vehicle_id=?', req.params.id))
       throw fail(409, 'Vehicles with bookings or service history cannot be deleted.');
+    if (
+      await one(
+        "SELECT 1 FROM membership_vehicles mv JOIN memberships m ON m.id=mv.membership_id WHERE mv.vehicle_id=? AND m.status='active'",
+        req.params.id,
+      )
+    )
+      throw fail(409, 'This car is covered by a membership. Cancel the membership first.');
+    await run('DELETE FROM membership_vehicles WHERE vehicle_id=?', req.params.id);
     await run('DELETE FROM vehicles WHERE id=?', req.params.id);
     res.json({ ok: true });
   });
@@ -1325,7 +1293,19 @@ export async function createApp({
       req.user.id,
       soon,
     );
+    const notices = await all(
+      'SELECT id,kind,title,body,at,link FROM notices WHERE user_id=? ORDER BY at DESC LIMIT 20',
+      req.user.id,
+    );
     const items = [
+      ...notices.map((n) => ({
+        id: `notice:${n.id}`,
+        type: n.kind,
+        title: n.title,
+        body: n.body,
+        at: n.at,
+        link: n.link,
+      })),
       ...messages.map((m) => ({
         id: `message:${m.id}`,
         type: 'message',
@@ -1427,6 +1407,23 @@ export async function createApp({
     optional,
   });
   registerTeam(app, teamCtx);
+  registerMemberships(app, {
+    one,
+    all,
+    run,
+    db,
+    transaction,
+    fail,
+    parse,
+    id,
+    clock,
+    ownGarage,
+    ownerGarage,
+    can,
+    driverOnly,
+    world,
+    worldOf,
+  });
   registerInvoices(app, {
     one,
     all,
@@ -1597,85 +1594,6 @@ export async function createApp({
         driver ? req.user.id : req.user.garage_id,
       ),
     );
-  });
-  app.get('/api/plans', async (req, res) =>
-    res.json(
-      req.user.role === 'garage'
-        ? can(req.user, 'memberships')
-          ? await all('SELECT * FROM plans WHERE garage_id=?', (await ownGarage(req.user)).id)
-          : []
-        : await all(
-            `SELECT p.*,g.name garage_name FROM plans p JOIN garages g ON g.id=p.garage_id WHERE p.active=1 AND g.published=1 AND ${worldOf('g.owner_id')}=?`,
-            world(req.user),
-          ),
-    ),
-  );
-  app.post('/api/plans', async (req, res) => {
-    const g = await ownerGarage(req.user, 'memberships'),
-      d = parse(z.object({ name: text(100), benefits: text(1500), price_cents: money }), req),
-      key = id();
-    await run(
-      'INSERT INTO plans(id,garage_id,name,benefits,price_cents) VALUES(?,?,?,?,?)',
-      key,
-      g.id,
-      d.name,
-      d.benefits,
-      d.price_cents,
-    );
-    res.status(201).json({ id: key });
-  });
-  app.get('/api/memberships', async (req, res) => {
-    const driver = req.user.role === 'driver';
-    if (!driver && !can(req.user, 'memberships')) return res.json([]);
-    res.json(
-      await all(
-        `SELECT m.*,p.name plan_name,p.benefits,p.price_cents,g.name garage_name,u.name driver_name FROM memberships m JOIN plans p ON p.id=m.plan_id JOIN garages g ON g.id=p.garage_id JOIN users u ON u.id=m.driver_id WHERE ${driver ? 'm.driver_id' : 'p.garage_id'}=? ORDER BY m.created_at DESC`,
-        driver ? req.user.id : req.user.garage_id,
-      ),
-    );
-  });
-  app.post('/api/memberships', async (req, res) => {
-    driverOnly(req.user);
-    const { plan_id } = parse(z.object({ plan_id: z.uuid() }), req);
-    if (
-      !(await one(
-        `SELECT p.id FROM plans p JOIN garages g ON g.id=p.garage_id WHERE p.id=? AND p.active=1 AND g.published=1 AND ${worldOf('g.owner_id')}=?`,
-        plan_id,
-        world(req.user),
-      ))
-    )
-      throw fail(404, 'Plan not found.');
-    const existing = await one(
-      'SELECT * FROM memberships WHERE driver_id=? AND plan_id=?',
-      req.user.id,
-      plan_id,
-    );
-    if (existing && existing.status !== 'cancelled')
-      throw fail(409, 'You already have a request or membership for this plan.');
-    if (existing) await run("UPDATE memberships SET status='requested' WHERE id=?", existing.id);
-    else
-      await run(
-        "INSERT INTO memberships(id,driver_id,plan_id,status) VALUES(?,?,?,'requested')",
-        id(),
-        req.user.id,
-        plan_id,
-      );
-    res.status(201).json({ ok: true });
-  });
-  app.patch('/api/memberships/:id', async (req, res) => {
-    const { status } = parse(z.object({ status: z.enum(['active', 'cancelled']) }), req);
-    const m = await one(
-      'SELECT m.*,p.garage_id FROM memberships m JOIN plans p ON p.id=m.plan_id WHERE m.id=?',
-      req.params.id,
-    );
-    const garageSide = !!m && req.user.role === 'garage' && req.user.garage_id === m.garage_id;
-    if (!m || (m.driver_id !== req.user.id && !garageSide))
-      throw fail(404, 'Membership not found.');
-    if (garageSide && !can(req.user, 'memberships')) throw fail(403, NO_ACCESS);
-    if (status === 'active' && (!garageSide || m.status !== 'requested'))
-      throw fail(403, 'Only the garage can approve a pending membership.');
-    await run('UPDATE memberships SET status=? WHERE id=?', status, m.id);
-    res.json({ ok: true });
   });
   app.get('/api/reminders', async (req, res) =>
     res.json(

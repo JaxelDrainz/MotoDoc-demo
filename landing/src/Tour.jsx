@@ -31,7 +31,7 @@ const driverSteps = [
   [
     'memberships',
     'Benefits from your mechanic',
-    'See available garage plans and manage your membership requests.',
+    'Join a garage plan and choose which of your cars it covers.',
   ],
   [
     'reminders',
@@ -74,7 +74,7 @@ const garageSteps = [
   [
     'memberships',
     'Reward regular customers',
-    'Launch your plan, review requests and manage active members.',
+    'Launch your plan, see your members and send them updates.',
   ],
   [
     'invoices',

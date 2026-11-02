@@ -27,6 +27,10 @@ const kindOf = {
   upcoming: 'pending',
   rescheduled: 'pending',
   invited: 'pending',
+  ends: 'pending',
+  'renews soon': 'pending',
+  ended: 'cancelled',
+  refunded: 'cancelled',
   reminder: 'pending',
   confirmed: 'confirmed',
   active: 'confirmed',
@@ -139,9 +143,10 @@ export function Bell() {
                   <li key={item.id} className={item.at > feed.seen_at ? 'new' : ''}>
                     <a
                       href={
-                        item.type === 'reminder' || item.type === 'overdue'
+                        item.link ||
+                        (item.type === 'reminder' || item.type === 'overdue'
                           ? '#reminders'
-                          : '#bookings'
+                          : '#bookings')
                       }
                       onClick={() => setOpen(false)}
                     >

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { referenceNumber } from '../src/invoiceMath.js';
+import { BASIC_BENEFITS } from '../src/membership.js';
 
 export const demoPersonas = ['driver', 'driver-basic', 'garage', 'mechanic', 'admin'];
 export const demoLifetime = 24 * 3600000;
@@ -133,19 +134,23 @@ export async function buildDemoWorld({ run, clock, world }) {
   );
   const plan = id();
   await run(
-    'INSERT INTO plans(id,garage_id,name,benefits,price_cents) VALUES(?,?,?,?,?)',
+    "INSERT INTO plans(id,garage_id,name,benefits,price_cents,kind) VALUES(?,?,?,?,?,'garage')",
     plan,
     garage,
-    'Demo Care Plus',
-    'Member hourly rate, priority booking, a seasonal tyre check and a 24-hour money-back guarantee.',
-    14900,
+    'MotoDoc Demo Garage membership',
+    [
+      'Priority booking within 5 days',
+      'Free annual safety check (30 min)',
+      'Free katsastus prep check before inspection',
+      'Fixed-price oil change once a year (€69)',
+    ].join('\n'),
+    4900,
   );
   await run(
-    "INSERT INTO memberships(id,driver_id,plan_id,status,created_at) VALUES(?,?,?,'active',?)",
+    "INSERT INTO plans(id,garage_id,name,benefits,price_cents,kind) VALUES(?,?,'Basic',?,1200,'basic')",
     id(),
-    member,
-    plan,
-    at(-120 * day),
+    garage,
+    BASIC_BENEFITS.join('\n'),
   );
   const corolla = id(),
     golf = id(),
@@ -165,6 +170,21 @@ export async function buildDemoWorld({ run, clock, world }) {
       plate,
       mileage,
     );
+  const membership = id();
+  await run(
+    "INSERT INTO memberships(id,driver_id,plan_id,status,price_cents,billing,member_since,renews_at,created_at) VALUES(?,?,?,'active',4900,'yearly',?,?,?)",
+    membership,
+    member,
+    plan,
+    at(-120 * day),
+    at(245 * day),
+    at(-120 * day),
+  );
+  await run(
+    'INSERT INTO membership_vehicles(membership_id,vehicle_id) VALUES(?,?)',
+    membership,
+    corolla,
+  );
   await run(
     'INSERT INTO vehicle_condition(vehicle_id,oil_life,brake_wear,mot_due,updated_at) VALUES(?,?,?,?,?)',
     corolla,
@@ -428,6 +448,10 @@ const purgeSteps = [
   `DELETE FROM invoices WHERE booking_id IN ${bookings}`,
   `DELETE FROM service_records WHERE booking_id IN ${bookings}`,
   `DELETE FROM bookings WHERE driver_id IN ${users} OR garage_id IN ${garages}`,
+  `DELETE FROM membership_vehicles WHERE membership_id IN (SELECT id FROM memberships WHERE driver_id IN ${users} OR plan_id IN (SELECT id FROM plans WHERE garage_id IN ${garages}))`,
+  `DELETE FROM notices WHERE user_id IN ${users}`,
+  `DELETE FROM member_updates WHERE garage_id IN ${garages}`,
+  `DELETE FROM custom_plan_requests WHERE garage_id IN ${garages}`,
   `DELETE FROM memberships WHERE driver_id IN ${users} OR plan_id IN (SELECT id FROM plans WHERE garage_id IN ${garages})`,
   `DELETE FROM plans WHERE garage_id IN ${garages}`,
   `DELETE FROM customer_notes WHERE garage_id IN ${garages} OR driver_id IN ${users}`,

@@ -1,0 +1,254 @@
+.mem-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+.mem-chips button {
+  flex: none;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.mem-chips button.active {
+  border-color: var(--green);
+  background: var(--mint);
+  color: var(--green);
+}
+.mem-current,
+.mem-hero,
+.mem-live,
+.mem-offering,
+.mem-plan-card {
+  margin-bottom: 16px;
+}
+.mem-current-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.mem-current-head > div {
+  flex: 1;
+  min-width: 0;
+}
+.mem-current-head h2,
+.mem-hero h2,
+.mem-live h2 {
+  margin: 4px 0;
+}
+.mem-current-head > svg,
+.mem-hero > svg {
+  color: var(--green);
+}
+.mem-note {
+  color: #9a5b00;
+  font-size: 14px;
+}
+.mem-cars {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}
+.mem-benefits {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  display: grid;
+  gap: 6px;
+}
+.mem-benefits li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 14px;
+}
+.mem-benefits svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--green);
+}
+.mem-price {
+  display: flex;
+  flex-direction: column;
+  font-weight: 700;
+  font-size: 18px;
+  margin: 8px 0;
+}
+.mem-price small {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--muted);
+}
+.mem-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.mem-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px;
+}
+.mem-toggle button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.mem-toggle button[aria-pressed='true'] {
+  background: var(--green);
+  color: #fff;
+}
+.mem-garage {
+  margin-bottom: 24px;
+}
+.mem-garage header h3 {
+  margin: 0;
+}
+.mem-garage header p {
+  margin: 4px 0 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.mem-plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+.mem-plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.mem-plan.featured {
+  border-color: var(--green);
+  box-shadow: 0 0 0 1px var(--green);
+}
+.mem-plan h4 {
+  margin: 4px 0 0;
+  font-size: 18px;
+}
+.mem-plan-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.mem-plan-price {
+  font-size: 22px;
+  margin-top: 8px;
+}
+.mem-plan small {
+  color: var(--muted);
+}
+.mem-plan button {
+  margin-top: auto;
+  align-self: flex-start;
+}
+.mem-recommended {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+  background: var(--mint);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.mem-live {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.mem-offering {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.mem-offering h3 {
+  margin: 0 0 4px;
+}
+.mem-offering p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.mem-switch {
+  flex: none;
+  width: 48px;
+  height: 28px;
+  border-radius: 999px;
+  border: 0;
+  background: #c9d2cc;
+  padding: 3px;
+  cursor: pointer;
+  display: flex;
+}
+.mem-switch span {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+}
+.mem-switch[aria-checked='true'] {
+  background: var(--green);
+}
+.mem-switch[aria-checked='true'] span {
+  transform: translateX(20px);
+}
+.mem-plan-card h4 {
+  margin: 16px 0 4px;
+  font-size: 14px;
+}
+.mem-pill {
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px;
+  color: var(--muted);
+}
+.mem-stats p {
+  margin-top: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mem-switch span {
+    transition: none;
+  }
+}
+:root[data-theme='dark'] .mem-plan {
+  background: #141d19;
+  border-color: #26332d;
+}
+:root[data-theme='dark'] .mem-plan.featured {
+  border-color: var(--green);
+}
+:root[data-theme='dark'] .mem-note {
+  color: #f0b45a;
+}
+:root[data-theme='dark'] .mem-switch {
+  background: #33433b;
+}

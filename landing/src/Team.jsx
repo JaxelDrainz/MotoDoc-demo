@@ -62,6 +62,7 @@ export function TeamPanel({ open, user }) {
   };
   const invite = () =>
     open({
+      silent: true,
       title: 'Invite a team member',
       note: 'They get a link to set their own password. MotoDoc doesn’t email it yet, so copy the link and send it to them.',
       values: { role: 'mechanic' },
@@ -86,6 +87,7 @@ export function TeamPanel({ open, user }) {
   const access = (m) => {
     const missing = SENSITIVE.filter((k) => !m.permissions.includes(k));
     open({
+      silent: true,
       title: `Access for ${m.name}`,
       note: 'Choose what they can see and change. The owner always has full access.',
       values: { permissions: m.permissions },
@@ -124,6 +126,7 @@ export function TeamPanel({ open, user }) {
   };
   const role = (m) =>
     open({
+      silent: true,
       title: `Change ${m.name}’s role`,
       note: 'Changing the role resets their access to that role’s usual areas. You can fine-tune it afterwards.',
       values: { role: m.role },
@@ -146,6 +149,7 @@ export function TeamPanel({ open, user }) {
     });
   const pause = (m) =>
     open({
+      silent: true,
       title: m.active ? `Pause ${m.name}’s access?` : `Turn ${m.name}’s access back on?`,
       note: m.active
         ? 'They’ll be signed out straight away and can’t use the garage account until you turn access back on.'
@@ -161,6 +165,7 @@ export function TeamPanel({ open, user }) {
     });
   const remove = (m) =>
     open({
+      silent: true,
       title: `Remove ${m.name} from the team?`,
       note: 'They’ll be signed out and lose access to your garage. Their past work stays in your records.',
       submit: 'Remove from team',
@@ -169,6 +174,7 @@ export function TeamPanel({ open, user }) {
     });
   const cancel = (i) =>
     open({
+      silent: true,
       title: `Cancel ${i.name}’s invite?`,
       note: 'The invite link stops working straight away.',
       submit: 'Cancel invite',
