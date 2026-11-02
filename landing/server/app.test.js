@@ -928,6 +928,9 @@ test('demo worlds give each visitor private sample data across roles and expire'
   await visitor('/api/demo', { persona: 'garage' });
   const owner = (await visitor('/api/auth/me')).data.user;
   assert.equal(owner.garageRole, 'owner');
+  const demoTeam = (await visitor('/api/team')).data;
+  assert.equal(demoTeam.members[0].role, 'mechanic');
+  assert.equal(demoTeam.invites[0].role, 'receptionist');
   assert.equal((await visitor('/api/invoices')).data.length, 2);
   assert((await visitor('/api/notifications')).data.items.some((n) => n.type === 'confirmed'));
 
@@ -1536,4 +1539,122 @@ test('invoices: line items, discounts, VAT, numbering, Finnish reference, e-invo
   assert.equal(paid.state, 'paid');
   assert.equal(paid.paid_method, 'bank_transfer');
   assert.equal((await shop(`/api/invoices/${created.data.id}/remind`, {})).status, 404);
+});
+
+test('team: invites, roles, per-area access, pause and remove', async (t) => {
+  const { client } = await fixture(t),
+    owner = client(),
+    staff = client(),
+    stranger = client();
+  await garage(owner);
+  const team = async () => (await owner('/api/team')).data;
+  assert.equal((await team()).owner.role, 'owner');
+
+  assert.equal(
+    (await owner('/api/team/invites', { name: 'Bad', email: 'nope', role: 'mechanic' })).status,
+    400,
+  );
+  assert.equal(
+    (await owner('/api/team/invites', { name: 'Owner', email: 'garage@example.test' })).status,
+    409,
+  );
+  const invited = await owner('/api/team/invites', {
+    name: 'Rita Reception',
+    email: 'rita@example.test',
+    role: 'receptionist',
+  });
+  assert.equal(invited.status, 201);
+  const { code } = invited.data;
+  assert.equal(
+    (await owner('/api/team/invites', { name: 'Rita', email: 'rita@example.test' })).status,
+    409,
+  );
+  const listed = (await team()).invites[0];
+  assert.deepEqual(listed.permissions, ['bookings', 'jobs', 'customers', 'invoicing']);
+  assert.equal((await owner(`/api/team/invites/${code}/resend`, {})).status, 200);
+
+  const look = await stranger(`/api/invites/${code}`);
+  assert.equal(look.data.garage_name, 'Test Garage');
+  assert.equal(look.data.role, 'receptionist');
+  assert.equal(
+    (await staff(`/api/invites/${code}/accept`, { name: 'Rita', password: 'short', terms: true }))
+      .status,
+    400,
+  );
+  const accepted = await staff(`/api/invites/${code}/accept`, {
+    name: 'Rita Reception',
+    password: 'testing-password-42',
+    terms: true,
+  });
+  assert.equal(accepted.status, 201);
+  assert.equal((await stranger(`/api/invites/${code}`)).status, 404);
+  const me = (await staff('/api/auth/me')).data.user;
+  assert.equal(me.garageRole, 'receptionist');
+  assert.equal(me.teamStatus, 'active');
+  assert.equal(me.onboarded, true);
+  assert.deepEqual(me.permissions, ['bookings', 'jobs', 'customers', 'invoicing']);
+
+  assert.equal((await staff('/api/invoices')).status, 200);
+  assert.equal((await staff('/api/customers')).status, 200);
+  assert.equal((await staff('/api/team')).status, 403);
+  assert.equal((await staff('/api/garage/contact', { phone: '+358401234567' }, 'PUT')).status, 403);
+  assert.equal(
+    (await staff('/api/plans', { name: 'x', benefits: 'y', price_cents: 100 })).status,
+    403,
+  );
+  assert.deepEqual((await staff('/api/service-history')).data, []);
+
+  const member = (await team()).members[0];
+  assert.equal(member.status, 'active');
+  assert.equal(
+    (await owner(`/api/team/members/${member.id}`, { permissions: ['customers', 'nope'] }, 'PUT'))
+      .status,
+    400,
+  );
+  await owner(`/api/team/members/${member.id}`, { permissions: ['customers'] }, 'PUT');
+  assert.equal((await staff('/api/invoices')).status, 403);
+  assert.deepEqual((await staff('/api/bookings')).data, []);
+  await owner(`/api/team/members/${member.id}`, { role: 'manager' }, 'PUT');
+  assert.equal((await staff('/api/auth/me')).data.user.garageRole, 'manager');
+  assert.equal((await staff('/api/invoices')).status, 200);
+  assert.equal((await staff('/api/team')).status, 403);
+  assert.equal(
+    (await owner(`/api/team/members/${(await team()).owner.id}`, { active: false }, 'PUT')).status,
+    403,
+  );
+
+  await owner(`/api/team/members/${member.id}`, { active: false }, 'PUT');
+  assert.equal((await staff('/api/auth/me')).status, 401);
+  assert.equal(
+    (
+      await staff('/api/auth/login', {
+        email: 'rita@example.test',
+        password: 'testing-password-42',
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await staff('/api/auth/me')).data.user.teamStatus, 'paused');
+  assert.equal((await staff('/api/bookings')).status, 403);
+  assert.equal((await team()).members[0].status, 'paused');
+  await owner(`/api/team/members/${member.id}`, { active: true }, 'PUT');
+  assert.equal((await staff('/api/bookings')).status, 200);
+
+  assert.equal((await owner(`/api/team/members/${member.id}`, {}, 'DELETE')).status, 200);
+  assert.equal((await team()).members.length, 0);
+  await staff('/api/auth/login', { email: 'rita@example.test', password: 'testing-password-42' });
+  assert.equal((await staff('/api/auth/me')).data.user.teamStatus, 'removed');
+  assert.equal((await staff('/api/customers')).status, 403);
+
+  const second = (await owner('/api/team/invites', { name: 'Kalle', email: 'kalle@example.test' }))
+    .data.code;
+  assert.equal((await owner(`/api/team/invites/${second}`, {}, 'DELETE')).status, 200);
+  assert.equal((await stranger(`/api/invites/${second}`)).status, 404);
+
+  const other = client();
+  await garage(other, 'other@example.test');
+  assert.equal(
+    (await other(`/api/team/members/${member.id}`, { active: true }, 'PUT')).status,
+    404,
+  );
 });

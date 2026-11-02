@@ -190,7 +190,7 @@ export function registerGarageOps(app, ctx) {
     await run(`UPDATE garage_details SET ${field}=? WHERE garage_id=?`, value, garageId);
   };
   app.put('/api/garage/hours', async (req, res) => {
-    const g = await ownerGarage(req.user);
+    const g = await ownerGarage(req.user, 'services');
     const { hours } = parse(z.object({ hours: hoursSchema }), req);
     await saveDetail(g.id, 'hours', JSON.stringify(hours));
     await run(
@@ -203,7 +203,7 @@ export function registerGarageOps(app, ctx) {
     res.json({ ok: true });
   });
   app.put('/api/garage/details', async (req, res) => {
-    const g = await ownerGarage(req.user);
+    const g = await ownerGarage(req.user, 'services');
     const keys = SPECIALIZATIONS.map(([key]) => key);
     const d = parse(
       z
@@ -245,13 +245,13 @@ export function registerGarageOps(app, ctx) {
     res.json({ ok: true });
   });
   app.put('/api/garage/online', async (req, res) => {
-    const g = await ownGarage(req.user);
+    const g = await ownGarage(req.user, 'bookings');
     const { online } = parse(z.object({ online: z.boolean() }), req);
     await saveDetail(g.id, 'online', Number(online));
     res.json({ ok: true });
   });
   app.post('/api/garage/blocked', async (req, res) => {
-    const g = await ownGarage(req.user);
+    const g = await ownGarage(req.user, 'bookings');
     const d = parse(
       z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), reason: optional(120) }),
       req,
@@ -266,7 +266,7 @@ export function registerGarageOps(app, ctx) {
     res.status(201).json({ ok: true });
   });
   app.delete('/api/garage/blocked/:date', async (req, res) => {
-    const g = await ownGarage(req.user);
+    const g = await ownGarage(req.user, 'bookings');
     await run('DELETE FROM garage_blocked WHERE garage_id=? AND date=?', g.id, req.params.date);
     res.json({ ok: true });
   });
@@ -290,7 +290,7 @@ export function registerGarageOps(app, ctx) {
     res.json(await menu(g.id));
   });
   app.post('/api/garage/services', async (req, res) => {
-    const g = await ownerGarage(req.user);
+    const g = await ownerGarage(req.user, 'services');
     const d = parse(serviceSchema, req);
     if (
       await one(
@@ -319,7 +319,7 @@ export function registerGarageOps(app, ctx) {
     res.status(201).json({ id: key });
   });
   app.put('/api/garage/services/:id', async (req, res) => {
-    const g = await ownerGarage(req.user);
+    const g = await ownerGarage(req.user, 'services');
     const d = parse(serviceSchema, req);
     const current = await one(
       'SELECT name FROM garage_services WHERE id=? AND garage_id=?',
@@ -343,7 +343,7 @@ export function registerGarageOps(app, ctx) {
     res.json({ ok: true });
   });
   app.delete('/api/garage/services/:id', async (req, res) => {
-    const g = await ownerGarage(req.user);
+    const g = await ownerGarage(req.user, 'services');
     const result = await run(
       'DELETE FROM garage_services WHERE id=? AND garage_id=?',
       req.params.id,

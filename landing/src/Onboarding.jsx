@@ -959,7 +959,7 @@ export function Onboarding() {
     api('/auth/me')
       .then(async ({ user }) => {
         if (user.admin && !user.demo) return location.replace('/admin');
-        if (user.garageRole === 'mechanic') return location.replace('/app');
+        if (user.garageRole && user.garageRole !== 'owner') return location.replace('/app');
         if (membership) {
           if (user.role !== 'garage') return location.replace('/app');
           const profile = await api('/garage/profile');

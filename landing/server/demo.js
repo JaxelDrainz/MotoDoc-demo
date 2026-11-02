@@ -118,10 +118,18 @@ export async function buildDemoWorld({ run, clock, world }) {
     at(-150 * day),
   );
   await run(
-    "INSERT INTO garage_staff(user_id,garage_id,role,created_at) VALUES(?,?,'mechanic',?)",
+    `INSERT INTO garage_staff(user_id,garage_id,role,permissions,created_at) VALUES(?,?,'mechanic','["bookings","jobs","records","customers"]',?)`,
     mechanic,
     garage,
     at(-90 * day),
+  );
+  await run(
+    `INSERT INTO team_invites(code,garage_id,name,email,phone,role,permissions,status,invited_at,invited_by) VALUES(?,?,'Sanna Lehto',?,'+358 40 555 0192','receptionist','["bookings","jobs","customers","invoicing"]','invited',?,?)`,
+    `DEMO${world.replace(/-/g, '').slice(0, 12).toUpperCase()}`,
+    garage,
+    `sanna.${tag}@demo.motodoc.invalid`,
+    at(-2 * day),
+    owner,
   );
   const plan = id();
   await run(
@@ -428,6 +436,7 @@ const purgeSteps = [
   `DELETE FROM garage_services WHERE garage_id IN ${garages}`,
   `DELETE FROM garage_blocked WHERE garage_id IN ${garages}`,
   `DELETE FROM garage_staff WHERE user_id IN ${users} OR garage_id IN ${garages}`,
+  `DELETE FROM team_invites WHERE garage_id IN ${garages}`,
   `DELETE FROM vehicle_condition WHERE vehicle_id IN (SELECT id FROM vehicles WHERE owner_id IN ${users})`,
   `DELETE FROM vehicles WHERE owner_id IN ${users}`,
   `DELETE FROM reminders WHERE user_id IN ${users}`,

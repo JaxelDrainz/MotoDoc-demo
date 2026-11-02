@@ -256,6 +256,114 @@ export const fiStrings = {
   'Awaiting garage confirmation': 'Odottaa korjaamon vahvistusta',
   'Awaiting payment': 'Odottaa maksua',
   'Back to home': 'Takaisin etusivulle',
+  Team: 'Tiimi',
+  'Your team': 'Tiimisi',
+  Roles: 'Roolit',
+  People: 'Henkilöt',
+  Active: 'Aktiivinen',
+  invited: 'kutsuttu',
+  paused: 'tauolla',
+  'Pending invites': 'Avoimet kutsut',
+  'Invite someone': 'Kutsu henkilö',
+  'Invite a team member': 'Kutsu tiimiläinen',
+  'They get a link to set their own password. MotoDoc doesn’t email it yet, so copy the link and send it to them.':
+    'He saavat linkin, jolla he asettavat oman salasanansa. MotoDoc ei vielä lähetä sitä sähköpostilla, joten kopioi linkki ja lähetä se heille.',
+  Role: 'Rooli',
+  'Create invite': 'Luo kutsu',
+  Owner: 'Omistaja',
+  Manager: 'Esihenkilö',
+  Receptionist: 'Asiakaspalvelija',
+  'Full access, including payouts and the team.': 'Täydet oikeudet, myös tilitykset ja tiimi.',
+  'Runs the workshop day to day; no payouts or team changes.':
+    'Pyörittää korjaamon arkea; ei tilityksiä eikä tiimimuutoksia.',
+  'Bookings, jobs, service records and customers.': 'Varaukset, työt, huoltohistoria ja asiakkaat.',
+  'Bookings, messages, customers and invoicing.': 'Varaukset, viestit, asiakkaat ja laskutus.',
+  'Manager — Runs the workshop day to day; no payouts or team changes.':
+    'Esihenkilö — Pyörittää korjaamon arkea; ei tilityksiä eikä tiimimuutoksia.',
+  'Mechanic — Bookings, jobs, service records and customers.':
+    'Mekaanikko — Varaukset, työt, huoltohistoria ja asiakkaat.',
+  'Receptionist — Bookings, messages, customers and invoicing.':
+    'Asiakaspalvelija — Varaukset, viestit, asiakkaat ja laskutus.',
+  'Jobs & messages': 'Työt ja viestit',
+  'Service records': 'Huoltohistoria',
+  'Services & profile': 'Palvelut ja profiili',
+  'Wallet & payouts': 'Lompakko ja tilitykset',
+  'Team & access': 'Tiimi ja oikeudet',
+  Areas: 'Osiot',
+  'Full access to everything': 'Täydet oikeudet kaikkeen',
+  'No areas yet': 'Ei vielä osioita',
+  '(you)': '(sinä)',
+  Access: 'Oikeudet',
+  'Edit role': 'Muokkaa roolia',
+  Pause: 'Keskeytä',
+  Activate: 'Aktivoi',
+  'Copy invite link': 'Kopioi kutsulinkki',
+  Resend: 'Lähetä uudelleen',
+  'Cancel invite': 'Peru kutsu',
+  'Access for {x}': 'Käyttöoikeudet: {x}',
+  'Choose what they can see and change. The owner always has full access.':
+    'Valitse, mitä hän voi nähdä ja muuttaa. Omistajalla on aina täydet oikeudet.',
+  'Payouts and team changes': 'Tilitykset ja tiimimuutokset',
+  'I understand that Wallet & payouts or Team & access lets them see earnings or change who has access.':
+    'Ymmärrän, että Lompakko ja tilitykset tai Tiimi ja oikeudet antaa nähdä tulot tai muuttaa käyttöoikeuksia.',
+  'Tick the box to confirm giving payouts or team access.':
+    'Vahvista tilitys- tai tiimioikeuksien antaminen rastittamalla ruutu.',
+  'Save access': 'Tallenna oikeudet',
+  'Access updated for {x}': 'Oikeudet päivitetty: {x}',
+  'Changing the role resets their access to that role’s usual areas. You can fine-tune it afterwards.':
+    'Roolin vaihtaminen palauttaa oikeudet roolin tavallisiin osioihin. Voit hienosäätää niitä jälkeenpäin.',
+  'Change role': 'Vaihda rooli',
+  'Pause access': 'Keskeytä käyttö',
+  'Turn access on': 'Palauta käyttö',
+  'They’ll be signed out straight away and can’t use the garage account until you turn access back on.':
+    'Hänet kirjataan heti ulos, eikä hän voi käyttää korjaamon tiliä ennen kuin palautat käytön.',
+  'They can sign in again with their own password.': 'Hän voi taas kirjautua omalla salasanallaan.',
+  'Remove from team': 'Poista tiimistä',
+  'They’ll be signed out and lose access to your garage. Their past work stays in your records.':
+    'Hänet kirjataan ulos ja hän menettää pääsyn korjaamoosi. Aiempi työ säilyy tiedoissasi.',
+  'The invite link stops working straight away.': 'Kutsulinkki lakkaa toimimasta heti.',
+  'Invite cancelled': 'Kutsu peruttu',
+  'Invite link copied. Share it with them by message or email.':
+    'Kutsulinkki kopioitu. Jaa se viestillä tai sähköpostilla.',
+  'Loading your team…': 'Ladataan tiimiä…',
+  'Who works with you, and what each person can see and do.':
+    'Keitä kanssasi työskentelee ja mitä kukin voi nähdä ja tehdä.',
+  'No access': 'Ei pääsyä',
+  'This part of the garage account isn’t shared with you.':
+    'Tätä korjaamon tilin osaa ei ole jaettu sinulle.',
+  'You don’t have access to this page': 'Sinulla ei ole pääsyä tälle sivulle',
+  'Ask the garage owner to give you access under Team & access.':
+    'Pyydä korjaamon omistajaa antamaan sinulle pääsy kohdassa Tiimi ja oikeudet.',
+  'Back to overview': 'Takaisin yleiskatsaukseen',
+  'Your access is paused': 'Käyttöoikeutesi on keskeytetty',
+  'You’re no longer on this team': 'Et ole enää tässä tiimissä',
+  'The garage owner has paused your access for now. Ask them to turn it back on.':
+    'Korjaamon omistaja on keskeyttänyt käyttöoikeutesi toistaiseksi. Pyydä häntä palauttamaan se.',
+  'The garage owner removed you from the team. Ask them for a new invite if this is a mistake.':
+    'Korjaamon omistaja poisti sinut tiimistä. Pyydä uutta kutsua, jos tämä on virhe.',
+  'TEAM INVITE': 'TIIMIKUTSU',
+  'Join {x}': 'Liity: {x}',
+  'You’ve been invited as {x}. Set a password to sign in.':
+    'Sinut on kutsuttu rooliin {x}. Aseta salasana kirjautuaksesi.',
+  'Join the team': 'Liity tiimiin',
+  'Checking your invite…': 'Tarkistetaan kutsua…',
+  'This invite link doesn’t work any more': 'Tämä kutsulinkki ei enää toimi',
+  'This invite link doesn’t work any more. It was already used or the invite was cancelled. Ask the garage owner to send a new one.':
+    'Tämä kutsulinkki ei enää toimi. Se on jo käytetty tai kutsu on peruttu. Pyydä korjaamon omistajaa lähettämään uusi.',
+  'Go to log in': 'Siirry kirjautumaan',
+  'Welcome to the team at {x}': 'Tervetuloa tiimiin: {x}',
+  'Invited team member': 'Kutsuttu tiimiläinen',
+  'You don’t have access to this. Ask the garage owner to give you access under Team & access.':
+    'Sinulla ei ole pääsyä tähän. Pyydä korjaamon omistajaa antamaan pääsy kohdassa Tiimi ja oikeudet.',
+  'Your access is paused. Ask the garage owner to turn it back on.':
+    'Käyttöoikeutesi on keskeytetty. Pyydä korjaamon omistajaa palauttamaan se.',
+  'You were removed from this garage team.': 'Sinut poistettiin tämän korjaamon tiimistä.',
+  'This person is already on your team or has an invite.':
+    'Tämä henkilö on jo tiimissäsi tai hänellä on kutsu.',
+  'An account with this email already exists. Ask the garage owner to invite a different email address.':
+    'Tällä sähköpostilla on jo tili. Pyydä korjaamon omistajaa kutsumaan toinen sähköpostiosoite.',
+  'You can’t change your own access. Ask the garage owner.':
+    'Et voi muuttaa omia oikeuksiasi. Kysy korjaamon omistajalta.',
   Jobs: 'Työt',
   'My services': 'Palveluni',
   'Add service': 'Lisää palvelu',

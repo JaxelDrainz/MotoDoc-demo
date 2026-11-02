@@ -77,6 +77,7 @@ export function DemoBar({ persona }) {
             }
           }}
         >
+          {persona === 'staff' && <option value="staff">Invited team member</option>}
           {demoRoles.map(([key, , , short]) => (
             <option key={key} value={key}>
               {short}

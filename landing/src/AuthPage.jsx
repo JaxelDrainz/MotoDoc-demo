@@ -17,6 +17,7 @@ import './auth.css';
 import { api } from './api.js';
 import { DemoAccounts } from './Demo.jsx';
 import { passwordProblem } from './finland.js';
+import { InviteCard } from './InviteCard.jsx';
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
@@ -48,6 +49,7 @@ export function AuthPage({ mode }) {
   const [resetToken] = useState(
     () => new URLSearchParams(location.hash.slice(1)).get('token') || '',
   );
+  const [inviteCode] = useState(() => new URLSearchParams(location.search).get('invite') || '');
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState(() => {
     const err = new URLSearchParams(location.search).get('error');
@@ -296,266 +298,270 @@ export function AuthPage({ mode }) {
           alt=""
           aria-hidden="true"
         />
-        <section className="auth-card" aria-labelledby="auth-title">
-          {!recovery && !reset && (
-            <nav className="auth-mode-tabs" aria-label="Account action">
-              <a
-                href={`/login${role === 'garage' ? '?as=garage' : ''}`}
-                aria-current={!signup ? 'page' : undefined}
-              >
-                Log in
-              </a>
-              <a
-                href={`/signup${role === 'garage' ? '?role=garage' : ''}`}
-                aria-current={signup ? 'page' : undefined}
-              >
-                Create account
-              </a>
-            </nav>
-          )}
-          <div className="auth-card-top">
-            <span className="auth-card-mark">
-              <LockKeyIcon size={19} aria-hidden="true" />
-            </span>
-            <span>MOTODOC ACCOUNT</span>
-          </div>
-          <h1 id="auth-title">{title}</h1>
-          <p className="auth-description">{description}</p>
-          <form id="auth-form" ref={form} onSubmit={submit} noValidate>
-            {(signup || (!recovery && !reset)) && (
-              <fieldset className="auth-roles">
-                <legend>{signup ? 'I’m joining as a' : 'I’m signing in as a'}</legend>
-                {[
-                  ['driver', CarIcon, 'Driver'],
-                  ['garage', StorefrontIcon, 'Garage owner'],
-                ].map(([value, Icon, label]) => (
-                  <label key={value} className={role === value ? 'selected' : ''}>
-                    <input
-                      type="radio"
-                      name="role"
-                      value={value}
-                      checked={role === value}
-                      onChange={() => {
-                        setRole(value);
-                        const next = signup
-                          ? `/signup${value === 'garage' ? '?role=garage' : ''}`
-                          : `/login${value === 'garage' ? '?as=garage' : ''}`;
-                        history.replaceState(null, '', next);
-                      }}
-                    />
-                    <Icon size={21} aria-hidden="true" />
-                    <span>{label}</span>
-                    {role === value && (
-                      <CheckCircleIcon size={17} weight="fill" aria-hidden="true" />
-                    )}
-                  </label>
-                ))}
-              </fieldset>
+        {inviteCode ? (
+          <InviteCard code={inviteCode} />
+        ) : (
+          <section className="auth-card" aria-labelledby="auth-title">
+            {!recovery && !reset && (
+              <nav className="auth-mode-tabs" aria-label="Account action">
+                <a
+                  href={`/login${role === 'garage' ? '?as=garage' : ''}`}
+                  aria-current={!signup ? 'page' : undefined}
+                >
+                  Log in
+                </a>
+                <a
+                  href={`/signup${role === 'garage' ? '?role=garage' : ''}`}
+                  aria-current={signup ? 'page' : undefined}
+                >
+                  Create account
+                </a>
+              </nav>
             )}
-            {(signup || (!recovery && !reset)) && (
-              <div className="auth-oauth-section">
-                {googleClientId && !local ? (
-                  <div className="auth-google-provider" ref={googleButton} />
-                ) : (
-                  <button
-                    type="button"
-                    className="auth-google-button"
-                    disabled={busy}
-                    onClick={handleGoogleAuth}
-                  >
-                    <GoogleIcon />
-                    <span>
-                      {signup
-                        ? role === 'garage'
-                          ? 'Sign up as Garage with Google'
-                          : 'Sign up as Driver with Google'
-                        : 'Continue with Google'}
-                    </span>
-                  </button>
-                )}
-                <div className="auth-divider" role="separator">
-                  <span>or continue with email</span>
+            <div className="auth-card-top">
+              <span className="auth-card-mark">
+                <LockKeyIcon size={19} aria-hidden="true" />
+              </span>
+              <span>MOTODOC ACCOUNT</span>
+            </div>
+            <h1 id="auth-title">{title}</h1>
+            <p className="auth-description">{description}</p>
+            <form id="auth-form" ref={form} onSubmit={submit} noValidate>
+              {(signup || (!recovery && !reset)) && (
+                <fieldset className="auth-roles">
+                  <legend>{signup ? 'I’m joining as a' : 'I’m signing in as a'}</legend>
+                  {[
+                    ['driver', CarIcon, 'Driver'],
+                    ['garage', StorefrontIcon, 'Garage owner'],
+                  ].map(([value, Icon, label]) => (
+                    <label key={value} className={role === value ? 'selected' : ''}>
+                      <input
+                        type="radio"
+                        name="role"
+                        value={value}
+                        checked={role === value}
+                        onChange={() => {
+                          setRole(value);
+                          const next = signup
+                            ? `/signup${value === 'garage' ? '?role=garage' : ''}`
+                            : `/login${value === 'garage' ? '?as=garage' : ''}`;
+                          history.replaceState(null, '', next);
+                        }}
+                      />
+                      <Icon size={21} aria-hidden="true" />
+                      <span>{label}</span>
+                      {role === value && (
+                        <CheckCircleIcon size={17} weight="fill" aria-hidden="true" />
+                      )}
+                    </label>
+                  ))}
+                </fieldset>
+              )}
+              {(signup || (!recovery && !reset)) && (
+                <div className="auth-oauth-section">
+                  {googleClientId && !local ? (
+                    <div className="auth-google-provider" ref={googleButton} />
+                  ) : (
+                    <button
+                      type="button"
+                      className="auth-google-button"
+                      disabled={busy}
+                      onClick={handleGoogleAuth}
+                    >
+                      <GoogleIcon />
+                      <span>
+                        {signup
+                          ? role === 'garage'
+                            ? 'Sign up as Garage with Google'
+                            : 'Sign up as Driver with Google'
+                          : 'Continue with Google'}
+                      </span>
+                    </button>
+                  )}
+                  <div className="auth-divider" role="separator">
+                    <span>or continue with email</span>
+                  </div>
                 </div>
-              </div>
-            )}
-            {signup && (
-              <div className="auth-field">
-                <label htmlFor="auth-name">Full name</label>
-                <input
-                  id="auth-name"
-                  name="name"
-                  type="text"
-                  autoComplete="name"
-                  placeholder="Your full name"
-                  value={values.name}
-                  onChange={change}
-                  required
-                  aria-invalid={!!errors.name}
-                  aria-describedby={errors.name ? 'name-error' : undefined}
-                />
-                {errors.name && (
-                  <p className="auth-error" id="name-error">
-                    {errors.name}
-                  </p>
-                )}
-              </div>
-            )}
-            {!reset && (
-              <div className="auth-field">
-                <label htmlFor="auth-email">Email address</label>
-                <input
-                  id="auth-email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  inputMode="email"
-                  spellCheck="false"
-                  autoCapitalize="none"
-                  placeholder="you@example.com"
-                  value={values.email}
-                  onChange={change}
-                  required
-                  aria-invalid={!!errors.email}
-                  aria-describedby={errors.email ? 'email-error' : undefined}
-                />
-                {errors.email && (
-                  <p className="auth-error" id="email-error">
-                    {errors.email}
-                  </p>
-                )}
-              </div>
-            )}
-            {!recovery && (
-              <div className="auth-field">
-                <div className="auth-label-row">
-                  <label htmlFor="auth-password">Password</label>
-                  {!signup && !reset && <a href="/forgot-password">Forgot password?</a>}
-                </div>
-                <div className="auth-password-wrap">
+              )}
+              {signup && (
+                <div className="auth-field">
+                  <label htmlFor="auth-name">Full name</label>
                   <input
-                    id="auth-password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete={signup || reset ? 'new-password' : 'current-password'}
-                    placeholder={signup || reset ? 'Create a password' : 'Enter your password'}
-                    value={values.password}
+                    id="auth-name"
+                    name="name"
+                    type="text"
+                    autoComplete="name"
+                    placeholder="Your full name"
+                    value={values.name}
                     onChange={change}
                     required
-                    minLength={signup || reset ? 8 : undefined}
-                    aria-invalid={!!errors.password}
-                    aria-describedby={
-                      errors.password
-                        ? 'password-error'
-                        : signup || reset
-                          ? 'password-hint'
-                          : undefined
-                    }
+                    aria-invalid={!!errors.name}
+                    aria-describedby={errors.name ? 'name-error' : undefined}
                   />
-                  <button
-                    type="button"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    aria-pressed={showPassword}
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeSlashIcon size={20} /> : <EyeIcon size={20} />}
-                  </button>
-                </div>
-                {errors.password ? (
-                  <p className="auth-error" id="password-error">
-                    {errors.password}
-                  </p>
-                ) : (
-                  (signup || reset) && (
-                    <p className="auth-hint" id="password-hint">
-                      At least 8 characters, with letters and numbers.
+                  {errors.name && (
+                    <p className="auth-error" id="name-error">
+                      {errors.name}
                     </p>
-                  )
-                )}
-              </div>
-            )}
-            {signup && (
-              <div className="auth-terms">
-                <label>
+                  )}
+                </div>
+              )}
+              {!reset && (
+                <div className="auth-field">
+                  <label htmlFor="auth-email">Email address</label>
                   <input
-                    type="checkbox"
-                    name="terms"
-                    checked={terms}
-                    onChange={(event) => {
-                      setTerms(event.target.checked);
-                      setErrors((current) => ({ ...current, terms: undefined }));
-                    }}
-                    aria-invalid={!!errors.terms}
-                    aria-describedby={errors.terms ? 'terms-error' : undefined}
+                    id="auth-email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    inputMode="email"
+                    spellCheck="false"
+                    autoCapitalize="none"
+                    placeholder="you@example.com"
+                    value={values.email}
+                    onChange={change}
+                    required
+                    aria-invalid={!!errors.email}
+                    aria-describedby={errors.email ? 'email-error' : undefined}
                   />
-                  <span>
-                    I accept the{' '}
-                    <a href="/terms" target="_blank" rel="noreferrer">
-                      terms of service
-                    </a>{' '}
-                    and{' '}
-                    <a href="/privacy" target="_blank" rel="noreferrer">
-                      privacy policy
+                  {errors.email && (
+                    <p className="auth-error" id="email-error">
+                      {errors.email}
+                    </p>
+                  )}
+                </div>
+              )}
+              {!recovery && (
+                <div className="auth-field">
+                  <div className="auth-label-row">
+                    <label htmlFor="auth-password">Password</label>
+                    {!signup && !reset && <a href="/forgot-password">Forgot password?</a>}
+                  </div>
+                  <div className="auth-password-wrap">
+                    <input
+                      id="auth-password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete={signup || reset ? 'new-password' : 'current-password'}
+                      placeholder={signup || reset ? 'Create a password' : 'Enter your password'}
+                      value={values.password}
+                      onChange={change}
+                      required
+                      minLength={signup || reset ? 8 : undefined}
+                      aria-invalid={!!errors.password}
+                      aria-describedby={
+                        errors.password
+                          ? 'password-error'
+                          : signup || reset
+                            ? 'password-hint'
+                            : undefined
+                      }
+                    />
+                    <button
+                      type="button"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeSlashIcon size={20} /> : <EyeIcon size={20} />}
+                    </button>
+                  </div>
+                  {errors.password ? (
+                    <p className="auth-error" id="password-error">
+                      {errors.password}
+                    </p>
+                  ) : (
+                    (signup || reset) && (
+                      <p className="auth-hint" id="password-hint">
+                        At least 8 characters, with letters and numbers.
+                      </p>
+                    )
+                  )}
+                </div>
+              )}
+              {signup && (
+                <div className="auth-terms">
+                  <label>
+                    <input
+                      type="checkbox"
+                      name="terms"
+                      checked={terms}
+                      onChange={(event) => {
+                        setTerms(event.target.checked);
+                        setErrors((current) => ({ ...current, terms: undefined }));
+                      }}
+                      aria-invalid={!!errors.terms}
+                      aria-describedby={errors.terms ? 'terms-error' : undefined}
+                    />
+                    <span>
+                      I accept the{' '}
+                      <a href="/terms" target="_blank" rel="noreferrer">
+                        terms of service
+                      </a>{' '}
+                      and{' '}
+                      <a href="/privacy" target="_blank" rel="noreferrer">
+                        privacy policy
+                      </a>
+                      .
+                    </span>
+                  </label>
+                  {errors.terms && (
+                    <p className="auth-error" id="terms-error">
+                      {errors.terms}
+                    </p>
+                  )}
+                </div>
+              )}
+              {serverError && (
+                <p className="auth-error" role="alert">
+                  {serverError}
+                </p>
+              )}
+              <button className="button auth-submit" type="submit" disabled={busy}>
+                {busy
+                  ? 'Please wait...'
+                  : signup
+                    ? 'Create account'
+                    : recovery
+                      ? 'Send reset link'
+                      : reset
+                        ? 'Update password'
+                        : 'Log in'}
+                <ArrowRightIcon size={19} aria-hidden="true" />
+              </button>
+              {submitted && (
+                <div className="auth-feedback" role="status" tabIndex={-1} ref={feedback}>
+                  <p>{message}</p>
+                  {reset && (
+                    <a href="/login">
+                      Back to log in <ArrowRightIcon size={16} />
                     </a>
-                    .
-                  </span>
-                </label>
-                {errors.terms && (
-                  <p className="auth-error" id="terms-error">
-                    {errors.terms}
-                  </p>
-                )}
-              </div>
-            )}
-            {serverError && (
-              <p className="auth-error" role="alert">
-                {serverError}
-              </p>
-            )}
-            <button className="button auth-submit" type="submit" disabled={busy}>
-              {busy
-                ? 'Please wait...'
-                : signup
-                  ? 'Create account'
-                  : recovery
-                    ? 'Send reset link'
-                    : reset
-                      ? 'Update password'
-                      : 'Log in'}
-              <ArrowRightIcon size={19} aria-hidden="true" />
-            </button>
-            {submitted && (
-              <div className="auth-feedback" role="status" tabIndex={-1} ref={feedback}>
-                <p>{message}</p>
-                {reset && (
-                  <a href="/login">
-                    Back to log in <ArrowRightIcon size={16} />
-                  </a>
-                )}
-              </div>
-            )}
-          </form>
-          <p className="auth-switch">
-            {signup ? (
-              <>
-                Already have an account? <a href="/login">Log in</a>
-              </>
-            ) : recovery || reset ? (
-              <a href="/login">
-                <ArrowLeftIcon size={15} aria-hidden="true" /> Back to log in
-              </a>
-            ) : (
-              <>
-                New to MotoDoc? <a href="/signup">Create an account</a>
-              </>
-            )}
-          </p>
-          {!recovery && !reset && <DemoAccounts disabled={busy} />}
-          <div className="auth-preview-note">
-            {local
-              ? 'Local MotoDoc - Your account and data stay on this computer.'
-              : 'Your car care, connected.'}
-          </div>
-        </section>
+                  )}
+                </div>
+              )}
+            </form>
+            <p className="auth-switch">
+              {signup ? (
+                <>
+                  Already have an account? <a href="/login">Log in</a>
+                </>
+              ) : recovery || reset ? (
+                <a href="/login">
+                  <ArrowLeftIcon size={15} aria-hidden="true" /> Back to log in
+                </a>
+              ) : (
+                <>
+                  New to MotoDoc? <a href="/signup">Create an account</a>
+                </>
+              )}
+            </p>
+            {!recovery && !reset && <DemoAccounts disabled={busy} />}
+            <div className="auth-preview-note">
+              {local
+                ? 'Local MotoDoc - Your account and data stay on this computer.'
+                : 'Your car care, connected.'}
+            </div>
+          </section>
+        )}
       </main>
       <footer className="auth-footer">
         <span>© {new Date().getFullYear()} MotoDoc</span>

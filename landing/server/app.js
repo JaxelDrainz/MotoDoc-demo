@@ -28,6 +28,8 @@ import { buildDemoWorld, demoLifetime, demoPersonas, purgeDemoWorld } from './de
 import { REVIEW_TAGS, decorateBooking, jobColumns, jobJoins, registerJobs } from './jobs.js';
 import { registerGarageOps } from './garage-ops.js';
 import { registerInvoices } from './invoices.js';
+import { registerInviteRoutes, registerTeam } from './team.js';
+import { AREA_KEYS } from '../src/team.js';
 import {
   FI_PLATE,
   SPECIALIZATIONS,
@@ -59,6 +61,10 @@ const dateSchema = z
     'Use a valid date.',
   );
 const money = z.number().int().min(0).max(100000000);
+const staffAreas = (u) =>
+  Number(u.staff_active) === 1 ? JSON.parse(u.staff_permissions || '[]') : [];
+const NO_ACCESS =
+  'You don’t have access to this. Ask the garage owner to give you access under Team & access.';
 const userView = (u) => ({
   id: u.id,
   name: u.name,
@@ -67,6 +73,14 @@ const userView = (u) => ({
   googleLinked: !!u.google_id,
   photo: u.photo || null,
   garageRole: u.role === 'garage' ? u.staff_role || 'owner' : null,
+  permissions: u.role !== 'garage' ? [] : u.staff_role ? staffAreas(u) : AREA_KEYS,
+  teamStatus: !u.staff_role
+    ? null
+    : Number(u.staff_active) === 1
+      ? 'active'
+      : Number(u.staff_active) === 0
+        ? 'paused'
+        : 'removed',
   demo: u.demo_persona || null,
   phone: u.phone || '',
   address: u.address || '',
@@ -84,7 +98,7 @@ const photoOf = (column) =>
   `(SELECT '/api/photos/'||user_id||'?v='||updated_at FROM photos WHERE user_id=${column})`;
 
 const worldOf = (column) => `COALESCE((SELECT world FROM demo_users WHERE user_id=${column}),'')`;
-const userSelect = `SELECT u.*,${photoOf('u.id')} photo,COALESCE((SELECT id FROM garages WHERE owner_id=u.id),(SELECT garage_id FROM garage_staff WHERE user_id=u.id)) garage_id,(SELECT role FROM garage_staff WHERE user_id=u.id) staff_role,(SELECT world FROM demo_users WHERE user_id=u.id) demo_world,(SELECT persona FROM demo_users WHERE user_id=u.id) demo_persona,us.phone,us.address,us.email_updates,us.email_chat,us.request_sound,us.terms_accepted_at,us.onboarded_at FROM users u LEFT JOIN user_settings us ON us.user_id=u.id`;
+const userSelect = `SELECT u.*,${photoOf('u.id')} photo,COALESCE((SELECT id FROM garages WHERE owner_id=u.id),(SELECT garage_id FROM garage_staff WHERE user_id=u.id)) garage_id,(SELECT role FROM garage_staff WHERE user_id=u.id) staff_role,(SELECT permissions FROM garage_staff WHERE user_id=u.id) staff_permissions,(SELECT active FROM garage_staff WHERE user_id=u.id) staff_active,(SELECT world FROM demo_users WHERE user_id=u.id) demo_world,(SELECT persona FROM demo_users WHERE user_id=u.id) demo_persona,us.phone,us.address,us.email_updates,us.email_chat,us.request_sound,us.terms_accepted_at,us.onboarded_at FROM users u LEFT JOIN user_settings us ON us.user_id=u.id`;
 const ratingColumns = `(SELECT ROUND(AVG(rating),1) FROM reviews WHERE garage_id=g.id) rating,(SELECT COUNT(*) FROM reviews WHERE garage_id=g.id) review_count`;
 const garageView = (g) => ({ ...g, services: JSON.parse(g.services), published: !!g.published });
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -165,15 +179,21 @@ export async function createApp({
   const all = (sql, ...params) => db.prepare(sql).all(...params);
   const run = (sql, ...params) => db.prepare(sql).run(...params);
   const parse = (schema, req) => schema.parse(req.body);
-  const ownGarage = async (user) => {
+  const ownGarage = async (user, area) => {
     if (user.role !== 'garage' || !user.garage_id) throw fail(403, 'A garage account is required.');
+    if (
+      user.staff_role &&
+      (Number(user.staff_active) !== 1 || (area && !staffAreas(user).includes(area)))
+    )
+      throw fail(403, NO_ACCESS);
     return await one('SELECT * FROM garages WHERE id=?', user.garage_id);
   };
-  const ownerGarage = async (user) => {
-    const garage = await ownGarage(user);
-    if (user.staff_role) throw fail(403, 'Only the garage owner can do this.');
+  const ownerGarage = async (user, area) => {
+    const garage = await ownGarage(user, area);
+    if (!area && user.staff_role) throw fail(403, 'Only the garage owner can do this.');
     return garage;
   };
+  const can = (user, area) => !user.staff_role || staffAreas(user).includes(area);
   const world = (user) => user.demo_world || '';
   const driverOnly = (user) => {
     if (user.role !== 'driver') throw fail(403, 'A driver account is required.');
@@ -486,6 +506,24 @@ export async function createApp({
       redirect: persona === 'admin' ? '/admin' : '/app',
     });
   });
+  const teamCtx = {
+    one,
+    all,
+    run,
+    db,
+    transaction,
+    fail,
+    parse,
+    id,
+    clock,
+    passwordHash,
+    passwordSchema,
+    session,
+    rateLimit,
+    text,
+    garageFor: ownerGarage,
+  };
+  registerInviteRoutes(app, teamCtx);
   app.use('/api', async (req, res, next) => {
     const token = sessionToken(req);
     req.user =
@@ -496,6 +534,17 @@ export async function createApp({
         clock(),
       ));
     if (!req.user) return res.status(401).json({ error: 'Please log in to continue.' });
+    if (
+      req.user.staff_role &&
+      Number(req.user.staff_active) !== 1 &&
+      !['/auth/me', '/auth/logout'].includes(req.path)
+    )
+      return res.status(403).json({
+        error:
+          Number(req.user.staff_active) === 0
+            ? 'Your access is paused. Ask the garage owner to turn it back on.'
+            : 'You were removed from this garage team.',
+      });
     next();
   });
   app.get('/api/auth/me', async (req, res) =>
@@ -688,7 +737,7 @@ export async function createApp({
     res.json({ next: garage ? '/onboarding/membership' : '/app' });
   });
   app.post('/api/garage/membership', async (req, res) => {
-    const g = await ownerGarage(req.user);
+    const g = await ownerGarage(req.user, 'memberships');
     const d = parse(
       z
         .object({
@@ -1124,7 +1173,7 @@ export async function createApp({
     });
   });
   app.put('/api/garage/contact', async (req, res) => {
-    const g = await ownerGarage(req.user);
+    const g = await ownerGarage(req.user, 'services');
     const d = parse(
       z.object({
         phone: z
@@ -1147,7 +1196,7 @@ export async function createApp({
     res.json({ ok: true });
   });
   app.put('/api/garage/profile', async (req, res) => {
-    const garage = await ownerGarage(req.user);
+    const garage = await ownerGarage(req.user, 'services');
     const d = parse(
       z.object({
         name: text(100),
@@ -1201,7 +1250,11 @@ export async function createApp({
       ? await all(`${bookingSelect} WHERE b.driver_id=? ORDER BY b.starts_at DESC`, user.id)
       : await all(`${bookingSelect} WHERE g.id=? ORDER BY b.starts_at DESC`, user.garage_id)
     ).map((b) => decorateBooking(b, clock(), b.member_count > 0));
-  app.get('/api/bookings', async (req, res) => res.json(await scopedBookings(req.user)));
+  app.get('/api/bookings', async (req, res) =>
+    res.json(
+      can(req.user, 'bookings') || can(req.user, 'jobs') ? await scopedBookings(req.user) : [],
+    ),
+  );
   const bookingEvent = (bookingId, actorId, kind, detail = '') =>
     run(
       'INSERT INTO booking_events(id,booking_id,actor_id,kind,detail,at) VALUES(?,?,?,?,?,?)',
@@ -1314,6 +1367,7 @@ export async function createApp({
   });
   app.get('/api/messages', async (req, res) => {
     const driver = req.user.role === 'driver';
+    if (!driver && !can(req.user, 'jobs')) return res.json([]);
     res.json(
       await all(
         `SELECT m.*,u.name sender_name,${photoOf('m.sender_id')} sender_photo FROM messages m JOIN bookings b ON b.id=m.booking_id JOIN users u ON u.id=m.sender_id WHERE ${driver ? 'b.driver_id' : 'b.garage_id'}=? ORDER BY m.created_at,m.id`,
@@ -1323,6 +1377,7 @@ export async function createApp({
   });
   app.post('/api/bookings/:id/messages', async (req, res) => {
     const d = parse(z.object({ body: text(2000) }), req);
+    if (req.user.role === 'garage') await ownGarage(req.user, 'jobs');
     const chat = (await scopedBookings(req.user)).find((b) => b.id === req.params.id);
     if (!chat) throw fail(404, 'Booking not found.');
     if (!chat.chat_open)
@@ -1371,6 +1426,7 @@ export async function createApp({
     text,
     optional,
   });
+  registerTeam(app, teamCtx);
   registerInvoices(app, {
     one,
     all,
@@ -1510,6 +1566,8 @@ export async function createApp({
       }),
       req,
     );
+    if (req.user.role === 'garage')
+      await ownGarage(req.user, d.status === 'completed' ? 'jobs' : 'bookings');
     const b = (await scopedBookings(req.user)).find((b) => b.id === req.params.id);
     if (!b) throw fail(404, 'Booking not found.');
     if (req.user.role === 'driver' && d.status !== 'cancelled')
@@ -1532,6 +1590,7 @@ export async function createApp({
   });
   app.get('/api/service-history', async (req, res) => {
     const driver = req.user.role === 'driver';
+    if (!driver && !can(req.user, 'records')) return res.json([]);
     res.json(
       await all(
         `SELECT r.*,g.name garage_name,v.registration,b.service,(SELECT rating FROM reviews WHERE booking_id=r.booking_id) rating FROM service_records r JOIN garages g ON r.garage_id=g.id JOIN vehicles v ON v.id=r.vehicle_id JOIN bookings b ON b.id=r.booking_id WHERE ${driver ? 'r.driver_id' : 'r.garage_id'}=? ORDER BY r.performed_at DESC`,
@@ -1542,7 +1601,9 @@ export async function createApp({
   app.get('/api/plans', async (req, res) =>
     res.json(
       req.user.role === 'garage'
-        ? await all('SELECT * FROM plans WHERE garage_id=?', (await ownGarage(req.user)).id)
+        ? can(req.user, 'memberships')
+          ? await all('SELECT * FROM plans WHERE garage_id=?', (await ownGarage(req.user)).id)
+          : []
         : await all(
             `SELECT p.*,g.name garage_name FROM plans p JOIN garages g ON g.id=p.garage_id WHERE p.active=1 AND g.published=1 AND ${worldOf('g.owner_id')}=?`,
             world(req.user),
@@ -1550,7 +1611,7 @@ export async function createApp({
     ),
   );
   app.post('/api/plans', async (req, res) => {
-    const g = await ownerGarage(req.user),
+    const g = await ownerGarage(req.user, 'memberships'),
       d = parse(z.object({ name: text(100), benefits: text(1500), price_cents: money }), req),
       key = id();
     await run(
@@ -1565,6 +1626,7 @@ export async function createApp({
   });
   app.get('/api/memberships', async (req, res) => {
     const driver = req.user.role === 'driver';
+    if (!driver && !can(req.user, 'memberships')) return res.json([]);
     res.json(
       await all(
         `SELECT m.*,p.name plan_name,p.benefits,p.price_cents,g.name garage_name,u.name driver_name FROM memberships m JOIN plans p ON p.id=m.plan_id JOIN garages g ON g.id=p.garage_id JOIN users u ON u.id=m.driver_id WHERE ${driver ? 'm.driver_id' : 'p.garage_id'}=? ORDER BY m.created_at DESC`,
@@ -1609,8 +1671,7 @@ export async function createApp({
     const garageSide = !!m && req.user.role === 'garage' && req.user.garage_id === m.garage_id;
     if (!m || (m.driver_id !== req.user.id && !garageSide))
       throw fail(404, 'Membership not found.');
-    if (garageSide && req.user.staff_role)
-      throw fail(403, 'Only the garage owner can change memberships.');
+    if (garageSide && !can(req.user, 'memberships')) throw fail(403, NO_ACCESS);
     if (status === 'active' && (!garageSide || m.status !== 'requested'))
       throw fail(403, 'Only the garage can approve a pending membership.');
     await run('UPDATE memberships SET status=? WHERE id=?', status, m.id);
@@ -1649,7 +1710,7 @@ export async function createApp({
     res.json({ ok: true });
   });
   app.get('/api/customers', async (req, res) => {
-    const g = await ownGarage(req.user);
+    const g = await ownGarage(req.user, 'customers');
     const customers = await all(
       `SELECT u.id,u.name,u.email,${photoOf('u.id')} photo,COUNT(b.id) booking_count,COALESCE(n.notes,'') notes,COALESCE(n.tags,'') tags FROM users u JOIN bookings b ON b.driver_id=u.id LEFT JOIN customer_notes n ON n.driver_id=u.id AND n.garage_id=b.garage_id WHERE b.garage_id=? GROUP BY u.id ORDER BY u.name`,
       g.id,
@@ -1662,7 +1723,7 @@ export async function createApp({
     res.json(customers);
   });
   app.put('/api/customers/:id', async (req, res) => {
-    const g = await ownGarage(req.user),
+    const g = await ownGarage(req.user, 'customers'),
       d = parse(z.object({ notes: optional(3000), tags: optional(300) }), req);
     if (
       !(await one('SELECT id FROM bookings WHERE garage_id=? AND driver_id=?', g.id, req.params.id))
@@ -1682,7 +1743,7 @@ export async function createApp({
       isGarage = req.user.role === 'garage';
     const accountId = isGarage ? (await ownGarage(req.user)).id : req.user.id,
       col = isGarage ? 'garage_id' : 'driver_id';
-    const invoiceTotals = req.user.staff_role
+    const invoiceTotals = !can(req.user, 'invoicing')
       ? null
       : await one(
           `SELECT COALESCE(SUM(CASE WHEN status='paid' THEN amount_cents ELSE 0 END),0) paid,COALESCE(SUM(CASE WHEN status='unpaid' THEN amount_cents ELSE 0 END),0) unpaid FROM invoices WHERE ${col}=?`,

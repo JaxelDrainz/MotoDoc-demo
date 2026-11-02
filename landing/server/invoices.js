@@ -55,7 +55,7 @@ export function registerInvoices(app, ctx) {
 
   app.get('/api/invoices', async (req, res) => {
     const driver = req.user.role === 'driver';
-    if (!driver) await ownerGarage(req.user);
+    if (!driver) await ownerGarage(req.user, 'invoicing');
     res.json(
       await view(
         await all(
@@ -103,7 +103,7 @@ export function registerInvoices(app, ctx) {
   });
 
   app.post('/api/invoices', async (req, res) => {
-    const g = await ownerGarage(req.user);
+    const g = await ownerGarage(req.user, 'invoicing');
     const d = parse(invoiceSchema, req);
     const b = await one(
       "SELECT * FROM bookings WHERE id=? AND garage_id=? AND status='completed'",
@@ -192,7 +192,7 @@ export function registerInvoices(app, ctx) {
   });
 
   app.patch('/api/invoices/:id', async (req, res) => {
-    const g = await ownerGarage(req.user);
+    const g = await ownerGarage(req.user, 'invoicing');
     const d = parse(
       z.object({ status: z.enum(['paid', 'void']), payment_reference: optional(200) }),
       req,
@@ -221,7 +221,7 @@ export function registerInvoices(app, ctx) {
   });
 
   app.post('/api/invoices/:id/remind', async (req, res) => {
-    const g = await ownerGarage(req.user);
+    const g = await ownerGarage(req.user, 'invoicing');
     const { note } = parse(z.object({ note: optional(300) }), req);
     const invoice = await one(
       "SELECT * FROM invoices WHERE id=? AND garage_id=? AND status='unpaid'",
