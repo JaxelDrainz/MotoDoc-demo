@@ -44,6 +44,7 @@ interface ApiBooking {
   service: string;
   starts_at: string;
   status: BookingStatus;
+  state?: string;
   garage_name: string;
   garage_address: string;
   garage_city: string;
@@ -165,6 +166,7 @@ export default function ConnectedDashboard() {
         startsAt: b.starts_at,
         durationMinutes: 60,
         status: b.status,
+        state: b.state,
         workshop: {
           name: b.garage_name,
           address: [b.garage_address, b.garage_city].filter(Boolean).join(', '),

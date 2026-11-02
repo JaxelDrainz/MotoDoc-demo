@@ -104,6 +104,18 @@ export const schemaSql = `
       stage TEXT NOT NULL DEFAULT 'booked',mechanic TEXT NOT NULL DEFAULT '',pickup_at TEXT,pickup_note TEXT NOT NULL DEFAULT '',
       completed_at TEXT,no_show INTEGER NOT NULL DEFAULT 0,declined INTEGER NOT NULL DEFAULT 0,cancel_reason TEXT NOT NULL DEFAULT '',
       cancelled_by TEXT NOT NULL DEFAULT '',cost_cents INTEGER,parts TEXT NOT NULL DEFAULT '');
+    CREATE TABLE IF NOT EXISTS garage_services(
+      id TEXT PRIMARY KEY,garage_id TEXT NOT NULL REFERENCES garages(id) ON DELETE CASCADE,name TEXT NOT NULL,
+      price_min_cents INTEGER,price_max_cents INTEGER,minutes INTEGER,description TEXT NOT NULL DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,sort INTEGER NOT NULL DEFAULT 0);
+    CREATE INDEX IF NOT EXISTS garage_menu ON garage_services(garage_id,sort);
+    CREATE TABLE IF NOT EXISTS garage_blocked(
+      garage_id TEXT NOT NULL REFERENCES garages(id) ON DELETE CASCADE,date TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',PRIMARY KEY(garage_id,date));
+    CREATE TABLE IF NOT EXISTS invoice_lines(
+      invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,position INTEGER NOT NULL,
+      description TEXT NOT NULL,quantity REAL NOT NULL DEFAULT 1,unit_cents INTEGER NOT NULL,
+      discount_pct REAL NOT NULL DEFAULT 0,PRIMARY KEY(invoice_id,position));
     INSERT OR IGNORE INTO schema_versions(version) VALUES(1);
   `;
 
@@ -124,6 +136,35 @@ export const migrations = [
       'ALTER TABLE reviews ADD COLUMN reply_at TEXT',
       'ALTER TABLE reviews ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0',
       "INSERT OR IGNORE INTO booking_jobs(booking_id,stage,completed_at) SELECT id,CASE WHEN status='completed' THEN 'finished' ELSE 'booked' END,CASE WHEN status='completed' THEN starts_at END FROM bookings",
+    ],
+  ],
+  [
+    4,
+    [
+      'ALTER TABLE garage_details ADD COLUMN online INTEGER NOT NULL DEFAULT 1',
+      'INSERT INTO garage_services(id,garage_id,name,sort) SELECT lower(hex(randomblob(16))),g.id,j.value,j.key FROM garages g,json_each(g.services) j',
+    ],
+  ],
+  [
+    5,
+    [
+      "ALTER TABLE invoices ADD COLUMN number TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE invoices ADD COLUMN reference TEXT NOT NULL DEFAULT ''",
+      'ALTER TABLE invoices ADD COLUMN vat_rate REAL NOT NULL DEFAULT 25.5',
+      "ALTER TABLE invoices ADD COLUMN discount_type TEXT NOT NULL DEFAULT 'none'",
+      'ALTER TABLE invoices ADD COLUMN discount_value INTEGER NOT NULL DEFAULT 0',
+      "ALTER TABLE invoices ADD COLUMN discount_reason TEXT NOT NULL DEFAULT ''",
+      'ALTER TABLE invoices ADD COLUMN mileage INTEGER',
+      "ALTER TABLE invoices ADD COLUMN business_id TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE invoices ADD COLUMN einvoice_address TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE invoices ADD COLUMN operator TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE invoices ADD COLUMN delivery TEXT NOT NULL DEFAULT 'motodoc'",
+      "ALTER TABLE invoices ADD COLUMN notes TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE invoices ADD COLUMN reminders TEXT NOT NULL DEFAULT '[]'",
+      'ALTER TABLE invoices ADD COLUMN paid_at TEXT',
+      'ALTER TABLE invoices ADD COLUMN paid_method TEXT',
+      'INSERT OR IGNORE INTO invoice_lines(invoice_id,position,description,quantity,unit_cents,discount_pct) SELECT id,0,description,1,amount_cents,0 FROM invoices',
+      "UPDATE invoices SET number='INV-'||substr(created_at,1,4)||'-'||upper(substr(id,1,4)) WHERE number=''",
     ],
   ],
 ];

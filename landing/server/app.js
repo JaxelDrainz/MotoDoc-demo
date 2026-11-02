@@ -26,6 +26,8 @@ import { mergeSite, siteDefaults, siteSchema, siteStyle } from './site.js';
 import { vehicleArt } from './vehicle-art.js';
 import { buildDemoWorld, demoLifetime, demoPersonas, purgeDemoWorld } from './demo.js';
 import { REVIEW_TAGS, decorateBooking, jobColumns, jobJoins, registerJobs } from './jobs.js';
+import { registerGarageOps } from './garage-ops.js';
+import { registerInvoices } from './invoices.js';
 import {
   FI_PLATE,
   SPECIALIZATIONS,
@@ -625,6 +627,21 @@ export async function createApp({
           JSON.stringify([...new Set(g.services)]),
           req.user.garage_id,
         );
+        for (const [index, name] of [...new Set(g.services)].entries())
+          if (
+            !(await one(
+              'SELECT 1 FROM garage_services WHERE garage_id=? AND lower(name)=lower(?)',
+              req.user.garage_id,
+              name,
+            ))
+          )
+            await run(
+              'INSERT INTO garage_services(id,garage_id,name,sort) VALUES(?,?,?,?)',
+              id(),
+              req.user.garage_id,
+              name,
+              index,
+            );
         await run(
           `INSERT INTO garage_details(garage_id,business_id,hourly_rate_cents,specializations,main_focus,hours) VALUES(?,?,?,?,?,?)
            ON CONFLICT(garage_id) DO UPDATE SET business_id=excluded.business_id,hourly_rate_cents=excluded.hourly_rate_cents,specializations=excluded.specializations,main_focus=excluded.main_focus,hours=excluded.hours`,
@@ -1081,21 +1098,22 @@ export async function createApp({
     await run('DELETE FROM vehicles WHERE id=?', req.params.id);
     res.json({ ok: true });
   });
-  app.get('/api/garages', async (req, res) =>
-    res.json(
-      (
-        await all(
-          `SELECT g.id,g.name,g.city,g.address,g.description,g.services,g.published,${ratingColumns} FROM garages g WHERE g.published=1 AND ${worldOf('g.owner_id')}=? ORDER BY g.name`,
-          world(req.user),
-        )
-      ).map(garageView),
-    ),
-  );
+  app.get('/api/garages', async (req, res) => {
+    const list = (
+      await all(
+        `SELECT g.id,g.name,g.city,g.address,g.description,g.services,g.published,${ratingColumns} FROM garages g WHERE g.published=1 AND ${worldOf('g.owner_id')}=? ORDER BY g.name`,
+        world(req.user),
+      )
+    ).map(garageView);
+    for (const g of list) Object.assign(g, await ops.publicInfo(g.id));
+    res.json(list);
+  });
   app.get('/api/garage/profile', async (req, res) => {
     const g = await ownGarage(req.user);
     res.json({
       ...garageView(g),
       ...(await garageDetails(g.id)),
+      ...(await ops.publicInfo(g.id)),
       phone: '',
       opening_hours: '',
       mechanic_name: '',
@@ -1151,6 +1169,30 @@ export async function createApp({
       Number(d.published),
       garage.id,
     );
+    const names = [...new Set(d.services)];
+    for (const [index, name] of names.entries())
+      if (
+        !(await one(
+          'SELECT 1 FROM garage_services WHERE garage_id=? AND lower(name)=lower(?)',
+          garage.id,
+          name,
+        ))
+      )
+        await run(
+          'INSERT INTO garage_services(id,garage_id,name,sort) VALUES(?,?,?,?)',
+          id(),
+          garage.id,
+          name,
+          index,
+        );
+    const keep = names.map((name) => name.toLowerCase());
+    for (const row of await all('SELECT id,name FROM garage_services WHERE garage_id=?', garage.id))
+      await run(
+        'UPDATE garage_services SET active=? WHERE id=?',
+        Number(keep.includes(row.name.toLowerCase())),
+        row.id,
+      );
+    await ops.syncServiceNames(garage.id);
     res.json({ ok: true });
   });
   const bookingSelect = `SELECT b.*,g.name garage_name,g.address garage_address,g.city garage_city,c.phone,c.opening_hours,c.mechanic_name,${photoOf('g.owner_id')} garage_photo,${photoOf('b.driver_id')} driver_photo,${ratingColumns},u.name driver_name,v.make,v.model,v.registration,${jobColumns},(SELECT COUNT(*) FROM memberships m JOIN plans p ON p.id=m.plan_id WHERE m.driver_id=b.driver_id AND p.garage_id=b.garage_id AND m.status='active') member_count FROM bookings b JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=b.driver_id JOIN vehicles v ON v.id=b.vehicle_id LEFT JOIN garage_contact c ON c.garage_id=g.id ${jobJoins}`;
@@ -1202,6 +1244,9 @@ export async function createApp({
     rescheduled: 'Reschedule requested',
     review: 'New review',
     reply: 'The garage replied to your review',
+    invoice: 'New invoice',
+    'payment-reminder': 'Payment reminder',
+    'invoice-paid': 'Invoice paid',
   };
   app.get('/api/notifications', async (req, res) => {
     const isDriver = req.user.role === 'driver',
@@ -1311,7 +1356,39 @@ export async function createApp({
       throw fail(400, 'Choose a future hourly appointment within the next year.');
     return date;
   };
+  const ops = registerGarageOps(app, {
+    one,
+    all,
+    run,
+    db,
+    transaction,
+    fail,
+    parse,
+    id,
+    clock,
+    ownGarage,
+    ownerGarage,
+    text,
+    optional,
+  });
+  registerInvoices(app, {
+    one,
+    all,
+    run,
+    db,
+    transaction,
+    fail,
+    parse,
+    id,
+    clock,
+    ownerGarage,
+    bookingEvent,
+    text,
+    optional,
+    dateSchema,
+  });
   const jobs = registerJobs(app, {
+    checkSlot: (...args) => ops.checkSlot(...args),
     one,
     all,
     run,
@@ -1333,13 +1410,14 @@ export async function createApp({
     driverOnly(req.user);
     const date = appointment(parse(z.object({ starts_at: z.iso.datetime() }), req).starts_at);
     const b = await one(
-      'SELECT status FROM bookings WHERE id=? AND driver_id=?',
+      'SELECT status,garage_id FROM bookings WHERE id=? AND driver_id=?',
       req.params.id,
       req.user.id,
     );
     if (!b) throw fail(404, 'Booking not found.');
     if (!['pending', 'confirmed'].includes(b.status))
       throw fail(409, 'Only upcoming bookings can be rescheduled.');
+    await ops.checkSlot(b.garage_id, date.toISOString());
     const job = await one('SELECT stage FROM booking_jobs WHERE booking_id=?', req.params.id);
     if (job && job.stage !== 'booked')
       throw fail(409, 'Started appointments cannot be rescheduled.');
@@ -1400,6 +1478,7 @@ export async function createApp({
       !(await one('SELECT id FROM vehicles WHERE id=? AND owner_id=?', d.vehicle_id, req.user.id))
     )
       throw fail(404, 'Vehicle not found.');
+    await ops.checkSlot(d.garage_id, date.toISOString());
     const garage = await one(
       `SELECT * FROM garages g WHERE g.id=? AND g.published=1 AND ${worldOf('g.owner_id')}=?`,
       d.garage_id,
@@ -1535,68 +1614,6 @@ export async function createApp({
     if (status === 'active' && (!garageSide || m.status !== 'requested'))
       throw fail(403, 'Only the garage can approve a pending membership.');
     await run('UPDATE memberships SET status=? WHERE id=?', status, m.id);
-    res.json({ ok: true });
-  });
-  app.get('/api/invoices', async (req, res) => {
-    const driver = req.user.role === 'driver';
-    if (!driver) await ownerGarage(req.user);
-    res.json(
-      await all(
-        `SELECT i.*,g.name garage_name,u.name driver_name FROM invoices i JOIN garages g ON g.id=i.garage_id JOIN users u ON u.id=i.driver_id WHERE ${driver ? 'i.driver_id' : 'i.garage_id'}=? ORDER BY i.created_at DESC`,
-        driver ? req.user.id : req.user.garage_id,
-      ),
-    );
-  });
-  app.post('/api/invoices', async (req, res) => {
-    const g = await ownerGarage(req.user),
-      d = parse(
-        z.object({
-          booking_id: z.uuid(),
-          description: text(1000),
-          amount_cents: money.refine((v) => v > 0),
-          due_date: dateSchema,
-        }),
-        req,
-      );
-    const b = await one(
-      "SELECT * FROM bookings WHERE id=? AND garage_id=? AND status='completed'",
-      d.booking_id,
-      g.id,
-    );
-    if (!b) throw fail(400, 'Invoices require a completed booking at your garage.');
-    const key = id();
-    await run(
-      'INSERT INTO invoices(id,booking_id,garage_id,driver_id,description,amount_cents,due_date) VALUES(?,?,?,?,?,?,?)',
-      key,
-      b.id,
-      g.id,
-      b.driver_id,
-      d.description,
-      d.amount_cents,
-      d.due_date,
-    );
-    res.status(201).json({ id: key });
-  });
-  app.patch('/api/invoices/:id', async (req, res) => {
-    const g = await ownerGarage(req.user),
-      d = parse(
-        z.object({ status: z.enum(['paid', 'void']), payment_reference: optional(200) }),
-        req,
-      );
-    if (d.status === 'paid' && !d.payment_reference)
-      throw fail(400, 'Enter the reference for the payment received outside MotoDoc.');
-    if (
-      !(
-        await run(
-          "UPDATE invoices SET status=?,payment_reference=? WHERE id=? AND garage_id=? AND status='unpaid'",
-          d.status,
-          d.payment_reference,
-          req.params.id,
-          g.id,
-        )
-      ).changes
-    )
-      throw fail(404, 'Unpaid invoice not found.');
     res.json({ ok: true });
   });
   app.get('/api/reminders', async (req, res) =>

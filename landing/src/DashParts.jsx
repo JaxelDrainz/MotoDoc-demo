@@ -76,6 +76,7 @@ const when = (value) =>
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'Europe/Helsinki',
   });
 
 export function Bell() {
@@ -167,31 +168,21 @@ export function Bell() {
   );
 }
 
-const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16];
-
 export function SlotPicker({ garageId, name }) {
-  const [days] = useState(() =>
-    Array.from({ length: 14 }, (_, index) => {
-      const day = new Date();
-      day.setHours(0, 0, 0, 0);
-      day.setDate(day.getDate() + index);
-      return day;
-    }),
-  );
-  const [day, setDay] = useState(days[1]),
+  const [days, setDays] = useState(null),
+    [day, setDay] = useState(null),
     [value, setValue] = useState(''),
-    [busy, setBusy] = useState(null);
-  const [availabilityError, setAvailabilityError] = useState('');
-  const [attempt, setAttempt] = useState(0);
+    [availabilityError, setAvailabilityError] = useState(''),
+    [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
-    setBusy(null);
+    setDays(null);
     setAvailabilityError('');
-    const to = new Date(days[13]);
-    to.setDate(to.getDate() + 1);
-    api(`/garages/${garageId}/busy?from=${days[0].toISOString()}&to=${to.toISOString()}`)
-      .then((taken) => {
-        if (active) setBusy(new Set(taken));
+    api(`/garages/${garageId}/availability?days=21`)
+      .then((list) => {
+        if (!active) return;
+        setDays(list);
+        setDay((current) => current || (list.find((d) => d.slots.length) || list[0])?.date);
       })
       .catch(() => {
         if (active) {
@@ -202,49 +193,51 @@ export function SlotPicker({ garageId, name }) {
     return () => {
       active = false;
     };
-  }, [garageId, days, attempt]);
-  const slot = (hour) => {
-    const start = new Date(day);
-    start.setHours(hour);
-    return start;
-  };
-  const free = (start) => busy && !busy.has(start.toISOString()) && start.getTime() > Date.now();
+  }, [garageId, attempt]);
+  const selected = days?.find((d) => d.date === day);
+  const label = (date, options) =>
+    new Date(`${date}T12:00:00`).toLocaleDateString(undefined, options);
   return (
     <div className="dash-slots">
-      <div className="dash-slot-days">
-        {days.map((item) => (
+      <div className="dash-slot-days" aria-busy={!days && !availabilityError}>
+        {(days || []).map((item) => (
           <button
             type="button"
-            key={item.getTime()}
-            aria-pressed={item.getTime() === day.getTime()}
+            key={item.date}
+            className={item.slots.length ? '' : 'closed'}
+            aria-pressed={item.date === day}
             onClick={() => {
-              setDay(item);
+              setDay(item.date);
               setValue('');
             }}
           >
-            <small>{item.toLocaleDateString(undefined, { weekday: 'short' })}</small>
-            <strong>{item.getDate()}</strong>
-            <small>{item.toLocaleDateString(undefined, { month: 'short' })}</small>
+            <small>{label(item.date, { weekday: 'short' })}</small>
+            <strong>{Number(item.date.slice(8))}</strong>
+            <small>{label(item.date, { month: 'short' })}</small>
           </button>
         ))}
       </div>
-      <div className="dash-slot-times" aria-busy={!busy && !availabilityError}>
-        {HOURS.map((hour) => {
-          const start = slot(hour),
-            iso = start.toISOString();
-          return (
+      {selected && selected.slots.length > 0 && (
+        <div className="dash-slot-times">
+          {selected.slots.map((iso) => (
             <button
               type="button"
-              key={hour}
-              disabled={!free(start)}
+              key={iso}
               aria-pressed={value === iso}
               onClick={() => setValue(iso)}
             >
-              {start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+              {new Date(iso).toLocaleTimeString(undefined, {
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'Europe/Helsinki',
+              })}
             </button>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
+      {selected && !selected.slots.length && (
+        <p className="dash-slot-reason">{selected.reason || 'No times left on this day.'}</p>
+      )}
       {availabilityError && (
         <div role="alert" className="dash-error">
           <p>{availabilityError}</p>
@@ -256,12 +249,9 @@ export function SlotPicker({ garageId, name }) {
       <p className="dash-slot-note">
         {value
           ? `Selected: ${when(value)}`
-          : busy
-            ? 'Greyed-out times are already booked or in the past.'
+          : days
+            ? 'Times are in Finnish time and follow the garage’s opening hours.'
             : 'Checking free times…'}
-      </p>
-      <p className="dash-slot-note">
-        Times use your device�s timezone. Your garage confirms the appointment.
       </p>
       <input type="hidden" name={name} value={value} />
     </div>

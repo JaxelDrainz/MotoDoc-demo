@@ -74,6 +74,7 @@ export interface Booking {
   startsAt: string;
   durationMinutes: number;
   status: BookingStatus;
+  state?: string;
   workshop: Workshop;
 }
 
@@ -137,6 +138,20 @@ const statusLabel: Record<BookingStatus, string> = {
   completed: 'Completed',
   cancelled: 'Cancelled',
 };
+const stateLabel: Record<string, string> = {
+  needs_approval: 'Needs your approval',
+  waiting: 'Waiting for garage',
+  confirmed: 'Confirmed',
+  in_progress: 'In progress',
+  finished: 'Work finished',
+  ready: 'Ready for pickup',
+  completed: 'Completed',
+  declined: 'Declined',
+  cancelled: 'Cancelled',
+  no_show: 'No-show',
+};
+const bookingLabel = (booking: Booking) =>
+  (booking.state && stateLabel[booking.state]) || statusLabel[booking.status];
 const isActive = (booking: Booking) =>
   booking.status === 'pending' || booking.status === 'confirmed';
 
@@ -759,7 +774,7 @@ export default function MotoDocDashboard({
                             {item.workshop.name} · {bookingDate(item.startsAt)}
                           </p>
                           <p className="mt-2">
-                            <StatusBadge kind={item.status}>{statusLabel[item.status]}</StatusBadge>
+                            <StatusBadge kind={item.status}>{bookingLabel(item)}</StatusBadge>
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-2.5">
@@ -808,9 +823,7 @@ export default function MotoDocDashboard({
                       </p>
                       <p className="mt-3 text-[19px] leading-7">{bookingDate(upcoming.startsAt)}</p>
                       <p className="mt-2">
-                        <StatusBadge kind={upcoming.status}>
-                          {statusLabel[upcoming.status]}
-                        </StatusBadge>
+                        <StatusBadge kind={upcoming.status}>{bookingLabel(upcoming)}</StatusBadge>
                       </p>
                       <div className="mt-6">{bookingActions(upcoming)}</div>
                     </>

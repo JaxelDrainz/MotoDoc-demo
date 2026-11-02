@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { referenceNumber } from '../src/invoiceMath.js';
 
 export const demoPersonas = ['driver', 'driver-basic', 'garage', 'mechanic', 'admin'];
 export const demoLifetime = 24 * 3600000;
@@ -67,8 +68,29 @@ export async function buildDemoWorld({ run, clock, world }) {
       'Brake check',
       'Diagnostics',
       'Inspection prep',
+      'Air conditioning',
     ]),
   );
+  for (const [index, [name, min, max, minutes, description]] of [
+    ['Annual service', 189, 289, 120, 'Oil and filter, fluids, brakes and a full check.'],
+    ['Oil change', 79, 110, 45, 'Synthetic oil and a new filter.'],
+    ['Tyre change', 40, 60, 30, 'Seasonal swap, balancing included.'],
+    ['Brake check', 0, 49, 30, 'Pads, discs and brake fluid checked.'],
+    ['Diagnostics', 69, 69, 60, 'Fault codes read and explained.'],
+    ['Inspection prep', 59, 89, 45, 'Everything katsastus checks, before you go.'],
+    ['Air conditioning', 89, 149, 60, 'Gas refill, leak test and cabin filter.'],
+  ].entries())
+    await run(
+      'INSERT INTO garage_services(id,garage_id,name,price_min_cents,price_max_cents,minutes,description,sort) VALUES(?,?,?,?,?,?,?,?)',
+      id(),
+      garage,
+      name,
+      min * 100,
+      max * 100,
+      minutes,
+      description,
+      index,
+    );
   await run(
     'INSERT INTO garage_contact(garage_id,phone,opening_hours,mechanic_name) VALUES(?,?,?,?)',
     garage,
@@ -272,29 +294,73 @@ export async function buildDemoWorld({ run, clock, world }) {
       mileage,
       booking.startsAt,
     );
-  await run(
-    "INSERT INTO invoices(id,booking_id,garage_id,driver_id,description,amount_cents,status,due_date,payment_reference,created_at) VALUES(?,?,?,?,?,?,'paid',?,?,?)",
-    id(),
-    annual.key,
-    garage,
-    member,
-    'Annual service, member rate',
-    24900,
-    dateOnly(-16),
-    'DEMO-PAYMENT',
-    at(-30 * day),
-  );
-  await run(
-    "INSERT INTO invoices(id,booking_id,garage_id,driver_id,description,amount_cents,status,due_date,created_at) VALUES(?,?,?,?,?,?,'unpaid',?,?)",
-    id(),
-    oil.key,
-    garage,
-    basic,
-    'Oil change',
-    8900,
-    dateOnly(7),
-    at(-60 * day),
-  );
+  const year = new Date(now).toISOString().slice(0, 4);
+  for (const [index, booking, driver, status, due, created, mileage, lines] of [
+    [
+      1,
+      annual,
+      member,
+      'paid',
+      dateOnly(-16),
+      at(-30 * day),
+      84200,
+      [
+        ['Annual service, member labour rate (2 h)', 2, 6800, 0],
+        ['Engine oil 5W-30 (5 l)', 1, 6500, 0],
+        ['Cabin air filter', 1, 4700, 0],
+      ],
+    ],
+    [
+      2,
+      oil,
+      basic,
+      'unpaid',
+      dateOnly(-5),
+      at(-19 * day),
+      128400,
+      [
+        ['Oil change labour', 1, 4900, 0],
+        ['Oil filter', 1, 2000, 0],
+        ['Engine oil 5W-30 (4 l)', 1, 2600, 10],
+      ],
+    ],
+  ]) {
+    const key = id();
+    const total = lines.reduce(
+      (sum, [, qty, unit, pct]) =>
+        sum + Math.round(qty * unit) - Math.round((qty * unit * pct) / 100),
+      0,
+    );
+    await run(
+      `INSERT INTO invoices(id,booking_id,garage_id,driver_id,description,amount_cents,status,due_date,payment_reference,number,reference,mileage,paid_at,paid_method,created_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      key,
+      booking.key,
+      garage,
+      driver,
+      booking.service,
+      total,
+      status,
+      due,
+      status === 'paid' ? 'Bank transfer' : '',
+      `INV-${year}-00${index}`,
+      referenceNumber(`${year}00${index}`),
+      mileage,
+      status === 'paid' ? at(-20 * day) : null,
+      status === 'paid' ? 'bank_transfer' : null,
+      created,
+    );
+    for (const [position, [description, quantity, unit, pct]] of lines.entries())
+      await run(
+        'INSERT INTO invoice_lines(invoice_id,position,description,quantity,unit_cents,discount_pct) VALUES(?,?,?,?,?,?)',
+        key,
+        position,
+        description,
+        quantity,
+        unit,
+        pct,
+      );
+  }
   await run(
     'INSERT INTO reviews(booking_id,garage_id,driver_id,rating,tags,comment,reply,reply_at,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
     annual.key,
@@ -350,6 +416,7 @@ const purgeSteps = [
   `DELETE FROM booking_events WHERE booking_id IN ${bookings}`,
   `DELETE FROM booking_jobs WHERE booking_id IN ${bookings}`,
   `DELETE FROM reviews WHERE booking_id IN ${bookings}`,
+  `DELETE FROM invoice_lines WHERE invoice_id IN (SELECT id FROM invoices WHERE booking_id IN ${bookings})`,
   `DELETE FROM invoices WHERE booking_id IN ${bookings}`,
   `DELETE FROM service_records WHERE booking_id IN ${bookings}`,
   `DELETE FROM bookings WHERE driver_id IN ${users} OR garage_id IN ${garages}`,
@@ -358,6 +425,8 @@ const purgeSteps = [
   `DELETE FROM customer_notes WHERE garage_id IN ${garages} OR driver_id IN ${users}`,
   `DELETE FROM garage_contact WHERE garage_id IN ${garages}`,
   `DELETE FROM garage_details WHERE garage_id IN ${garages}`,
+  `DELETE FROM garage_services WHERE garage_id IN ${garages}`,
+  `DELETE FROM garage_blocked WHERE garage_id IN ${garages}`,
   `DELETE FROM garage_staff WHERE user_id IN ${users} OR garage_id IN ${garages}`,
   `DELETE FROM vehicle_condition WHERE vehicle_id IN (SELECT id FROM vehicles WHERE owner_id IN ${users})`,
   `DELETE FROM vehicles WHERE owner_id IN ${users}`,
