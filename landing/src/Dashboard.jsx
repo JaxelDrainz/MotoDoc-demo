@@ -24,6 +24,7 @@ import {
   ListChecksIcon,
   ChartBarIcon,
   QuestionIcon,
+  UsersThreeIcon,
 } from '@phosphor-icons/react';
 import { api } from './api.js';
 import { Brand } from './Brand.jsx';
@@ -43,6 +44,8 @@ import {
   specLabel,
 } from './GarageTools.jsx';
 import { GuidedTour } from './Tour.jsx';
+import { NoAccess, TeamGate, TeamPanel } from './Team.jsx';
+import { TAB_AREAS } from './team.js';
 import { siteFlag } from './site.jsx';
 import './dashboard.css';
 
@@ -584,8 +587,10 @@ export function Dashboard() {
     [dialog, setDialog] = useState(null),
     [search, setSearch] = useState('');
   const isGarage = user?.role === 'garage';
-  const isMechanic = user?.garageRole === 'mechanic';
+  const isStaff = isGarage && user?.garageRole !== 'owner';
+  const allowed = (area) => !isGarage || !!user?.permissions?.includes(area);
   const load = useCallback(async (account) => {
+    const may = (area) => account.role !== 'garage' || account.permissions?.includes(area);
     const paths = [
       'overview',
       'bookings',
@@ -593,9 +598,11 @@ export function Dashboard() {
       'service-history',
       'plans',
       'memberships',
-      ...(account.garageRole === 'mechanic' ? [] : ['invoices']),
+      ...(may('invoicing') ? ['invoices'] : []),
       'reminders',
-      ...(account.role === 'garage' ? ['garage/profile', 'customers'] : ['vehicles', 'garages']),
+      ...(account.role === 'garage'
+        ? ['garage/profile', ...(may('customers') ? ['customers'] : [])]
+        : ['vehicles', 'garages']),
     ];
     const results = await Promise.all(paths.map((p) => api('/' + p)));
     setData(Object.fromEntries(paths.map((p, i) => [p, results[i]])));
@@ -608,6 +615,7 @@ export function Dashboard() {
         if (!active) return;
         if (!u.onboarded) return location.replace('/onboarding');
         setUser(u);
+        if (['paused', 'removed'].includes(u.teamStatus)) return;
         await load(u);
       })
       .catch((e) => {
@@ -654,12 +662,11 @@ export function Dashboard() {
     ['invoices', ReceiptIcon, 'Invoices'],
     ...(isGarage ? [['analytics', ChartBarIcon, 'Analytics']] : []),
     ['reminders', BellIcon, 'Reminders'],
+    ...(isGarage ? [['team', UsersThreeIcon, 'Team']] : []),
     ['account', LockKeyIcon, 'Account'],
-  ].filter(
-    ([key]) =>
-      !isMechanic || !['profile', 'services', 'memberships', 'invoices', 'analytics'].includes(key),
-  );
-  const selected = nav.some((n) => n[0] === view) ? view : 'overview';
+  ].filter(([key]) => !isGarage || !TAB_AREAS[key] || allowed(TAB_AREAS[key]));
+  const blocked = isGarage && !!TAB_AREAS[view] && !allowed(TAB_AREAS[view]);
+  const selected = blocked ? 'no-access' : nav.some((n) => n[0] === view) ? view : 'overview';
   const quick = isGarage
     ? { overview: 'Overview', bookings: 'Bookings', customers: 'Customers', profile: 'Profile' }
     : { overview: 'Overview', vehicles: 'Vehicles', garages: 'Garages', bookings: 'Bookings' };
@@ -996,6 +1003,8 @@ export function Dashboard() {
     );
   }
 
+  if (user && ['paused', 'removed'].includes(user.teamStatus))
+    return <TeamGate user={user} onLogout={logout} />;
   if (!user || !data) {
     if (error || !loading)
       return (
@@ -1040,7 +1049,7 @@ export function Dashboard() {
       <aside className="dash-sidebar" data-fit>
         <Brand />
         <span className="dash-role">
-          {isMechanic ? 'GARAGE TEAM' : isGarage ? 'FOR GARAGES' : 'FOR DRIVERS'}
+          {isStaff ? 'GARAGE TEAM' : isGarage ? 'FOR GARAGES' : 'FOR DRIVERS'}
         </span>
         <nav aria-label="Account navigation">
           {nav.map(([key, Icon, label]) => (
@@ -1067,7 +1076,7 @@ export function Dashboard() {
           <Bell />
           <Avatar name={user.name} photo={user.photo} />
           <ThemeToggle />
-          {!isMechanic && (
+          {!isStaff && (
             <button
               type="button"
               className="icon-button"
@@ -1106,7 +1115,7 @@ export function Dashboard() {
             <h1>
               {selected === 'overview'
                 ? `Hello, ${user.name.split(' ')[0]}.`
-                : nav.find((n) => n[0] === selected)?.[2]}
+                : nav.find((n) => n[0] === selected)?.[2] || 'No access'}
             </h1>
             <p>
               {selected === 'overview'
@@ -1121,7 +1130,11 @@ export function Dashboard() {
                       ? 'Your service costs, all in one place.'
                       : selected === 'reminders'
                         ? 'A little help remembering what’s next.'
-                        : 'Keep the details that matter together.'}
+                        : selected === 'team'
+                          ? 'Who works with you, and what each person can see and do.'
+                          : selected === 'no-access'
+                            ? 'This part of the garage account isn’t shared with you.'
+                            : 'Keep the details that matter together.'}
             </p>
           </div>
           <span className="dash-connected">
@@ -1142,13 +1155,15 @@ export function Dashboard() {
 
         {selected === 'overview' && (
           <>
-            {isGarage && <AvailabilityCard canEdit={!isMechanic} />}
+            {isGarage && <AvailabilityCard canEdit={allowed('bookings')} />}
             <div className="dash-stats">
               {[
                 [CalendarBlankIcon, 'Upcoming bookings', data.overview.upcoming],
                 [CheckCircleIcon, 'Services completed', data.overview.completed],
-                isMechanic
-                  ? [UsersIcon, 'Customers', data.customers.length]
+                isGarage && !allowed('invoicing')
+                  ? allowed('customers')
+                    ? [UsersIcon, 'Customers', data.customers.length]
+                    : [ChatCircleIcon, 'Messages', data.messages.length]
                   : [
                       ReceiptIcon,
                       isGarage ? 'Awaiting payment' : 'Outstanding invoices',
@@ -1208,7 +1223,7 @@ export function Dashboard() {
                     : 'A familiar face for every service.'}
                 </h3>
                 <p>
-                  {isMechanic
+                  {isGarage && !allowed('invoicing')
                     ? 'Your jobs, customers and messages, all in one place.'
                     : isGarage
                       ? `Payments recorded as received: ${euro(data.overview.invoiceTotals.paid)}. These are your recorded payments, not processed transactions.`
@@ -1376,7 +1391,9 @@ export function Dashboard() {
           </>
         )}
 
-        {selected === 'services' && <ServicesPanel open={open} canEdit={!isMechanic} />}
+        {selected === 'services' && <ServicesPanel open={open} canEdit={allowed('services')} />}
+        {selected === 'team' && <TeamPanel open={open} user={user} />}
+        {selected === 'no-access' && <NoAccess />}
 
         {selected === 'analytics' && <AnalyticsPanel data={data} />}
 
@@ -1628,7 +1645,7 @@ export function Dashboard() {
 
         {selected === 'memberships' && (
           <>
-            {isGarage && !isMechanic && !data['garage/profile']?.membership_launched_at && (
+            {isGarage && !isStaff && !data['garage/profile']?.membership_launched_at && (
               <article className="dash-tile dash-launch">
                 <GiftIcon size={28} />
                 <div>
@@ -1912,7 +1929,7 @@ export function Dashboard() {
           </button>
         </MoreSheet>
       )}
-      {tourOpen && !isMechanic && (
+      {tourOpen && !isStaff && (
         <GuidedTour
           role={user.role}
           onTarget={setTourTarget}

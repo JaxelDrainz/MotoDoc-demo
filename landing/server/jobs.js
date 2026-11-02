@@ -92,8 +92,8 @@ export function registerJobs(app, ctx) {
     if (!b) throw fail(404, 'Booking not found.');
     return b;
   };
-  const garageBooking = async (req) => {
-    await ownGarage(req.user);
+  const garageBooking = async (req, area = 'bookings') => {
+    await ownGarage(req.user, area);
     return find(req);
   };
   const notStarted = (b) => {
@@ -157,7 +157,7 @@ export function registerJobs(app, ctx) {
   });
 
   app.post('/api/bookings/schedule', async (req, res) => {
-    const garage = await ownGarage(req.user);
+    const garage = await ownGarage(req.user, 'bookings');
     const d = parse(
       z.object({
         driver_id: z.uuid(),
@@ -222,7 +222,7 @@ export function registerJobs(app, ctx) {
   });
 
   app.post('/api/bookings/:id/stage', async (req, res) => {
-    const b = await garageBooking(req);
+    const b = await garageBooking(req, 'jobs');
     const { stage } = parse(z.object({ stage: z.enum(['in_progress', 'finished']) }), req);
     if (b.status !== 'confirmed') throw fail(409, 'Approve the request before starting work.');
     if (JOB_STAGES.indexOf(stage) !== JOB_STAGES.indexOf(b.stage) + 1)
@@ -259,7 +259,7 @@ export function registerJobs(app, ctx) {
   };
 
   app.post('/api/bookings/:id/ready', async (req, res) => {
-    const b = await garageBooking(req);
+    const b = await garageBooking(req, 'jobs');
     const d = parse(
       z.object({
         pickup_at: isoTime,
@@ -297,7 +297,7 @@ export function registerJobs(app, ctx) {
     });
   };
   app.post('/api/bookings/:id/complete', async (req, res) => {
-    const b = await garageBooking(req);
+    const b = await garageBooking(req, 'jobs');
     const d = parse(
       z.object({
         summary: text(2000),
@@ -347,6 +347,7 @@ export function registerJobs(app, ctx) {
     });
   };
   app.post('/api/bookings/:id/cancel', async (req, res) => {
+    if (req.user.role === 'garage') await ownGarage(req.user, 'bookings');
     const b = await find(req);
     const d = parse(z.object({ reason: optional(300), no_show: z.boolean().default(false) }), req);
     await cancel(req, b, d);
@@ -354,7 +355,7 @@ export function registerJobs(app, ctx) {
   });
 
   app.post('/api/bookings/:id/notes', async (req, res) => {
-    const b = await garageBooking(req);
+    const b = await garageBooking(req, 'jobs');
     const { note } = parse(z.object({ note: text(500) }), req);
     if (b.status !== 'confirmed') throw fail(409, 'Notes can be added to approved, active jobs.');
     await bookingEvent(b.id, req.user.id, 'note', note);
@@ -362,7 +363,7 @@ export function registerJobs(app, ctx) {
   });
 
   app.post('/api/bookings/:id/review/reply', async (req, res) => {
-    const b = await garageBooking(req);
+    const b = await garageBooking(req, 'customers');
     const { reply } = parse(z.object({ reply: text(1000) }), req);
     const review = await one('SELECT reply FROM reviews WHERE booking_id=?', b.id);
     if (!review) throw fail(404, 'This job has no review yet.');

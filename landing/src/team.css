@@ -1,0 +1,94 @@
+.team-stats {
+  margin-bottom: 8px;
+}
+.team-row .dash-row-title {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.team-role {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.team-you {
+  font-weight: 400;
+  color: var(--muted);
+}
+.team-areas {
+  font-size: 13px;
+  color: var(--muted);
+}
+.team-row .dash-row-actions .dash-text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.team-roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.team-roles article {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+.team-roles h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+.team-roles p {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.team-state {
+  max-width: 460px;
+  margin: 48px auto;
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 32px 24px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+}
+.team-state > svg {
+  color: var(--green);
+}
+.team-state h1,
+.team-state h2 {
+  margin: 0;
+  font-size: 22px;
+}
+.team-state p {
+  margin: 0;
+  color: var(--muted);
+}
+.team-gate {
+  min-height: 100vh;
+  padding: 24px 16px;
+  background: var(--surface);
+}
+.dash-dialog .dash-checks label {
+  border-radius: 12px;
+}
+:root[data-theme='dark'] :is(.team-roles article, .team-state) {
+  background: #141d19;
+  border-color: #26332d;
+}
+:root[data-theme='dark'] .team-gate {
+  background: #0d1512;
+  color: #e7efe9;
+  --ink: #e7efe9;
+  --muted: #9aa9a1;
+  --line: #26332d;
+  --green: #34d399;
+}
+.dash-dialog .dash-checks + .dash-checks {
+  margin-top: 16px;
+}

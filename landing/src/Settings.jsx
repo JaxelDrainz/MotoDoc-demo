@@ -25,7 +25,7 @@ function Switch({ label, description, checked, onChange, disabled }) {
 
 export function AccountSettings({ user, onSaved }) {
   const garage = user.role === 'garage';
-  const owner = garage && user.garageRole !== 'mechanic';
+  const owner = garage && !!user.permissions?.includes('bookings');
   const [details, setDetails] = useState({
     name: user.name,
     phone: user.phone || '',

@@ -26,6 +26,7 @@ const kindOf = {
   unpaid: 'pending',
   upcoming: 'pending',
   rescheduled: 'pending',
+  invited: 'pending',
   reminder: 'pending',
   confirmed: 'confirmed',
   active: 'confirmed',

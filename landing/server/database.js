@@ -167,6 +167,19 @@ export const migrations = [
       "UPDATE invoices SET number='INV-'||substr(created_at,1,4)||'-'||upper(substr(id,1,4)) WHERE number=''",
     ],
   ],
+  [
+    6,
+    [
+      "ALTER TABLE garage_staff ADD COLUMN permissions TEXT NOT NULL DEFAULT '[]'",
+      'ALTER TABLE garage_staff ADD COLUMN active INTEGER NOT NULL DEFAULT 1',
+      `UPDATE garage_staff SET permissions='["bookings","jobs","records","customers"]' WHERE role='mechanic'`,
+      `CREATE TABLE IF NOT EXISTS team_invites(
+        code TEXT PRIMARY KEY,garage_id TEXT NOT NULL REFERENCES garages(id) ON DELETE CASCADE,name TEXT NOT NULL,
+        email TEXT NOT NULL,phone TEXT NOT NULL DEFAULT '',role TEXT NOT NULL,permissions TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'invited',invited_at TEXT NOT NULL,invited_by TEXT NOT NULL DEFAULT '',user_id TEXT)`,
+      'CREATE INDEX IF NOT EXISTS team_invite_garage ON team_invites(garage_id,status)',
+    ],
+  ],
 ];
 
 export function openDatabase(path) {
