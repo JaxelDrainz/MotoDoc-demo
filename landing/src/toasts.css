@@ -33,6 +33,19 @@
   flex: 1;
   overflow-wrap: anywhere;
 }
+.toast-action {
+  align-self: center;
+  flex-shrink: 0;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #e6f4ed;
+  color: #087658;
+  font-size: 13px;
+  font-weight: 650;
+}
+.toast-action:hover {
+  background: #d7ede2;
+}
 .toast > button {
   display: flex;
   flex-shrink: 0;
@@ -68,6 +81,10 @@
 }
 :root[data-theme='dark']:has(.dashboard) .toast > svg {
   color: #34d399;
+}
+:root[data-theme='dark']:has(.dashboard) .toast-action {
+  background: #173829;
+  color: #6ee7b7;
 }
 :root[data-theme='dark']:has(.dashboard) .toast-error > svg {
   color: #f59a92;

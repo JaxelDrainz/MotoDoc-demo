@@ -11,6 +11,8 @@ import {
   XIcon,
 } from '@phosphor-icons/react';
 import { api } from './api.js';
+import { playChime } from './Onboarding.jsx';
+import { toast } from './Toasts.jsx';
 import './extras.css';
 
 const kinds = {
@@ -93,19 +95,37 @@ const when = (value) =>
     timeZone: 'Europe/Helsinki',
   });
 
-export function Bell() {
-  const [feed, setFeed] = useState({ items: [], unread: 0, seen_at: '' }),
+export function Bell({ user, onFeed }) {
+  const [feed, setFeed] = useState({ items: [], unread: 0, seen_at: '', counts: {} }),
     [open, setOpen] = useState(false),
-    box = useRef(null);
+    box = useRef(null),
+    known = useRef(null);
   useEffect(() => {
-    const load = () =>
-      api('/notifications')
-        .then(setFeed)
-        .catch(() => {});
+    const load = async () => {
+      try {
+        const next = await api('/notifications');
+        if (known.current) {
+          const fresh = next.items.filter((item) => !known.current.has(item.id));
+          if (fresh.length) {
+            const item = fresh[0];
+            toast(item.title, 'success', { label: 'Open', href: item.link || '#notifications' });
+            if (
+              user?.role === 'garage' &&
+              user?.prefs?.requestSound &&
+              fresh.some((entry) => entry.type === 'requested')
+            )
+              playChime();
+          }
+        }
+        known.current = new Set(next.items.map((item) => item.id));
+        setFeed(next);
+        onFeed?.(next);
+      } catch {}
+    };
     load();
-    const timer = setInterval(() => !document.hidden && load(), 60000);
+    const timer = setInterval(() => !document.hidden && load(), 30000);
     return () => clearInterval(timer);
-  }, []);
+  }, [onFeed, user]);
   useEffect(() => {
     if (!open) return;
     const close = (event) => {
@@ -126,7 +146,9 @@ export function Bell() {
     setOpen(!open);
     if (!open && feed.unread) {
       api('/notifications/seen', { method: 'POST', body: {} }).catch(() => {});
-      setFeed((current) => ({ ...current, unread: 0 }));
+      const next = { ...feed, unread: 0, seen_at: new Date().toISOString(), counts: {} };
+      setFeed(next);
+      onFeed?.(next);
     }
   }
   return (
@@ -145,7 +167,7 @@ export function Bell() {
           <h2>Notifications</h2>
           {feed.items.length ? (
             <ul>
-              {feed.items.map((item) => {
+              {feed.items.slice(0, 7).map((item) => {
                 const kind = kindOf[item.type] || 'confirmed',
                   Icon = item.type === 'message' ? ChatCircleIcon : kinds[kind];
                 return (
@@ -177,6 +199,9 @@ export function Bell() {
           ) : (
             <p>Nothing new. Messages, booking updates and due reminders will appear here.</p>
           )}
+          <a className="dash-bell-all" href="#notifications" onClick={() => setOpen(false)}>
+            View all notifications
+          </a>
         </div>
       )}
     </div>

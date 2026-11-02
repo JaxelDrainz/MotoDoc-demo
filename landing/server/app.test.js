@@ -797,6 +797,8 @@ test('free slots and notifications follow bookings, messages and reminders', asy
   assert.equal((await d('/api/notifications')).data.unread, 0);
   const forGarage = (await g('/api/notifications')).data;
   assert.deepEqual([forGarage.unread, forGarage.items[0].type], [1, 'requested']);
+  assert.equal(forGarage.counts.bookings, 1);
+  assert.equal(forGarage.items[0].email_sent, true);
   await g(`/api/bookings/${key}`, { status: 'confirmed' }, 'PATCH');
   await g(`/api/bookings/${key}/messages`, { body: 'See you then' });
   await d('/api/reminders', {
@@ -814,12 +816,71 @@ test('free slots and notifications follow bookings, messages and reminders', asy
     'message',
     'reminder',
   ]);
+  assert.equal(forDriver.items.find((item) => item.type === 'confirmed').email_sent, true);
+  assert.equal(forDriver.items.find((item) => item.type === 'message').email_sent, false);
   assert.equal((await other('/api/notifications')).data.items.length, 0);
   assert.equal((await d('/api/notifications/seen', {})).status, 200);
   assert.equal((await d('/api/notifications')).data.unread, 0);
   await d(`/api/bookings/${key}`, { status: 'cancelled' }, 'PATCH');
   assert.deepEqual((await other(`/api/garages/${profile.id}/busy?${range}`)).data, []);
   assert.equal((await g('/api/notifications')).data.items[0].type, 'cancelled');
+});
+test('notification email preferences, area badges and server reply reminders', async (t) => {
+  let now = Date.UTC(2026, 10, 2, 10, 0, 0);
+  const sent = [];
+  const { client } = await fixture(t, {
+      clock: () => now,
+      sendNotificationEmail: async (message) => {
+        sent.push(message);
+        return true;
+      },
+    }),
+    driver = client(),
+    shop = client();
+  await signup(driver, 'notify-driver@example.test');
+  const profile = await garage(shop, 'notify-garage@example.test');
+  const car = (await vehicle(driver)).data;
+  const booking = (
+    await driver('/api/bookings', {
+      garage_id: profile.id,
+      vehicle_id: car.id,
+      service: 'Oil change',
+      starts_at: new Date(now + 3 * 86400000).toISOString(),
+      notes: '',
+    })
+  ).data.id;
+
+  const requestFeed = (await shop('/api/notifications')).data;
+  assert.equal(requestFeed.counts.bookings, 1);
+  assert.equal(requestFeed.items[0].email_sent, true);
+  assert.equal(sent.at(-1).to, 'notify-garage@example.test');
+
+  await shop(`/api/bookings/${booking}/messages`, { body: 'Can you confirm the mileage?' });
+  let driverFeed = (await driver('/api/notifications')).data;
+  assert.equal(driverFeed.items.find((item) => item.type === 'message').email_sent, false);
+  await driver(
+    '/api/account/settings',
+    {
+      name: 'Test Driver',
+      phone: '',
+      address: '',
+      email_updates: true,
+      email_chat: true,
+    },
+    'PUT',
+  );
+  now += 24 * 3600000 + 1000;
+  driverFeed = (await driver('/api/notifications')).data;
+  assert(driverFeed.items.some((item) => item.type === 'reply-reminder'));
+  assert(driverFeed.items.find((item) => item.type === 'message').email_sent);
+  assert.equal(driverFeed.counts.bookings >= 1, true);
+
+  await driver(`/api/bookings/${booking}/messages`, { body: 'The mileage is 12,000 km.' });
+  now += 2 * 3600000 + 1000;
+  const garageFeed = (await shop('/api/notifications')).data;
+  assert(garageFeed.items.some((item) => item.type === 'reply-reminder'));
+  await shop('/api/notifications/seen', {});
+  assert.deepEqual((await shop('/api/notifications')).data.counts, {});
 });
 test('only administrators can change site settings, which are versioned and public', async (t) => {
   const { client, base } = await fixture(t, { adminEmails: 'boss@example.test' }),

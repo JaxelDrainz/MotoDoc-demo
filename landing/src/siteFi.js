@@ -1920,6 +1920,25 @@ export const fiStrings = {
     'Sinulla on jo pyyntö tai jäsenyys tähän jäsenyyteen.',
   'The MotoDoc server is unavailable.': 'MotoDoc-palvelin ei ole käytettävissä.',
   'MotoDoc could not connect. Please try again.': 'MotoDociin ei saatu yhteyttä. Yritä uudelleen.',
+  'A message is waiting for your reply': 'Viesti odottaa vastaustasi',
+  'Message from {x}': 'Viesti käyttäjältä {x}',
+  'New booking request': 'Uusi varauspyyntö',
+  'Reminder due soon': 'Muistutus lähestyy',
+  'Reminder overdue': 'Muistutus myöhässä',
+  '{x} unread update': '{x} lukematon päivitys',
+  '{x} unread updates': '{x} lukematonta päivitystä',
+  'All notifications marked as read.': 'Kaikki ilmoitukset merkitty luetuiksi.',
+  'Also sent by email': 'Lähetetty myös sähköpostilla',
+  Earlier: 'Aiemmat',
+  'Every update that needs your attention, in one place.':
+    'Kaikki huomiotasi odottavat päivitykset yhdessä paikassa.',
+  'Mark all as read': 'Merkitse kaikki luetuiksi',
+  'Nothing new. Messages, booking updates and due reminders will appear here.':
+    'Ei uusia ilmoituksia. Viestit, varauspäivitykset ja muistutukset näkyvät täällä.',
+  'View all notifications': 'Näytä kaikki ilmoitukset',
+  'You’re all caught up': 'Kaikki on ajan tasalla',
+  'Booking updates, messages, reminders and garage news will appear here.':
+    'Varauspäivitykset, viestit, muistutukset ja korjaamon uutiset näkyvät täällä.',
 };
 
 export const fiGlossary = [

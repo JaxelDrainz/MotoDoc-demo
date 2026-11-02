@@ -114,6 +114,16 @@ span.dash-status {
 .dash-bell-panel small {
   font-size: 12px;
 }
+.dash-bell-panel .dash-bell-all {
+  display: block;
+  margin: 7px 8px 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 10px 10px;
+  color: var(--green-dark);
+  font-size: 13px;
+  font-weight: 650;
+  text-align: center;
+}
 .dash-bell-icon {
   display: flex;
   flex-shrink: 0;

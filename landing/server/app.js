@@ -33,6 +33,7 @@ import { registerMemberships } from './memberships.js';
 import { registerMarketplace } from './marketplace.js';
 import { platformSettings, registerAdmin, registerFeedback } from './admin.js';
 import { registerFuelDay } from './fuelday.js';
+import { registerNotifications } from './notifications.js';
 import { AREA_KEYS } from '../src/team.js';
 import {
   FI_PLATE,
@@ -159,6 +160,7 @@ export async function createApp({
   vehicleLookup = nhtsaLookup(),
   imageLookup = wikimediaImages(),
   adminEmails = process.env.ADMIN_EMAILS || '',
+  sendNotificationEmail,
 } = {}) {
   if (production && !database && !process.env.TURSO_DATABASE_URL)
     throw new Error(
@@ -814,6 +816,7 @@ export async function createApp({
         'resets',
         'photos',
         'notification_reads',
+        'notification_deliveries',
         'notices',
         'reminders',
         'garage_staff',
@@ -1280,105 +1283,16 @@ export async function createApp({
       ).map((row) => row.starts_at),
     );
   });
-  const eventTitles = {
-    requested: 'New booking request',
-    confirmed: 'Booking approved',
-    'approved-new-time': 'Booking approved for a new time',
-    declined: 'Booking declined',
-    'new-time': 'New time proposed',
-    scheduled: 'Your garage scheduled an appointment',
-    'customer-approved': 'Customer approved the appointment',
-    'customer-declined': 'Customer declined the appointment',
-    stage: 'Repair progress updated',
-    ready: 'Your car is ready for pickup',
-    note: 'Mechanic note',
-    moved: 'Appointment moved',
-    cancelled: 'Appointment cancelled',
-    'no-show': 'Marked as no-show',
-    completed: 'Service completed',
-    rescheduled: 'Reschedule requested',
-    review: 'New review',
-    reply: 'The garage replied to your review',
-    invoice: 'New invoice',
-    'payment-reminder': 'Payment reminder',
-    'invoice-paid': 'Invoice paid',
-    'quote-accepted': 'Quote accepted',
-  };
-  app.get('/api/notifications', async (req, res) => {
-    const isDriver = req.user.role === 'driver',
-      column = isDriver ? 'b.driver_id' : 'b.garage_id',
-      scope = isDriver ? req.user.id : req.user.garage_id,
-      now = new Date(clock()).toISOString();
-    const seen =
-      (await one('SELECT seen_at FROM notification_reads WHERE user_id=?', req.user.id))?.seen_at ||
-      '';
-    const messages = await all(
-      `SELECT m.id,m.body,m.created_at at,m.booking_id,u.name sender_name FROM messages m JOIN bookings b ON b.id=m.booking_id JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=m.sender_id WHERE ${column}=? AND m.sender_id<>? ORDER BY m.created_at DESC LIMIT 20`,
-      scope,
-      req.user.id,
-    );
-    const events = await all(
-      `SELECT e.id,e.kind,e.detail,e.at,e.booking_id,b.service,g.name garage_name,u.name driver_name FROM booking_events e JOIN bookings b ON b.id=e.booking_id JOIN garages g ON g.id=b.garage_id JOIN users u ON u.id=b.driver_id WHERE ${column}=? AND e.actor_id<>? ORDER BY e.at DESC LIMIT 20`,
-      scope,
-      req.user.id,
-    );
-    const soon = new Date(clock() + 7 * 86400000).toISOString().slice(0, 10);
-    const reminders = await all(
-      'SELECT id,title,due_date FROM reminders WHERE user_id=? AND done=0 AND due_date<=? ORDER BY due_date LIMIT 20',
-      req.user.id,
-      soon,
-    );
-    const notices = await all(
-      'SELECT id,kind,title,body,at,link FROM notices WHERE user_id=? ORDER BY at DESC LIMIT 20',
-      req.user.id,
-    );
-    const items = [
-      ...notices.map((n) => ({
-        id: `notice:${n.id}`,
-        type: n.kind,
-        title: n.title,
-        body: n.body,
-        at: n.at,
-        link: n.link,
-      })),
-      ...messages.map((m) => ({
-        id: `message:${m.id}`,
-        type: 'message',
-        title: `Message from ${m.sender_name}`,
-        body: m.body.slice(0, 140),
-        at: m.at,
-        booking_id: m.booking_id,
-      })),
-      ...events.map((e) => ({
-        id: `booking:${e.id}`,
-        type: e.kind,
-        title: eventTitles[e.kind] || 'Booking updated',
-        body: `${e.service} · ${isDriver ? e.garage_name : e.driver_name}`,
-        detail: e.detail || '',
-        at: e.at,
-        booking_id: e.booking_id,
-      })),
-      ...reminders.map((r) => ({
-        id: `reminder:${r.id}`,
-        type: r.due_date < now.slice(0, 10) ? 'overdue' : 'reminder',
-        title: r.due_date < now.slice(0, 10) ? 'Reminder overdue' : 'Reminder due soon',
-        body: r.title,
-        at: new Date(Date.parse(`${r.due_date}T00:00:00Z`) - 7 * 86400000).toISOString(),
-        due_date: r.due_date,
-      })),
-    ]
-      .filter((item) => item.at <= now)
-      .sort((a, b) => (a.at < b.at ? 1 : -1))
-      .slice(0, 30);
-    res.json({ items, unread: items.filter((item) => item.at > seen).length, seen_at: seen });
-  });
-  app.post('/api/notifications/seen', async (req, res) => {
-    await run(
-      'INSERT INTO notification_reads(user_id,seen_at) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET seen_at=excluded.seen_at',
-      req.user.id,
-      new Date(clock()).toISOString(),
-    );
-    res.json({ ok: true });
+  registerNotifications(app, {
+    one,
+    all,
+    run,
+    id,
+    clock,
+    outboxPath,
+    appOrigin,
+    production,
+    sendNotificationEmail,
   });
   app.get('/api/messages', async (req, res) => {
     const driver = req.user.role === 'driver';
