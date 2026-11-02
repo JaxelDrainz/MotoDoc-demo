@@ -182,6 +182,29 @@ export async function buildDemoWorld({ run, clock, world }) {
     'It would be great to see the membership renewal date on the home screen too.',
     at(-3 * 3600000),
   );
+  const fuelDay = id(),
+    helsinkiDay = new Date(now + 2 * 3600000).toISOString().slice(0, 10);
+  await run(
+    "INSERT INTO fuel_days(id,world,station_name,station_address,date,start_time,end_time,amount_cents,cap,status,created_at,created_by,live_at) VALUES(?,?,'Neste Kamppi','Runeberginkatu 1, 00100 Helsinki',?,'00:00','23:59',1000,100,'live',?,?,?)",
+    fuelDay,
+    world,
+    helsinkiDay,
+    at(-3 * day),
+    people.admin[0],
+    at(-2 * day),
+  );
+  await run(
+    "INSERT INTO fuel_passes(code,fuel_day_id,driver_id,vehicle_id,car_label,plate,claimed_at,used_at,used_by) VALUES(?,?,?,?,'Skoda Octavia','DEM-201',?,?,'Demo Admin')",
+    `FD-${tag
+      .slice(0, 5)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, 'X')}`,
+    fuelDay,
+    basic,
+    octavia,
+    at(-26 * 3600000),
+    at(-6 * 3600000),
+  );
   const squeak = id(),
     warning = id();
   for (const [key, driverId, vehicleId, service, kind, urgency, days, text, mileage, posted] of [
@@ -535,6 +558,8 @@ const purgeSteps = [
     (table) => `DELETE FROM ${table} WHERE user_id IN ${users}`,
   ),
   `DELETE FROM feedback WHERE user_id IN ${users}`,
+  `DELETE FROM fuel_passes WHERE driver_id IN ${users}`,
+  'DELETE FROM fuel_days WHERE world=?',
   `DELETE FROM users WHERE id IN ${users}`,
   'DELETE FROM announcements WHERE world=?',
   'DELETE FROM admin_audit WHERE world=?',

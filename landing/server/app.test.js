@@ -2016,3 +2016,119 @@ test('admin console: overview, suspend, verify, reviews, feedback, announcements
   );
   assert.equal((await visitor('/api/admin/feedback')).data.length, 1);
 });
+
+test('fuel day: setup, go live, claim rules, attendant check, use, undo, end, funnel, CSV', async (t) => {
+  let now = Date.parse('2026-06-10T07:00:00Z');
+  const { client } = await fixture(t, { adminEmails: 'boss@example.test', clock: () => now }),
+    admin = client(),
+    d = client(),
+    e = client(),
+    nocar = client();
+  await signup(admin, 'boss@example.test');
+  await signup(d, 'one@example.test');
+  await signup(e, 'two@example.test');
+  await signup(nocar, 'three@example.test');
+  const car = (await vehicle(d)).data;
+  const sameplate = (await vehicle(e)).data;
+  assert.equal((await d('/api/fuel-day')).data.day, null);
+  assert.equal((await d('/api/admin/fuel-days')).status, 403);
+
+  const setup = {
+    station_name: 'Neste Kamppi',
+    station_address: 'Runeberginkatu 1, Helsinki',
+    date: '2026-06-10',
+    start_time: '10:00',
+    end_time: '18:00',
+    amount: 10,
+    cap: 2,
+  };
+  assert.equal((await admin('/api/admin/fuel-days', { ...setup, end_time: '09:00' })).status, 400);
+  const created = await admin('/api/admin/fuel-days', setup);
+  assert.equal(created.status, 201);
+  const dayId = created.data.id;
+  assert.equal(
+    (await d('/api/fuel-day/passes', { fuel_day_id: dayId, vehicle_id: car.id })).status,
+    409,
+  );
+  const live = await admin(`/api/admin/fuel-days/${dayId}/live`, {});
+  assert.equal(live.data.notified, 4);
+  assert(
+    (await d('/api/notifications')).data.items.some(
+      (n) => n.title === 'Fuel Day: free fuel with MotoDoc',
+    ),
+  );
+  const offer = (await d('/api/fuel-day')).data;
+  assert.equal(offer.day.places_left, 2);
+  assert.equal(offer.day.phase, 'live');
+
+  assert.equal((await nocar('/api/fuel-day/passes', { fuel_day_id: dayId })).status, 400);
+  const got = await d('/api/fuel-day/passes', { fuel_day_id: dayId, vehicle_id: car.id });
+  assert.equal(got.status, 201);
+  assert.match(got.data.code, /^FD-[A-Z2-9]{5}$/);
+  assert.equal(
+    (await d('/api/fuel-day/passes', { fuel_day_id: dayId, vehicle_id: car.id })).status,
+    409,
+  );
+  assert.equal(
+    (await e('/api/fuel-day/passes', { fuel_day_id: dayId, vehicle_id: sameplate.id })).data.error,
+    'This car already has a pass.',
+  );
+  assert.equal((await d('/api/fuel-day')).data.pass.code, got.data.code);
+
+  const lower = got.data.code.toLowerCase().replace('-', ' ');
+  assert.equal(
+    (await admin(`/api/admin/fuel-passes/${encodeURIComponent(lower)}`)).data.status,
+    'valid',
+  );
+  assert.equal((await admin('/api/admin/fuel-passes/FD-ZZZZZ')).data.status, 'not_found');
+  assert.equal((await admin(`/api/admin/fuel-passes/${got.data.code}/use`, {})).status, 200);
+  const used = (await admin(`/api/admin/fuel-passes/${got.data.code}`)).data;
+  assert.equal(used.status, 'used');
+  assert.equal(used.pass.used_by, 'Test Driver');
+  assert.equal((await admin(`/api/admin/fuel-passes/${got.data.code}/use`, {})).status, 409);
+  assert.equal((await d(`/api/fuel-day/passes/${got.data.code}`, {}, 'DELETE')).status, 409);
+  assert.equal((await admin(`/api/admin/fuel-passes/${got.data.code}/undo`, {})).status, 200);
+  assert.equal((await d(`/api/fuel-day/passes/${got.data.code}`, {}, 'DELETE')).status, 200);
+  const again = await d('/api/fuel-day/passes', { fuel_day_id: dayId, vehicle_id: car.id });
+  await admin(`/api/admin/fuel-passes/${again.data.code}/use`, {});
+
+  await d('/api/market/requests', {
+    vehicle_id: car.id,
+    service: 'Brake check',
+    preferred_date: '2026-06-12',
+    area: 'Helsinki',
+    description: 'Squeaks.',
+  });
+  assert.equal(
+    (await admin(`/api/admin/fuel-days/${dayId}`, { ...setup, cap: 0 }, 'PUT')).status,
+    400,
+  );
+  let report = (await admin('/api/admin/fuel-days')).data;
+  assert.equal(report.day.claimed, 1);
+  assert.equal(report.funnel.got, 1);
+  assert.equal(report.funnel.used, 1);
+  assert.equal(report.funnel.quote, 1);
+  assert.equal(report.funnel.verdict, 'too_early');
+
+  now = Date.parse('2026-06-10T17:00:00Z');
+  assert.equal(
+    (await e('/api/fuel-day/passes', { fuel_day_id: dayId, vehicle_id: sameplate.id })).data.error,
+    'This Fuel Day is over.',
+  );
+  await admin(`/api/admin/fuel-days/${dayId}/end`, {});
+  report = (await admin('/api/admin/fuel-days')).data;
+  assert.equal(report.funnel.verdict, 'meets');
+  const exported = await admin(`/api/admin/fuel-days/${dayId}/export`);
+  const csv = new TextDecoder().decode(exported.data);
+  assert.match(csv, /^code,driver,car,plate,claimed_at,used_at,used_by,amount_eur\n/);
+  assert.match(csv, /TEST-123/);
+  const log = (await admin('/api/admin/audit')).data.map((a) => a.action);
+  for (const action of [
+    'Created Fuel Day',
+    'Fuel Day live',
+    'Fuel Day pass used',
+    'Fuel Day pass reset',
+    'Fuel Day ended',
+  ])
+    assert(log.includes(action), action);
+});

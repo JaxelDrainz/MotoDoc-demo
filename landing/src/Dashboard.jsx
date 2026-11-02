@@ -27,6 +27,7 @@ import {
   UsersThreeIcon,
   LifebuoyIcon,
   ChatTextIcon,
+  GasPumpIcon,
 } from '@phosphor-icons/react';
 import { api } from './api.js';
 import { Brand } from './Brand.jsx';
@@ -50,6 +51,7 @@ import { NoAccess, TeamGate, TeamPanel } from './Team.jsx';
 import { DriverMemberships, GarageMemberships } from './Memberships.jsx';
 import { DriverMarketplace, GarageMarketplace } from './Marketplace.jsx';
 import { durationLabel } from './marketplace.js';
+import { DriverFuelDay, fuelOffer } from './FuelDay.jsx';
 import { TAB_AREAS } from './team.js';
 import { FEEDBACK_KINDS } from './platform.js';
 import { siteFlag } from './site.jsx';
@@ -608,7 +610,7 @@ export function Dashboard() {
       'reminders',
       ...(account.role === 'garage'
         ? ['garage/profile', ...(may('customers') ? ['customers'] : [])]
-        : ['vehicles', 'garages']),
+        : ['vehicles', 'garages', 'fuel-day']),
     ];
     const results = await Promise.all(paths.map((p) => api('/' + p)));
     setData(Object.fromEntries(paths.map((p, i) => [p, results[i]])));
@@ -662,6 +664,7 @@ export function Dashboard() {
         ]),
     ['bookings', CalendarBlankIcon, 'Bookings'],
     ['marketplace', LifebuoyIcon, 'Marketplace'],
+    ...(!isGarage && data?.['fuel-day']?.day ? [['fuel-day', GasPumpIcon, 'Fuel Day']] : []),
     ...(isGarage ? [['jobs', ListChecksIcon, 'Jobs']] : []),
     ['history', ClockCounterClockwiseIcon, 'Service history'],
     ...(isGarage ? [['customers', UsersIcon, 'Customers']] : []),
@@ -1178,13 +1181,15 @@ export function Dashboard() {
                       ? 'Your service costs, all in one place.'
                       : selected === 'reminders'
                         ? 'A little help remembering what’s next.'
-                        : selected === 'marketplace'
-                          ? 'Emergency help from nearby garages, with prices up front.'
-                          : selected === 'team'
-                            ? 'Who works with you, and what each person can see and do.'
-                            : selected === 'no-access'
-                              ? 'This part of the garage account isn’t shared with you.'
-                              : 'Keep the details that matter together.'}
+                        : selected === 'fuel-day'
+                          ? 'Free fuel from MotoDoc at a partner station, one day only.'
+                          : selected === 'marketplace'
+                            ? 'Emergency help from nearby garages, with prices up front.'
+                            : selected === 'team'
+                              ? 'Who works with you, and what each person can see and do.'
+                              : selected === 'no-access'
+                                ? 'This part of the garage account isn’t shared with you.'
+                                : 'Keep the details that matter together.'}
             </p>
           </div>
           <span className="dash-connected">
@@ -1206,6 +1211,18 @@ export function Dashboard() {
         {selected === 'overview' && (
           <>
             {isGarage && <AvailabilityCard canEdit={allowed('bookings')} />}
+            {!isGarage && fuelOffer(data) && !fuelOffer(data).pass && (
+              <a className="dash-tile fd-promo" href="#fuel-day">
+                <GasPumpIcon size={26} />
+                <span>
+                  <strong>{`${euro(fuelOffer(data).day.amount_cents)} of fuel on us`}</strong>
+                  <small>
+                    {`${fuelOffer(data).day.station_name} · ${fuelOffer(data).day.places_left} places left`}
+                  </small>
+                </span>
+                <ArrowRightIcon size={18} />
+              </a>
+            )}
             <div className="dash-stats">
               {[
                 [CalendarBlankIcon, 'Upcoming bookings', data.overview.upcoming],
@@ -1446,6 +1463,7 @@ export function Dashboard() {
 
         {selected === 'services' && <ServicesPanel open={open} canEdit={allowed('services')} />}
         {selected === 'team' && <TeamPanel open={open} user={user} />}
+        {selected === 'fuel-day' && <DriverFuelDay data={data} open={open} reload={reload} />}
         {selected === 'marketplace' &&
           (isGarage ? (
             <GarageMarketplace open={open} data={data} />
