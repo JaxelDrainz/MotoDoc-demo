@@ -1152,7 +1152,7 @@
     font-size: 22px;
   }
   .dash-role,
-  .dash-account > div {
+  .dash-user-name {
     display: none;
   }
   .dash-sidebar nav a {
@@ -1507,6 +1507,7 @@ img.dash-avatar {
   }
   .dash-bottom-nav a,
   .dash-bottom-nav button {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1519,6 +1520,15 @@ img.dash-avatar {
     font: inherit;
     font-size: 11px;
     color: #5e646c;
+  }
+  .dash-bottom-nav .dash-nav-badge {
+    position: absolute;
+    top: 4px;
+    right: max(10px, calc(50% - 27px));
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    line-height: 16px;
   }
   .dash-bottom-nav [aria-current='page'] {
     color: var(--green);
@@ -1701,6 +1711,23 @@ img.dash-avatar {
 .dash-sidebar nav a:focus-visible {
   outline: 3px solid #4da58b;
   outline-offset: 2px;
+}
+.dash-nav-badge {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  margin-left: auto;
+  padding: 0 5px;
+  place-items: center;
+  border-radius: 999px;
+  background: #c53d35;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+}
+.dash-more .dash-nav-badge {
+  margin-left: auto;
 }
 @media (prefers-reduced-motion: reduce) {
   .dash-sidebar nav a::after {

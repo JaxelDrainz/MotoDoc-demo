@@ -14,12 +14,12 @@ Our app keeps its own design. The goal is the spec's features and step-by-step w
 | Area                             | ✅     | 🟡     | ❌     |
 | -------------------------------- | ------ | ------ | ------ |
 | 1. Accounts, sign-in, onboarding | 18     | 2      | 2      |
-| 2. Driver                        | 8      | 17     | 16     |
-| 3. Garage                        | 3      | 12     | 17     |
+| 2. Driver                        | 9      | 16     | 16     |
+| 3. Garage                        | 6      | 12     | 14     |
 | 4. Admin and Fuel Day            | 15     | 0      | 0      |
-| 5. Notifications                 | 2      | 3      | 7      |
+| 5. Notifications                 | 10     | 1      | 1      |
 | 6. Platform rules                | 5      | 3      | 3      |
-| **Total**                        | **51** | **37** | **45** |
+| **Total**                        | **63** | **34** | **36** |
 
 ---
 
@@ -33,7 +33,7 @@ Our app keeps its own design. The goal is the spec's features and step-by-step w
 6. **Emergency marketplace.** ✅ Done 2 November 2026. Driver posts a request, garages quote, driver accepts or closes.
 7. **Admin console.** ✅ Done 2 November 2026. The 12 sections: users and suspension, garage verification, review moderation, payments, feedback, announcements, platform settings, audit log.
 8. **Fuel Day campaign.** ✅ Done 2 November 2026. Passes with QR, the attendant check, admin setup, driver notification, funnel reporting and CSV export.
-9. **Notifications everywhere.** All 29 events, a full notifications page, email delivery, reply reminders run on the server, and badges.
+9. **Notifications everywhere.** ✅ Done 2 November 2026. All 29 event families, a full notifications page, delivery metadata, server reply reminders, navigation badges, fresh toasts and the garage chime. Production email sending still needs the chosen provider credential.
 10. **Extras.** MotoDoc Free/Pro subscription, service recommendations, Ask MotoDoc assistant, inspections and Coming soon, Pay later, referrals, feedback.
 
 ---
@@ -104,7 +104,7 @@ Our app keeps its own design. The goal is the spec's features and step-by-step w
 | Ask MotoDoc assistant                                                                                                                                                                                                                        | ❌     | Needs an AI key and a decision.                                                                                                                  |
 | MotoDoc subscription Free / Pro (launch bonus)                                                                                                                                                                                               | ❌     |                                                                                                                                                  |
 | Profile page (name, phone, address, notes for your mechanic)                                                                                                                                                                                 | 🟡     | Account tab has a photo; no phone, address or notes.                                                                                             |
-| Settings: email important updates, email chat copies, reply reminders, language, password, delete account                                                                                                                                    | 🟡     | Language only.                                                                                                                                   |
+| Settings: email important updates, email chat copies, reply reminders, language, password, delete account                                                                                                                                    | ✅     | Preferences persist; password changes revoke other sessions and deletion anonymises retained accounting records.                                |
 | Fuel Day pass (website page as well)                                                                                                                                                                                                         | ✅     | Driver offer, one-pass rules, QR code, place release and used state are implemented.                                                             |
 | Coming soon (inspection booking, road tax, insurance)                                                                                                                                                                                        | ❌     |                                                                                                                                                  |
 | Leave feedback                                                                                                                                                                                                                               | ❌     |                                                                                                                                                  |
@@ -143,9 +143,9 @@ Our app keeps its own design. The goal is the spec's features and step-by-step w
 | Team & access (invite Manager / Mechanic / Receptionist, per-area switches, pause, remove)                                                                                                                                                                    | ✅     | Wallet area is ready for when the wallet is built.            |
 | Workshop profile (contact person, Y-tunnus, about, specialisations, main focus, hourly rate)                                                                                                                                                                  | 🟡     | Name, city, address, description, services.                   |
 | Garage subscription Free / Pro                                                                                                                                                                                                                                | ❌     |                                                               |
-| Garage settings (notifications, sound with Test, password, delete account, business hours)                                                                                                                                                                    | ❌     |                                                               |
-| New-request chime and toast                                                                                                                                                                                                                                   | ❌     |                                                               |
-| Sidebar badges (bookings waiting, marketplace, messages, reviews needing reply)                                                                                                                                                                               | ❌     |                                                               |
+| Garage settings (notifications, sound with Test, password, delete account, business hours)                                                                                                                                                                    | ✅     | Account settings and garage availability tools cover the complete set.          |
+| New-request chime and toast                                                                                                                                                                                                                                   | ✅     | Respects the garage sound preference and only fires for fresh requests.          |
+| Sidebar badges (bookings waiting, marketplace, messages, reviews needing reply)                                                                                                                                                                               | ✅     | Unread notification areas feed desktop, mobile and More-sheet badges.            |
 | Confirmation dialogs for sending, paying out, changing prices or access                                                                                                                                                                                       | 🟡     | Some exist.                                                   |
 
 ## 4. Admin and Fuel Day
@@ -174,16 +174,16 @@ Our app keeps its own design. The goal is the spec's features and step-by-step w
 | -------------------------------------------------------------------------------- | ------ | ------------------------------------ |
 | Bell with unread count and mark all read                                         | ✅     |                                      |
 | In-app notifications for booking events, messages and reminders                  | ✅     | Covers about 6 of the 29 events.     |
-| All 29 events from the spec matrix                                               | 🟡     |                                      |
-| Full notifications page (Today / Earlier, icons per type)                        | ❌     |                                      |
-| Email delivery with per-user preferences (important updates on, chat copies off) | ❌     | Needs an email provider.             |
-| "Also sent by email" marker                                                      | ❌     |                                      |
-| Reply reminders on the server (garage 2 h, driver 24 h)                          | ❌     |                                      |
+| All 29 events from the spec matrix                                               | ✅     | Booking, job, message, reminder, invoice, membership, marketplace, admin and campaign events are unified. |
+| Full notifications page (Today / Earlier, icons per type)                        | ✅     | Includes unread state, mark all read and responsive empty state.                                  |
+| Email delivery with per-user preferences (important updates on, chat copies off) | 🟡     | Local delivery and a production mailer hook work; the production provider credential is external. |
+| "Also sent by email" marker                                                      | ✅     | Driven by recorded delivery status, not a visual placeholder.                                     |
+| Reply reminders on the server (garage 2 h, driver 24 h)                          | ✅     | Calculated from the last unanswered booking message and tested on the server.                       |
 | Push notifications for the driver app                                            | ❌     | We have no native app.               |
-| Garage chime for new requests                                                    | ❌     |                                      |
-| Red badges in navigation                                                         | 🟡     | Bell only.                           |
-| Notification text in the recipient's language                                    | 🟡     | Our translation layer covers titles. |
-| Fresh notification toast with "Open"                                             | ❌     |                                      |
+| Garage chime for new requests                                                    | ✅     | Respects the persisted sound preference and includes a Test control.              |
+| Red badges in navigation                                                         | ✅     | Counts are grouped by destination and clear with mark all read.                    |
+| Notification text in the recipient's language                                    | ✅     | Event titles, reminder copy and the notification UI are available in Finnish.      |
+| Fresh notification toast with "Open"                                             | ✅     | Polling detects only newly arrived IDs and offers the correct destination.          |
 
 ## 6. Platform rules
 

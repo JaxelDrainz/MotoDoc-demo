@@ -6,8 +6,8 @@ const FLASH = 'motodoc-flash';
 const EVENT = 'motodoc-toast';
 let nextToastId = 0;
 
-export function toast(message, kind = 'success') {
-  if (message) window.dispatchEvent(new CustomEvent(EVENT, { detail: { message, kind } }));
+export function toast(message, kind = 'success', action = null) {
+  if (message) window.dispatchEvent(new CustomEvent(EVENT, { detail: { message, kind, action } }));
 }
 
 export function flash(message, kind = 'success') {
@@ -21,11 +21,11 @@ export function Toasts() {
   useEffect(() => {
     const timers = new Set();
     const remove = (id) => setItems((list) => list.filter((item) => item.id !== id));
-    const add = ({ message, kind }) => {
+    const add = ({ message, kind, action }) => {
       const id = ++nextToastId;
       setItems((list) => [
         ...list.filter((item) => item.message !== message).slice(-2),
-        { id, message, kind },
+        { id, message, kind, action },
       ]);
       const timer = setTimeout(
         () => {
@@ -64,6 +64,11 @@ export function Toasts() {
             <CheckCircleIcon size={21} weight="fill" aria-hidden="true" />
           )}
           <span>{item.message}</span>
+          {item.action?.href && (
+            <a className="toast-action" href={item.action.href}>
+              {item.action.label || 'Open'}
+            </a>
+          )}
           <button
             aria-label="Dismiss"
             onClick={() => setItems((list) => list.filter((other) => other.id !== item.id))}

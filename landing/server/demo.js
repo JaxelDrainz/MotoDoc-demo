@@ -554,9 +554,14 @@ const purgeSteps = [
   `DELETE FROM vehicles WHERE owner_id IN ${users}`,
   `DELETE FROM reminders WHERE user_id IN ${users}`,
   `DELETE FROM garages WHERE owner_id IN ${users}`,
-  ...['sessions', 'resets', 'photos', 'notification_reads', 'user_settings'].map(
-    (table) => `DELETE FROM ${table} WHERE user_id IN ${users}`,
-  ),
+  ...[
+    'sessions',
+    'resets',
+    'photos',
+    'notification_reads',
+    'notification_deliveries',
+    'user_settings',
+  ].map((table) => `DELETE FROM ${table} WHERE user_id IN ${users}`),
   `DELETE FROM feedback WHERE user_id IN ${users}`,
   `DELETE FROM fuel_passes WHERE driver_id IN ${users}`,
   'DELETE FROM fuel_days WHERE world=?',

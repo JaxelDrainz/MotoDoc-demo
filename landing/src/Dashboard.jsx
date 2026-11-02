@@ -52,6 +52,7 @@ import { DriverMemberships, GarageMemberships } from './Memberships.jsx';
 import { DriverMarketplace, GarageMarketplace } from './Marketplace.jsx';
 import { durationLabel } from './marketplace.js';
 import { DriverFuelDay, fuelOffer } from './FuelDay.jsx';
+import { NotificationsPage } from './Notifications.jsx';
 import { TAB_AREAS } from './team.js';
 import { FEEDBACK_KINDS } from './platform.js';
 import { siteFlag } from './site.jsx';
@@ -552,6 +553,13 @@ function ConnectGoogle({ onLinked }) {
 
 export function Dashboard() {
   const [notice, setNotice] = useState('');
+  const [notificationFeed, setNotificationFeed] = useState({
+    items: [],
+    unread: 0,
+    seen_at: '',
+    counts: {},
+    loading: true,
+  });
   useEffect(() => {
     document.title = 'Your account — MotoDoc';
   }, []);
@@ -672,6 +680,7 @@ export function Dashboard() {
     ['invoices', ReceiptIcon, 'Invoices'],
     ...(isGarage ? [['analytics', ChartBarIcon, 'Analytics']] : []),
     ['reminders', BellIcon, 'Reminders'],
+    ['notifications', BellIcon, 'Notifications'],
     ...(isGarage ? [['team', UsersThreeIcon, 'Team']] : []),
     ['account', LockKeyIcon, 'Account'],
   ].filter(([key]) => !isGarage || !TAB_AREAS[key] || allowed(TAB_AREAS[key]));
@@ -680,6 +689,7 @@ export function Dashboard() {
   const quick = isGarage
     ? { overview: 'Overview', bookings: 'Bookings', customers: 'Customers', profile: 'Profile' }
     : { overview: 'Overview', vehicles: 'Vehicles', garages: 'Garages', bookings: 'Bookings' };
+  const notificationCount = (key) => notificationFeed.counts?.[key] || 0;
   const go = (target, label) => (
     <button className="button button-small" onClick={() => navigate(target)}>
       {label} <ArrowRightIcon size={16} />
@@ -1077,6 +1087,11 @@ export function Dashboard() {
             >
               <Icon size={20} />
               <span>{label}</span>
+              {notificationCount(key) > 0 && (
+                <span className="dash-nav-badge" aria-label={`${notificationCount(key)} unread`}>
+                  {Math.min(notificationCount(key), 99)}
+                </span>
+              )}
             </a>
           ))}
           {!isGarage && (
@@ -1088,7 +1103,7 @@ export function Dashboard() {
         </nav>
         <div className="dash-account">
           <span data-lang-switch />
-          <Bell />
+          <Bell user={user} onFeed={setNotificationFeed} />
           <Avatar name={user.name} photo={user.photo} />
           <ThemeToggle />
           {!isStaff && (
@@ -1137,7 +1152,7 @@ export function Dashboard() {
           >
             <ChatTextIcon size={20} />
           </button>
-          <div>
+          <div className="dash-user-name">
             <strong>{user.name}</strong>
             <small>{user.email}</small>
           </div>
@@ -1181,15 +1196,17 @@ export function Dashboard() {
                       ? 'Your service costs, all in one place.'
                       : selected === 'reminders'
                         ? 'A little help remembering what’s next.'
-                        : selected === 'fuel-day'
-                          ? 'Free fuel from MotoDoc at a partner station, one day only.'
-                          : selected === 'marketplace'
-                            ? 'Emergency help from nearby garages, with prices up front.'
-                            : selected === 'team'
-                              ? 'Who works with you, and what each person can see and do.'
-                              : selected === 'no-access'
-                                ? 'This part of the garage account isn’t shared with you.'
-                                : 'Keep the details that matter together.'}
+                        : selected === 'notifications'
+                          ? 'Every update that needs your attention, in one place.'
+                          : selected === 'fuel-day'
+                            ? 'Free fuel from MotoDoc at a partner station, one day only.'
+                            : selected === 'marketplace'
+                              ? 'Emergency help from nearby garages, with prices up front.'
+                              : selected === 'team'
+                                ? 'Who works with you, and what each person can see and do.'
+                                : selected === 'no-access'
+                                  ? 'This part of the garage account isn’t shared with you.'
+                                  : 'Keep the details that matter together.'}
             </p>
           </div>
           <span className="dash-connected">
@@ -1463,6 +1480,19 @@ export function Dashboard() {
 
         {selected === 'services' && <ServicesPanel open={open} canEdit={allowed('services')} />}
         {selected === 'team' && <TeamPanel open={open} user={user} />}
+        {selected === 'notifications' && (
+          <NotificationsPage
+            feed={notificationFeed}
+            onSeen={() =>
+              setNotificationFeed((current) => ({
+                ...current,
+                unread: 0,
+                seen_at: new Date().toISOString(),
+                counts: {},
+              }))
+            }
+          />
+        )}
         {selected === 'fuel-day' && <DriverFuelDay data={data} open={open} reload={reload} />}
         {selected === 'marketplace' &&
           (isGarage ? (
@@ -1862,6 +1892,9 @@ export function Dashboard() {
             <a href={`#${key}`} aria-current={selected === key ? 'page' : undefined} key={key}>
               <Icon size={22} />
               <span>{quick[key]}</span>
+              {notificationCount(key) > 0 && (
+                <span className="dash-nav-badge">{Math.min(notificationCount(key), 99)}</span>
+              )}
             </a>
           ))}
         <button
@@ -1880,7 +1913,10 @@ export function Dashboard() {
             .map(([key, Icon, label]) => (
               <a href={`#${key}`} aria-current={selected === key ? 'page' : undefined} key={key}>
                 <Icon size={21} />
-                {label}
+                <span>{label}</span>
+                {notificationCount(key) > 0 && (
+                  <span className="dash-nav-badge">{Math.min(notificationCount(key), 99)}</span>
+                )}
               </a>
             ))}
           {!isGarage && (

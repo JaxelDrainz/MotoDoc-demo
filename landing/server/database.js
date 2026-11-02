@@ -276,6 +276,16 @@ Direct contact with garage',1200,'basic' FROM garage_details WHERE membership_la
         UNIQUE(fuel_day_id,driver_id),UNIQUE(fuel_day_id,plate))`,
     ],
   ],
+  [
+    11,
+    [
+      `CREATE TABLE IF NOT EXISTS notification_deliveries(
+        id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        source_id TEXT NOT NULL,channel TEXT NOT NULL,status TEXT NOT NULL,sent_at TEXT NOT NULL,
+        UNIQUE(user_id,source_id,channel))`,
+      'CREATE INDEX IF NOT EXISTS notification_delivery_user ON notification_deliveries(user_id,sent_at)',
+    ],
+  ],
 ];
 
 export function openDatabase(path) {

@@ -124,3 +124,21 @@ Verified in the in-app browser:
 - A React StrictMode duplicate-toast-key warning found during role-switch testing was removed by using a module-level monotonic toast identifier. A fresh driver and admin load has no console warnings or errors.
 
 Automated coverage passes for draft/live/ended states, capacity and duplicate claim rules, QR/pass lookup, use and undo, notifications, funnel attribution and CSV export. No outstanding P0, P1 or P2 finding remains in this stage.
+
+# Notifications everywhere — 2 November 2026
+
+final result: passed
+
+The notification experience extends the established authenticated MotoDoc design system with a compact bell preview and a dedicated Today / Earlier timeline. Notification types use semantic Phosphor icons and the existing green, blue, amber and red status palette rather than introducing a new visual language.
+
+Verified in the in-app browser:
+
+- The full page groups updates by day, distinguishes unread items, shows delivery metadata and provides one clear mark-all-read action.
+- Mark all read immediately clears the unread total, notification dots and destination badges without removing history.
+- Sidebar, mobile bottom navigation and the More sheet receive destination-specific red badges from the same server feed.
+- The bell remains visible on phone layouts, opens a seven-item preview and links to the complete timeline.
+- A 390 × 844 viewport has no horizontal overflow; the notification list remains readable and the bell panel fits between the app header and screen edges.
+- Dark mode, Finnish translations, keyboard links, focus states and reduced-motion behavior inherit the existing product rules.
+- Browser warning/error log was empty after desktop and mobile verification.
+
+Backend integration coverage includes email preference handling, persisted delivery status, the “Also sent by email” marker, area counts, mark-all-read, garage 2-hour reply reminders and driver 24-hour reply reminders. No outstanding P0, P1 or P2 finding remains in this stage.
