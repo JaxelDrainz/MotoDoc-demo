@@ -286,6 +286,21 @@ Direct contact with garage',1200,'basic' FROM garage_details WHERE membership_la
       'CREATE INDEX IF NOT EXISTS notification_delivery_user ON notification_deliveries(user_id,sent_at)',
     ],
   ],
+  [
+    12,
+    [
+      "ALTER TABLE user_settings ADD COLUMN plan TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE user_settings ADD COLUMN plan_period TEXT NOT NULL DEFAULT 'monthly'",
+      'ALTER TABLE user_settings ADD COLUMN plan_changed_at TEXT',
+      "ALTER TABLE user_settings ADD COLUMN ref_code TEXT NOT NULL DEFAULT ''",
+      'ALTER TABLE user_settings ADD COLUMN referred_by TEXT',
+      `CREATE TABLE IF NOT EXISTS referrals(
+        id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,email TEXT NOT NULL,
+        kind TEXT NOT NULL,created_at TEXT NOT NULL,resent_at TEXT,joined_user_id TEXT,joined_at TEXT,
+        UNIQUE(user_id,email))`,
+      'CREATE INDEX IF NOT EXISTS referral_email ON referrals(email)',
+    ],
+  ],
 ];
 
 export function openDatabase(path) {

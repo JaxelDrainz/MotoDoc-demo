@@ -1,0 +1,179 @@
+.ex-bonus {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  border-color: var(--green);
+}
+.ex-bonus > svg {
+  color: var(--green);
+  flex: none;
+}
+.ex-bonus p {
+  margin: 0;
+}
+.ex-plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.ex-plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.ex-plan.featured {
+  border-color: var(--green);
+  box-shadow: 0 0 0 1px var(--green);
+}
+.ex-plan h3 {
+  margin: 0;
+  font-size: 20px;
+}
+.ex-plan small {
+  color: var(--muted);
+}
+.ex-plan button,
+.ex-current {
+  margin-top: auto;
+  align-self: flex-start;
+}
+.ex-current {
+  font-weight: 600;
+  color: var(--green);
+}
+.ex-priority {
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 2px 10px;
+  background: #f1f4f6;
+  color: var(--muted);
+}
+.ex-priority.overdue {
+  background: #fdecec;
+  color: #9b1c1c;
+}
+.ex-priority.due_soon {
+  background: #fff7e6;
+  color: #8a5300;
+}
+.ex-priority.on_track {
+  background: var(--mint);
+  color: var(--green);
+}
+.ex-buttons {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.dash-row:has(.ex-detail) {
+  flex-wrap: wrap;
+}
+.ex-detail {
+  flex-basis: 100%;
+}
+.ex-soon {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.ex-soon article {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.ex-soon svg {
+  color: var(--green);
+}
+.ex-soon h3,
+.ex-soon p {
+  margin: 0;
+}
+.ex-soon .mem-pill {
+  justify-self: start;
+}
+.ex-paylater {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-top: 16px;
+}
+.ex-paylater > svg {
+  color: var(--green);
+  flex: none;
+}
+.ex-paylater h3 {
+  margin: 0 0 4px;
+}
+.ex-paylater p {
+  margin: 0 0 6px;
+}
+.ex-links,
+.ex-invite {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.ex-links h3,
+.ex-invite h3 {
+  margin: 0;
+}
+.ex-link {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px 12px;
+  align-items: center;
+}
+.ex-link code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #f1f4f6;
+}
+.ex-invite .button {
+  justify-self: start;
+}
+.ex-joined {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--green);
+  font-weight: 600;
+}
+@media (max-width: 560px) {
+  .ex-link {
+    grid-template-columns: 1fr auto;
+  }
+  .ex-link span {
+    grid-column: 1 / -1;
+  }
+}
+:root[data-theme='dark'] .ex-plan {
+  background: #141d19;
+  border-color: #26332d;
+}
+:root[data-theme='dark'] .ex-plan.featured {
+  border-color: var(--green);
+}
+:root[data-theme='dark'] :is(.ex-link code, .ex-priority) {
+  background: #1b2621;
+}
+:root[data-theme='dark'] .ex-priority.overdue {
+  background: #3a1717;
+  color: #fca5a5;
+}
+:root[data-theme='dark'] .ex-priority.due_soon {
+  background: #3a2a0d;
+  color: #fcd34d;
+}

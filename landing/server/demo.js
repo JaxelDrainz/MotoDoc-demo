@@ -182,6 +182,18 @@ export async function buildDemoWorld({ run, clock, world }) {
     'It would be great to see the membership renewal date on the home screen too.',
     at(-3 * 3600000),
   );
+  await run(
+    "UPDATE user_settings SET plan='free',plan_changed_at=? WHERE user_id=?",
+    at(-30 * day),
+    basic,
+  );
+  await run(
+    "INSERT INTO referrals(id,user_id,email,kind,created_at) VALUES(?,?,?,'garage',?)",
+    id(),
+    owner,
+    `korjaamo.${tag}@demo.motodoc.invalid`,
+    at(-4 * day),
+  );
   const fuelDay = id(),
     helsinkiDay = new Date(now + 2 * 3600000).toISOString().slice(0, 10);
   await run(
@@ -563,6 +575,7 @@ const purgeSteps = [
     'user_settings',
   ].map((table) => `DELETE FROM ${table} WHERE user_id IN ${users}`),
   `DELETE FROM feedback WHERE user_id IN ${users}`,
+  `DELETE FROM referrals WHERE user_id IN ${users}`,
   `DELETE FROM fuel_passes WHERE driver_id IN ${users}`,
   'DELETE FROM fuel_days WHERE world=?',
   `DELETE FROM users WHERE id IN ${users}`,

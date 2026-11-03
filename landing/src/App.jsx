@@ -541,6 +541,13 @@ export function App() {
   if (['/privacy', '/terms', '/contact'].includes(path)) return <InfoPage kind={path.slice(1)} />;
   if (path === '/reset-password') return <AuthPage mode="reset" />;
   if (path === '/login' || path === '/auth') return <AuthPage mode="login" />;
+  if (path === '/join') {
+    const q = new URLSearchParams(location.search);
+    location.replace(
+      `/signup?ref=${encodeURIComponent(q.get('ref') || '')}${q.get('as') === 'garage' ? '&role=garage' : ''}`,
+    );
+    return null;
+  }
   if (path === '/signup') return <AuthPage mode="signup" />;
   if (path === '/forgot-password') return <AuthPage mode="recovery" />;
   return <LandingPage />;

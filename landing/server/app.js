@@ -33,6 +33,7 @@ import { registerMemberships } from './memberships.js';
 import { registerMarketplace } from './marketplace.js';
 import { platformSettings, registerAdmin, registerFeedback } from './admin.js';
 import { registerFuelDay } from './fuelday.js';
+import { registerExtras } from './extras.js';
 import { registerNotifications } from './notifications.js';
 import { AREA_KEYS } from '../src/team.js';
 import {
@@ -366,6 +367,7 @@ export async function createApp({
           email: emailSchema,
           password: passwordSchema,
           role: z.enum(['driver', 'garage']),
+          ref: z.string().trim().max(20).optional(),
           terms: z
             .boolean()
             .refine(Boolean, 'Please accept the terms and privacy policy to continue.'),
@@ -376,7 +378,7 @@ export async function createApp({
     if (await one('SELECT id FROM users WHERE email=?', data.email))
       throw fail(409, 'Unable to create this account. Try logging in or resetting your password.');
     const password = await passwordHash(data.password);
-    const { terms: _terms, ...fields } = data;
+    const { terms: _terms, ref, ...fields } = data;
     const user = { id: id(), ...fields };
     await transaction(db, async () => {
       await run(
@@ -400,6 +402,7 @@ export async function createApp({
           `${data.name}’s garage`,
         );
     });
+    await extras.joined(user, ref);
     await session(req, res, user);
     res.status(201).json({ user: userView(user) });
   });
@@ -564,6 +567,17 @@ export async function createApp({
             : 'You were removed from this garage team.',
       });
     next();
+  });
+  const extras = registerExtras(app, {
+    one,
+    all,
+    run,
+    fail,
+    parse,
+    id,
+    clock,
+    driverOnly,
+    ownerGarage,
   });
   app.get('/api/auth/me', async (req, res) =>
     res.json({
@@ -1099,6 +1113,7 @@ export async function createApp({
   });
   app.post('/api/vehicles', async (req, res) => {
     driverOnly(req.user);
+    await extras.freeLimit(req.user, 'vehicles');
     const d = parse(vehicleSchema, req),
       key = id();
     await run(
@@ -1488,6 +1503,7 @@ export async function createApp({
   });
   app.post('/api/bookings', async (req, res) => {
     driverOnly(req.user);
+    await extras.freeLimit(req.user, 'bookings');
     const d = parse(
       z.object({
         garage_id: z.uuid(),
