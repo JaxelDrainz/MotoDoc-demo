@@ -192,7 +192,14 @@ export function AuthPage({ mode }) {
             ? '/auth/reset-password'
             : '/auth/login';
       const body = signup
-        ? { ...values, role, terms }
+        ? {
+            ...values,
+            role,
+            terms,
+            ...(new URLSearchParams(location.search).get('ref')
+              ? { ref: new URLSearchParams(location.search).get('ref') }
+              : {}),
+          }
         : recovery
           ? { email: values.email }
           : reset

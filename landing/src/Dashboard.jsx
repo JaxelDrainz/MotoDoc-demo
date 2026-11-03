@@ -28,6 +28,10 @@ import {
   LifebuoyIcon,
   ChatTextIcon,
   GasPumpIcon,
+  ThumbsUpIcon,
+  CalendarCheckIcon,
+  ShareNetworkIcon,
+  CrownIcon,
 } from '@phosphor-icons/react';
 import { api } from './api.js';
 import { Brand } from './Brand.jsx';
@@ -52,6 +56,13 @@ import { DriverMemberships, GarageMemberships } from './Memberships.jsx';
 import { DriverMarketplace, GarageMarketplace } from './Marketplace.jsx';
 import { durationLabel } from './marketplace.js';
 import { DriverFuelDay, fuelOffer } from './FuelDay.jsx';
+import {
+  InspectionsPanel,
+  PayLaterCard,
+  PlanPanel,
+  RecommendationsPanel,
+  ReferPanel,
+} from './Extras.jsx';
 import { NotificationsPage } from './Notifications.jsx';
 import { TAB_AREAS } from './team.js';
 import { FEEDBACK_KINDS } from './platform.js';
@@ -675,6 +686,12 @@ export function Dashboard() {
     ...(!isGarage && data?.['fuel-day']?.day ? [['fuel-day', GasPumpIcon, 'Fuel Day']] : []),
     ...(isGarage ? [['jobs', ListChecksIcon, 'Jobs']] : []),
     ['history', ClockCounterClockwiseIcon, 'Service history'],
+    ...(!isGarage
+      ? [
+          ['recommendations', ThumbsUpIcon, 'Recommendations'],
+          ['inspections', CalendarCheckIcon, 'Inspections'],
+        ]
+      : []),
     ...(isGarage ? [['customers', UsersIcon, 'Customers']] : []),
     ['memberships', GiftIcon, 'Memberships'],
     ['invoices', ReceiptIcon, 'Invoices'],
@@ -682,6 +699,8 @@ export function Dashboard() {
     ['reminders', BellIcon, 'Reminders'],
     ['notifications', BellIcon, 'Notifications'],
     ...(isGarage ? [['team', UsersThreeIcon, 'Team']] : []),
+    ['refer', ShareNetworkIcon, 'Invite & refer'],
+    ...(!isStaff ? [['plan', CrownIcon, 'Plan']] : []),
     ['account', LockKeyIcon, 'Account'],
   ].filter(([key]) => !isGarage || !TAB_AREAS[key] || allowed(TAB_AREAS[key]));
   const blocked = isGarage && !!TAB_AREAS[view] && !allowed(TAB_AREAS[view]);
@@ -1198,15 +1217,23 @@ export function Dashboard() {
                         ? 'A little help remembering what’s next.'
                         : selected === 'notifications'
                           ? 'Every update that needs your attention, in one place.'
-                          : selected === 'fuel-day'
-                            ? 'Free fuel from MotoDoc at a partner station, one day only.'
-                            : selected === 'marketplace'
-                              ? 'Emergency help from nearby garages, with prices up front.'
-                              : selected === 'team'
-                                ? 'Who works with you, and what each person can see and do.'
-                                : selected === 'no-access'
-                                  ? 'This part of the garage account isn’t shared with you.'
-                                  : 'Keep the details that matter together.'}
+                          : selected === 'plan'
+                            ? 'Free or Pro: pick what suits you.'
+                            : selected === 'recommendations'
+                              ? 'What each of your cars needs next, and why.'
+                              : selected === 'inspections'
+                                ? 'Katsastus dates and reminders for your cars.'
+                                : selected === 'refer'
+                                  ? 'Bring people you trust to MotoDoc.'
+                                  : selected === 'fuel-day'
+                                    ? 'Free fuel from MotoDoc at a partner station, one day only.'
+                                    : selected === 'marketplace'
+                                      ? 'Emergency help from nearby garages, with prices up front.'
+                                      : selected === 'team'
+                                        ? 'Who works with you, and what each person can see and do.'
+                                        : selected === 'no-access'
+                                          ? 'This part of the garage account isn’t shared with you.'
+                                          : 'Keep the details that matter together.'}
             </p>
           </div>
           <span className="dash-connected">
@@ -1765,6 +1792,11 @@ export function Dashboard() {
             reload={reload}
           />
         )}
+        {selected === 'invoices' && !isGarage && <PayLaterCard invoices={data.invoices} />}
+        {selected === 'plan' && <PlanPanel open={open} />}
+        {selected === 'recommendations' && <RecommendationsPanel navigate={navigate} />}
+        {selected === 'inspections' && <InspectionsPanel open={open} />}
+        {selected === 'refer' && <ReferPanel user={user} />}
 
         {selected === 'reminders' && (
           <>

@@ -29,6 +29,8 @@ const kindOf = {
   upcoming: 'pending',
   rescheduled: 'pending',
   invited: 'pending',
+  'due soon': 'pending',
+  'on track': 'confirmed',
   suspended: 'cancelled',
   verified: 'confirmed',
   rejected: 'cancelled',

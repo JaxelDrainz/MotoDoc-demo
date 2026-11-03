@@ -2193,3 +2193,123 @@ test('fuel day: setup, go live, claim rules, attendant check, use, undo, end, fu
   ])
     assert(log.includes(action), action);
 });
+
+test('extras: plans and free limits, launch bonus, recommendations, referrals and joining', async (t) => {
+  const { client } = await fixture(t, { adminEmails: 'boss@example.test' }),
+    admin = client(),
+    d = client(),
+    g = client(),
+    friend = client();
+  await signup(admin, 'boss@example.test');
+  await signup(d, 'driver@example.test');
+  await garage(g);
+
+  let plan = (await d('/api/subscription')).data;
+  assert.equal(plan.plan, 'pro');
+  assert.equal(plan.launch_bonus, true);
+  assert.equal(
+    (await d('/api/subscription', { plan: 'free', period: 'monthly' }, 'PUT')).status,
+    200,
+  );
+  assert.equal((await d('/api/subscription')).data.plan, 'free');
+  for (const plate of ['AAA-1', 'AAA-2'])
+    assert.equal(
+      (
+        await d('/api/vehicles', {
+          make: 'Toyota',
+          model: 'Corolla',
+          year: 2015,
+          registration: plate,
+          mileage: 90000,
+        })
+      ).status,
+      201,
+    );
+  const third = await d('/api/vehicles', {
+    make: 'Ford',
+    model: 'Focus',
+    year: 2018,
+    registration: 'AAA-3',
+    mileage: 50000,
+  });
+  assert.equal(third.status, 403);
+  assert.match(third.data.error, /Free plan covers up to 2 cars/);
+  assert.equal(
+    (await d('/api/subscription', { plan: 'pro', period: 'yearly' }, 'PUT')).status,
+    200,
+  );
+  assert.equal(
+    (
+      await d('/api/vehicles', {
+        make: 'Ford',
+        model: 'Focus',
+        year: 2018,
+        registration: 'AAA-3',
+        mileage: 50000,
+      })
+    ).status,
+    201,
+  );
+
+  const settings = (await admin('/api/admin/settings')).data;
+  await admin('/api/admin/settings', { ...settings, launch_bonus: false }, 'PUT');
+  plan = (await d('/api/subscription')).data;
+  assert.equal(plan.plan, 'free');
+  const buy = await d('/api/subscription', { plan: 'pro', period: 'monthly' }, 'PUT');
+  assert.equal(buy.status, 402);
+  assert.match(buy.data.error, /payments aren’t connected/);
+  await admin('/api/admin/settings', { ...settings, launch_bonus: true }, 'PUT');
+  assert.equal((await g('/api/subscription')).data.role, 'garage');
+
+  const recs = (await d('/api/recommendations')).data;
+  assert.equal(recs.length, 3);
+  const ids = recs[0].items.map((i) => i.id);
+  assert(ids.includes('oil') && ids.includes('service'));
+  assert(
+    recs[0].items.every((i) =>
+      ['overdue', 'due_soon', 'upcoming', 'on_track'].includes(i.priority),
+    ),
+  );
+  assert.equal((await g('/api/recommendations')).status, 403);
+
+  const ref = (await g('/api/referrals')).data;
+  assert.match(ref.code, /^[0-9A-F]{8}$/);
+  assert.equal((await g('/api/referrals', { email: 'bad', kind: 'driver' })).status, 400);
+  assert.equal(
+    (await g('/api/referrals', { email: 'friend@example.test', kind: 'driver' })).status,
+    201,
+  );
+  assert.equal(
+    (await g('/api/referrals', { email: 'friend@example.test', kind: 'driver' })).status,
+    409,
+  );
+  const [invite] = (await g('/api/referrals')).data.invites;
+  assert.equal(invite.joined_at, null);
+  assert.equal((await g(`/api/referrals/${invite.id}/resend`, {})).status, 200);
+
+  const joined = await friend('/api/auth/signup', {
+    name: 'Friend',
+    email: 'friend@example.test',
+    password: 'testing-password-42',
+    role: 'driver',
+    terms: true,
+    ref: ref.code,
+  });
+  assert.equal(joined.status, 201);
+  const after = (await g('/api/referrals')).data.invites;
+  assert.equal(after.length, 1);
+  assert(after[0].joined_at);
+
+  const viaLink = client();
+  await viaLink('/api/auth/signup', {
+    name: 'Link',
+    email: 'link@example.test',
+    password: 'testing-password-42',
+    role: 'garage',
+    terms: true,
+    ref: ref.code,
+  });
+  const listed = (await g('/api/referrals')).data.invites;
+  assert.equal(listed.length, 2);
+  assert(listed.find((i) => i.email === 'link@example.test').joined_at);
+});
