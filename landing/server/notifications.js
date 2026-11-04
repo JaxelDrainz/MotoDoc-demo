@@ -24,6 +24,7 @@ const eventTitles = {
   reply: 'The garage replied to your review',
   invoice: 'New invoice',
   'payment-reminder': 'Payment reminder',
+  'record-added': 'Service record added',
   'invoice-paid': 'Invoice paid',
   'quote-accepted': 'Quote accepted',
 };

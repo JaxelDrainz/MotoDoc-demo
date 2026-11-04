@@ -113,7 +113,13 @@ export function registerMemberships(app, ctx) {
     if (!plan) throw fail(404, 'This plan isn’t available any more.');
     const ids = [...new Set(d.vehicle_ids)];
     for (const vehicleId of ids)
-      if (!(await one('SELECT 1 FROM vehicles WHERE id=? AND owner_id=?', vehicleId, req.user.id)))
+      if (
+        !(await one(
+          'SELECT 1 FROM vehicles WHERE id=? AND owner_id=? AND archived_at IS NULL',
+          vehicleId,
+          req.user.id,
+        ))
+      )
         throw fail(404, 'Vehicle not found.');
     await settle();
     for (const vehicleId of ids) {

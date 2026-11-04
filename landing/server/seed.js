@@ -26,15 +26,9 @@ for (const [role, name, email] of [
       role,
     );
     if (role === 'driver')
-      db.prepare('INSERT INTO vehicles VALUES(?,?,?,?,?,?,?)').run(
-        randomUUID(),
-        key,
-        'Toyota',
-        'Corolla',
-        2021,
-        'DEMO-123',
-        28000,
-      );
+      db.prepare(
+        'INSERT INTO vehicles(id,owner_id,make,model,year,registration,mileage) VALUES(?,?,?,?,?,?,?)',
+      ).run(randomUUID(), key, 'Toyota', 'Corolla', 2021, 'DEM-123', 28000);
     else
       db.prepare(
         'INSERT INTO garages(id,owner_id,name,city,address,description,services,published) VALUES(?,?,?,?,?,?,?,1)',

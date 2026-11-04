@@ -61,7 +61,7 @@ const vehicle = (c) =>
     make: 'Toyota',
     model: 'Corolla',
     year: 2021,
-    registration: 'TEST-123',
+    registration: 'TST-123',
     mileage: 12000,
   });
 async function garage(c, email = 'garage@example.test') {
@@ -163,7 +163,7 @@ test('vehicle ownership and SQL injection resistance', async (t) => {
         make: "'); DROP TABLE users; --",
         model: 'Safe',
         year: 2020,
-        registration: 'SAFE',
+        registration: 'SFE-1',
         mileage: 0,
       })
     ).status,
@@ -218,7 +218,20 @@ test('booking lifecycle, unique slots, tenant isolation and atomic service histo
   );
   assert.equal((await d('/api/service-history')).data[0].mileage, 13000);
   assert.equal((await other('/api/service-history')).data.length, 0);
-  assert.equal((await d(`/api/vehicles/${v.id}`, {}, 'DELETE')).status, 409);
+  const removed = await d(`/api/vehicles/${v.id}`, {}, 'DELETE');
+  assert.equal(removed.data.archived, true);
+  assert((await d('/api/vehicles')).data.find((x) => x.id === v.id).archived_at);
+  assert.equal((await d('/api/service-history')).data.length, 1);
+  assert.equal(
+    (
+      await d(
+        `/api/vehicles/${v.id}`,
+        { make: 'X', model: 'Y', year: 2020, registration: 'ABC-1', mileage: 1 },
+        'PATCH',
+      )
+    ).status,
+    404,
+  );
   assert.equal((await g(`/api/bookings/${key}`, { status: 'cancelled' }, 'PATCH')).status, 409);
 });
 test('reset links expire, are single use, and revoke existing sessions', async (t) => {
@@ -706,7 +719,7 @@ test('vehicle catalogue searches bundled data first, falls back to the lookup, a
     make: 'Volvo',
     model: 'V60',
     year: 2020,
-    registration: 'V-60',
+    registration: 'VO-60',
     mileage: 1,
   });
   const listed = (await c('/api/vehicles')).data;
@@ -1559,7 +1572,7 @@ test('invoices: line items, discounts, VAT, numbering, Finnish reference, e-invo
   assert.equal(mine.lines[0].total, 5400);
   assert.equal(mine.reference.replace(/\s/g, '').slice(0, -1), `${year}001`);
   assert.equal(mine.state, 'unpaid');
-  assert.equal(mine.registration, 'TEST-123');
+  assert.equal(mine.registration, 'TST-123');
   assert((await driver('/api/notifications')).data.items.some((n) => n.title === 'New invoice'));
 
   const second = await done(54);
@@ -1896,7 +1909,7 @@ test('marketplace: post, nearby garages quote once, accept books, close, photos'
   assert.equal((await far('/api/market/garage')).data.length, 0);
   const seen = (await g('/api/market/garage')).data;
   assert.equal(seen[0].tab, 'to_quote');
-  assert.equal(seen[0].registration, 'TEST-123');
+  assert.equal(seen[0].registration, 'TST-123');
 
   const pixel =
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
@@ -2182,7 +2195,7 @@ test('fuel day: setup, go live, claim rules, attendant check, use, undo, end, fu
   const exported = await admin(`/api/admin/fuel-days/${dayId}/export`);
   const csv = new TextDecoder().decode(exported.data);
   assert.match(csv, /^code,driver,car,plate,claimed_at,used_at,used_by,amount_eur\n/);
-  assert.match(csv, /TEST-123/);
+  assert.match(csv, /TST-123/);
   const log = (await admin('/api/admin/audit')).data.map((a) => a.action);
   for (const action of [
     'Created Fuel Day',
@@ -2312,4 +2325,138 @@ test('extras: plans and free limits, launch bonus, recommendations, referrals an
   const listed = (await g('/api/referrals')).data.invites;
   assert.equal(listed.length, 2);
   assert(listed.find((i) => i.email === 'link@example.test').joined_at);
+});
+
+test('car details, plate format, archiving and typed reminders', async (t) => {
+  const { client } = await fixture(t),
+    d = client(),
+    other = client();
+  await signup(d, 'cars@example.test');
+  await signup(other, 'other-cars@example.test');
+  const base = { make: 'Skoda', model: 'Octavia', year: 2019, mileage: 80000 };
+  assert.equal((await d('/api/vehicles', { ...base, registration: 'TOOLONG-1' })).status, 400);
+  assert.equal(
+    (await d('/api/vehicles', { ...base, registration: 'ABC-123', vin: 'SHORT' })).status,
+    400,
+  );
+  const car = (
+    await d('/api/vehicles', {
+      ...base,
+      registration: 'abc123',
+      fuel_type: 'diesel',
+      vin: 'TMBJG9NE0K0123456',
+      inspection_due: '2027-03-01',
+      insurance_due: '2027-01-15',
+      tax_due: '2027-02-01',
+    })
+  ).data;
+  assert.equal(car.registration, 'ABC-123');
+  const listed = (await d('/api/vehicles')).data[0];
+  assert.equal(listed.fuel_type, 'diesel');
+  assert.equal(listed.mot_due, '2027-03-01');
+  assert.equal(listed.insurance_due, '2027-01-15');
+
+  const r = await d('/api/reminders', {
+    title: 'Insurance renewal',
+    due_date: '2027-01-15',
+    type: 'insurance',
+    vehicle_id: car.id,
+    note: 'Compare prices first',
+  });
+  assert.equal(r.status, 201);
+  const [reminder] = (await d('/api/reminders')).data;
+  assert.equal(reminder.type, 'insurance');
+  assert.equal(reminder.registration, 'ABC-123');
+  assert.equal(
+    (await other('/api/reminders', { title: 'x', due_date: '2027-01-01', vehicle_id: car.id }))
+      .status,
+    404,
+  );
+  assert.equal((await other(`/api/reminders/${reminder.id}`, {}, 'DELETE')).status, 404);
+  assert.equal((await d(`/api/reminders/${reminder.id}`, {}, 'DELETE')).status, 200);
+  assert.equal((await d('/api/reminders')).data.length, 0);
+
+  assert.equal((await d(`/api/vehicles/${car.id}`, {}, 'DELETE')).status, 200);
+  assert.equal((await d('/api/vehicles')).data.length, 0);
+});
+
+test('garage: customer details, records added by hand, reviews breakdown', async (t) => {
+  const { client } = await fixture(t),
+    d = client(),
+    g = client(),
+    stranger = client(),
+    other = client();
+  await signup(d, 'cust@example.test');
+  await signup(stranger, 'stranger@example.test');
+  const gp = await garage(g);
+  await garage(other, 'other-garage@example.test');
+  const car = (await vehicle(d)).data;
+  const strangerCar = (await vehicle(stranger)).data;
+  const b = (
+    await d('/api/bookings', {
+      garage_id: gp.id,
+      vehicle_id: car.id,
+      service: 'Oil change',
+      starts_at: future(),
+    })
+  ).data;
+  await g(`/api/bookings/${b.id}`, { status: 'confirmed' }, 'PATCH');
+  await g(
+    `/api/bookings/${b.id}`,
+    { status: 'completed', summary: 'Done', mileage: 13000 },
+    'PATCH',
+  );
+  await g('/api/invoices', {
+    booking_id: b.id,
+    description: 'Oil change and filter',
+    amount_cents: 9500,
+  });
+  const [customer] = (await g('/api/customers')).data;
+  assert.equal(customer.spent_cents, 9500);
+  assert(customer.last_visit);
+  assert.equal(customer.member, 0);
+
+  const base = {
+    driver_id: customer.id,
+    vehicle_id: car.id,
+    service: 'Brake check',
+    mileage: 14500,
+    cost: 60,
+    summary: 'Checked pads and discs, all fine.',
+    performed_on: new Date().toISOString().slice(0, 10),
+  };
+  assert.equal((await g('/api/service-records', { ...base, mileage: 0 })).status, 400);
+  assert.equal(
+    (
+      await g('/api/service-records', {
+        ...base,
+        driver_id: (await stranger('/api/auth/me')).data.user.id,
+        vehicle_id: strangerCar.id,
+      })
+    ).status,
+    404,
+  );
+  assert.equal((await other('/api/service-records', base)).status, 404);
+  const added = await g('/api/service-records', base);
+  assert.equal(added.status, 201);
+  const history = (await d('/api/service-history')).data;
+  assert.equal(history.length, 2);
+  assert((await d('/api/vehicles')).data[0].mileage === 14500);
+  assert(
+    (await d('/api/notifications')).data.items.some((n) => n.title === 'Service record added'),
+  );
+
+  await d(
+    `/api/bookings/${b.id}/review`,
+    { rating: 4, comment: 'Quick and friendly.', tags: [] },
+    'PUT',
+  );
+  const reviews = (await g('/api/garage/reviews')).data;
+  assert.equal(reviews.average, 4);
+  assert.deepEqual(
+    reviews.breakdown.find(([s]) => s === 4),
+    [4, 1],
+  );
+  assert.equal(reviews.reviews[0].reply, null);
+  assert.equal((await stranger('/api/garage/reviews')).status, 403);
 });

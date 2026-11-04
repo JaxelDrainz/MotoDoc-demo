@@ -301,6 +301,19 @@ Direct contact with garage',1200,'basic' FROM garage_details WHERE membership_la
       'CREATE INDEX IF NOT EXISTS referral_email ON referrals(email)',
     ],
   ],
+  [
+    13,
+    [
+      "ALTER TABLE vehicles ADD COLUMN fuel_type TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE vehicles ADD COLUMN vin TEXT NOT NULL DEFAULT ''",
+      'ALTER TABLE vehicles ADD COLUMN insurance_due TEXT',
+      'ALTER TABLE vehicles ADD COLUMN tax_due TEXT',
+      'ALTER TABLE vehicles ADD COLUMN archived_at TEXT',
+      "ALTER TABLE reminders ADD COLUMN type TEXT NOT NULL DEFAULT 'other'",
+      'ALTER TABLE reminders ADD COLUMN vehicle_id TEXT',
+      "ALTER TABLE reminders ADD COLUMN note TEXT NOT NULL DEFAULT ''",
+    ],
+  ],
 ];
 
 export function openDatabase(path) {

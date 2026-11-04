@@ -202,7 +202,12 @@ export function registerExtras(app, ctx) {
       const month = now().slice(0, 7);
       return {
         vehicles: Number(
-          (await one('SELECT COUNT(*) n FROM vehicles WHERE owner_id=?', user.id)).n,
+          (
+            await one(
+              'SELECT COUNT(*) n FROM vehicles WHERE owner_id=? AND archived_at IS NULL',
+              user.id,
+            )
+          ).n,
         ),
         bookings: (await all('SELECT created_at FROM bookings WHERE driver_id=?', user.id)).filter(
           (b) => iso(b.created_at).startsWith(month),
@@ -283,7 +288,7 @@ export function registerExtras(app, ctx) {
   app.get('/api/recommendations', async (req, res) => {
     driverOnly(req.user);
     const vehicles = await all(
-      'SELECT * FROM vehicles WHERE owner_id=? ORDER BY registration',
+      'SELECT * FROM vehicles WHERE owner_id=? AND archived_at IS NULL ORDER BY registration',
       req.user.id,
     );
     const out = [];
