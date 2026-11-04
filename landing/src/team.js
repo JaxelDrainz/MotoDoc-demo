@@ -44,6 +44,7 @@ export const TAB_AREAS = {
   marketplace: 'bookings',
   refer: 'memberships',
   reviews: 'customers',
+  messages: 'jobs',
   jobs: 'jobs',
   history: 'records',
   reminders: 'records',

@@ -314,6 +314,7 @@ Direct contact with garage',1200,'basic' FROM garage_details WHERE membership_la
       "ALTER TABLE reminders ADD COLUMN note TEXT NOT NULL DEFAULT ''",
     ],
   ],
+  [14, ["ALTER TABLE user_settings ADD COLUMN mechanic_notes TEXT NOT NULL DEFAULT ''"]],
 ];
 
 export function openDatabase(path) {

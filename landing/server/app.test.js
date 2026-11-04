@@ -2460,3 +2460,148 @@ test('garage: customer details, records added by hand, reviews breakdown', async
   assert.equal(reviews.reviews[0].reply, null);
   assert.equal((await stranger('/api/garage/reviews')).status, 403);
 });
+
+test('mechanic notes, public garage reviews and contact, garage reminders to customers', async (t) => {
+  const { client } = await fixture(t),
+    d = client(),
+    g = client(),
+    stranger = client();
+  await signup(d, 'notes@example.test');
+  await signup(stranger, 'nobody@example.test');
+  const gp = await garage(g);
+  await g('/api/garage/contact', { phone: '+358401234567', mechanic_name: 'Mikko' }, 'PUT');
+  assert.equal(
+    (
+      await d(
+        '/api/account/settings',
+        {
+          phone: '+358 50 1',
+          address: 'Home 1',
+          mechanic_notes: 'Please call before any extra work.',
+          email_updates: true,
+          email_chat: false,
+        },
+        'PUT',
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await d('/api/auth/me')).data.user.mechanicNotes,
+    'Please call before any extra work.',
+  );
+  const car = (await vehicle(d)).data;
+  const b = (
+    await d('/api/bookings', {
+      garage_id: gp.id,
+      vehicle_id: car.id,
+      service: 'Oil change',
+      starts_at: future(),
+    })
+  ).data;
+  const [customer] = (await g('/api/customers')).data;
+  assert.equal(customer.mechanic_notes, 'Please call before any extra work.');
+
+  const listed = (await d('/api/garages')).data.find((x) => x.id === gp.id);
+  assert.equal(listed.email, 'garage@example.test');
+  assert.equal(listed.mechanic_name, 'Mikko');
+
+  await g(`/api/bookings/${b.id}`, { status: 'confirmed' }, 'PATCH');
+  await g(
+    `/api/bookings/${b.id}`,
+    { status: 'completed', summary: 'Done', mileage: 13000 },
+    'PATCH',
+  );
+  await d(`/api/bookings/${b.id}/review`, { rating: 5, comment: 'Great.', tags: [] }, 'PUT');
+  const reviews = (await d(`/api/garages/${gp.id}/reviews`)).data;
+  assert.equal(reviews.average, 5);
+  assert.equal(reviews.latest[0].driver_name, 'Test');
+
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  assert.equal(
+    (
+      await g(`/api/customers/${customer.id}/reminders`, {
+        title: 'Winter tyres',
+        due_date: '2020-01-01',
+      })
+    ).status,
+    400,
+  );
+  const sent = await g(`/api/customers/${customer.id}/reminders`, {
+    title: 'Winter tyres',
+    type: 'tyres',
+    due_date: tomorrow,
+    vehicle_id: car.id,
+  });
+  assert.equal(sent.status, 201);
+  const [reminder] = (await d('/api/reminders')).data;
+  assert.equal(reminder.type, 'tyres');
+  assert.match(reminder.note, /From Test Garage/);
+  assert(
+    (await d('/api/notifications')).data.items.some((n) => n.title === 'Reminder from Test Garage'),
+  );
+  const strangerId = (await stranger('/api/auth/me')).data.user.id;
+  assert.equal(
+    (await g(`/api/customers/${strangerId}/reminders`, { title: 'Spam', due_date: tomorrow }))
+      .status,
+    404,
+  );
+});
+
+test('booking wizard: diagnosis and custom requests, mileage update and first message', async (t) => {
+  const { client } = await fixture(t),
+    d = client(),
+    g = client();
+  await signup(d, 'wizard@example.test');
+  const gp = await garage(g);
+  const car = (await vehicle(d)).data;
+  const slot = (offset) => {
+    const at = new Date(Date.now() + offset * 86400000);
+    at.setUTCMinutes(0, 0, 0);
+    return at.toISOString();
+  };
+  assert.equal(
+    (
+      await d('/api/bookings', {
+        garage_id: gp.id,
+        vehicle_id: car.id,
+        service: 'Made up service',
+        starts_at: slot(1),
+      })
+    ).status,
+    400,
+  );
+  const diag = await d('/api/bookings', {
+    garage_id: gp.id,
+    vehicle_id: car.id,
+    service: 'Anything',
+    kind: 'diagnosis',
+    starts_at: slot(2),
+    mileage: 15000,
+    message: 'It makes a knocking sound over bumps.',
+  });
+  assert.equal(diag.status, 201);
+  const custom = await d('/api/bookings', {
+    garage_id: gp.id,
+    vehicle_id: car.id,
+    service: 'Fit a tow bar',
+    kind: 'custom',
+    starts_at: slot(3),
+    notes: 'Bar is in the boot.',
+  });
+  assert.equal(custom.status, 201);
+  const mine = (await d('/api/bookings')).data;
+  assert(mine.some((b) => b.service === 'Diagnosis: I don’t know the issue'));
+  assert(mine.some((b) => b.service === 'Fit a tow bar'));
+  assert.equal((await d('/api/vehicles')).data[0].mileage, 15000);
+  const messages = (await g('/api/messages')).data;
+  assert.equal(messages[0].body, 'It makes a knocking sound over bumps.');
+  await d('/api/bookings', {
+    garage_id: gp.id,
+    vehicle_id: car.id,
+    service: 'Oil change',
+    starts_at: slot(4),
+    mileage: 100,
+  });
+  assert.equal((await d('/api/vehicles')).data[0].mileage, 15000);
+});

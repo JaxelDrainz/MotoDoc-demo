@@ -3,6 +3,7 @@ import { z } from 'zod';
 export function registerGarageExtras(app, ctx) {
   const { one, all, run, db, transaction, fail, parse, id, clock, ownGarage, jobs, bookingEvent } =
     ctx;
+  const { worldOf } = ctx;
   const now = () => new Date(clock()).toISOString();
 
   app.post('/api/service-records', async (req, res) => {
@@ -82,6 +83,81 @@ export function registerGarageExtras(app, ctx) {
       await bookingEvent(bookingId, req.user.id, 'record-added', d.service);
     });
     res.status(201).json({ booking_id: bookingId });
+  });
+
+  app.get('/api/garages/:id/reviews', async (req, res) => {
+    const g = await one(
+      `SELECT g.id FROM garages g WHERE g.id=? AND g.published=1 AND ${worldOf('g.owner_id')}=?`,
+      req.params.id,
+      req.user.demo_world || '',
+    );
+    if (!g) throw fail(404, 'Garage not found.');
+    const reviews = await all(
+      'SELECT r.rating,r.comment,r.tags,r.reply,r.created_at,u.name driver_name FROM reviews r JOIN users u ON u.id=r.driver_id WHERE r.garage_id=? AND r.hidden=0 ORDER BY r.created_at DESC',
+      g.id,
+    );
+    res.json({
+      average: reviews.length
+        ? Math.round((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length) * 10) / 10
+        : null,
+      count: reviews.length,
+      breakdown: [5, 4, 3, 2, 1].map((stars) => [
+        stars,
+        reviews.filter((r) => r.rating === stars).length,
+      ]),
+      latest: reviews.slice(0, 3).map((r) => ({
+        ...r,
+        driver_name: r.driver_name.split(' ')[0],
+        tags: JSON.parse(r.tags || '[]'),
+      })),
+    });
+  });
+
+  app.post('/api/customers/:id/reminders', async (req, res) => {
+    const g = await ownGarage(req.user, 'customers');
+    const d = parse(
+      z.object({
+        title: z.string().trim().min(2).max(160),
+        type: z.enum(['oil', 'tyres', 'inspection', 'insurance', 'tax', 'other']).default('other'),
+        due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a date.'),
+        vehicle_id: z.string().max(64).optional(),
+        note: z.string().trim().max(500).default(''),
+      }),
+      req,
+    );
+    if (d.due_date < now().slice(0, 10)) throw fail(400, 'Choose today or a later date.');
+    const customer = await one(
+      'SELECT u.id FROM users u WHERE u.id=? AND EXISTS(SELECT 1 FROM bookings b WHERE b.driver_id=u.id AND b.garage_id=?)',
+      req.params.id,
+      g.id,
+    );
+    if (!customer) throw fail(404, 'Customer not found.');
+    if (
+      d.vehicle_id &&
+      !(await one('SELECT 1 FROM vehicles WHERE id=? AND owner_id=?', d.vehicle_id, customer.id))
+    )
+      throw fail(404, 'Vehicle not found.');
+    await transaction(db, async () => {
+      await run(
+        'INSERT INTO reminders(id,user_id,title,due_date,type,vehicle_id,note) VALUES(?,?,?,?,?,?,?)',
+        id(),
+        customer.id,
+        d.title,
+        d.due_date,
+        d.type,
+        d.vehicle_id || null,
+        [`From ${g.name}`, d.note].filter(Boolean).join(' · '),
+      );
+      await run(
+        "INSERT INTO notices(id,user_id,kind,title,body,at,link) VALUES(?,?,'reminder',?,?,?,'#reminders')",
+        id(),
+        customer.id,
+        `Reminder from ${g.name}`,
+        `${d.title} · ${d.due_date}`,
+        now(),
+      );
+    });
+    res.status(201).json({ ok: true });
   });
 
   app.get('/api/garage/reviews', async (req, res) => {

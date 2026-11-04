@@ -66,6 +66,17 @@ import {
 import { NotificationsPage } from './Notifications.jsx';
 import { HistoryPanel } from './History.jsx';
 import { CustomersPanel, ReviewsPanel, recordDialog } from './GarageExtras.jsx';
+import {
+  CarDetail,
+  GarageSheet,
+  MessagesPanel,
+  MonthView,
+  MyMechanic,
+  SetupChecklist,
+  WeekView,
+} from './DriverExtras.jsx';
+import { BookingWizard } from './BookingWizard.jsx';
+import { cityPoint, distanceKm, distanceText } from './fiCities.js';
 import { TAB_AREAS } from './team.js';
 import { FEEDBACK_KINDS } from './platform.js';
 import { siteFlag } from './site.jsx';
@@ -670,7 +681,44 @@ export function Dashboard() {
     [loading, setLoading] = useState(true),
     [view, setView] = useState(location.hash.slice(1) || 'overview'),
     [dialog, setDialog] = useState(null),
-    [search, setSearch] = useState('');
+    [search, setSearch] = useState(''),
+    [carDetail, setCarDetail] = useState(''),
+    [garageFilter, setGarageFilter] = useState({ spec: '', open: false }),
+    [bookingView, setBookingView] = useState('list'),
+    [wizard, setWizard] = useState(null),
+    [here, setHere] = useState(null);
+  const nearMe = () => {
+    if (!navigator.geolocation) {
+      setHere({ error: 'Location is off. Allow location for MotoDoc, or search by city.' });
+      return;
+    }
+    setHere({ busy: true });
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setHere({ point: [pos.coords.latitude, pos.coords.longitude] }),
+      () => setHere({ error: 'Location is off. Allow location for MotoDoc, or search by city.' }),
+      { timeout: 10000, maximumAge: 600000 },
+    );
+  };
+  const kmTo = (g) => {
+    const point = here?.point && cityPoint(g.city);
+    return point ? distanceKm(here.point, point) : null;
+  };
+  const garageMatch = (g) =>
+    `${g.name} ${g.city} ${g.services.join(' ')} ${(g.specializations || []).map(specLabel).join(' ')}`
+      .toLowerCase()
+      .includes(search.toLowerCase()) &&
+    (!garageFilter.spec || (g.specializations || []).includes(garageFilter.spec)) &&
+    (!garageFilter.open || (g.open_now && g.online));
+  const showGarage = (g) =>
+    setDialog({
+      silent: true,
+      title: g.name,
+      content: <GarageSheet garage={g} />,
+      cancel: 'Close',
+      submit: data?.vehicles?.length ? 'Book here' : 'Add a vehicle to book',
+      save: async () => {},
+      then: () => book(g),
+    });
   const isGarage = user?.role === 'garage';
   const isStaff = isGarage && user?.garageRole !== 'owner';
   const allowed = (area) => !isGarage || !!user?.permissions?.includes(area);
@@ -746,6 +794,8 @@ export function Dashboard() {
         ]),
     ['bookings', CalendarBlankIcon, 'Bookings'],
     ['marketplace', LifebuoyIcon, 'Marketplace'],
+    ['messages', ChatCircleIcon, 'Messages'],
+    ...(!isGarage ? [['mechanic', WrenchIcon, 'My mechanic']] : []),
     ...(!isGarage && data?.['fuel-day']?.day ? [['fuel-day', GasPumpIcon, 'Fuel Day']] : []),
     ...(isGarage ? [['jobs', ListChecksIcon, 'Jobs']] : []),
     ['history', ClockCounterClockwiseIcon, 'Service history'],
@@ -815,52 +865,7 @@ export function Dashboard() {
     });
   }
   function book(g) {
-    if (!data.vehicles.length) {
-      navigate('vehicles');
-      return;
-    }
-    open({
-      title: `Book ${g.name}`,
-      note: 'Pick a free hour in your local time. The garage will confirm your request.',
-      values: { vehicle_id: data.vehicles[0].id, service: g.services[0] },
-      fields: [
-        {
-          name: 'vehicle_id',
-          label: 'Vehicle',
-          required: true,
-          options: data.vehicles.map((v) => ({
-            value: v.id,
-            label: `${v.make} ${v.model} · ${v.registration}`,
-          })),
-        },
-        {
-          name: 'service',
-          label: 'Service',
-          required: true,
-          options: (g.menu?.length ? g.menu : g.services.map((name) => ({ name }))).map((s) => ({
-            value: s.name,
-            label: s.id ? `${s.name} · ${priceText(s)} · ${durationText(s)}` : s.name,
-          })),
-        },
-        {
-          name: 'starts_at',
-          label: 'Appointment',
-          type: 'slots',
-          garageId: g.id,
-        },
-        {
-          name: 'notes',
-          label: 'Anything the mechanic should know?',
-          type: 'textarea',
-          maxLength: 1000,
-        },
-      ],
-      submit: 'Request booking',
-      save: (d) => {
-        if (!d.starts_at) throw new Error('Choose an appointment time.');
-        return act('/bookings', { ...d, garage_id: g.id });
-      },
-    });
+    setWizard({ garage: g || null });
   }
   function profile() {
     const g = data['garage/profile'];
@@ -1365,6 +1370,7 @@ export function Dashboard() {
 
         {selected === 'overview' && (
           <>
+            {!isStaff && <SetupChecklist user={user} data={data} navigate={navigate} />}
             {isGarage && <AvailabilityCard canEdit={allowed('bookings')} />}
             {!isGarage && fuelOffer(data) && !fuelOffer(data).pass && (
               <a className="dash-tile fd-promo" href="#fuel-day">
@@ -1551,7 +1557,27 @@ export function Dashboard() {
           </>
         )}
 
-        {selected === 'vehicles' && (
+        {selected === 'vehicles' && data.vehicles.find((v) => v.id === carDetail) && (
+          <CarDetail
+            vehicle={data.vehicles.find((v) => v.id === carDetail)}
+            history={data['service-history']}
+            onBack={() => setCarDetail('')}
+            onEdit={() => changeVehicle(data.vehicles.find((v) => v.id === carDetail))}
+            onRemove={() => {
+              const v = data.vehicles.find((x) => x.id === carDetail);
+              open({
+                title: 'Remove this vehicle?',
+                note: `${v.make} ${v.model} · ${v.registration}. Its service history, bookings and invoices are kept. You’ll still find them in Service history.`,
+                submit: 'Remove',
+                save: async () => {
+                  await act(`/vehicles/${v.id}`, {}, 'DELETE');
+                  setCarDetail('');
+                },
+              });
+            }}
+          />
+        )}
+        {selected === 'vehicles' && !data.vehicles.find((v) => v.id === carDetail) && (
           <>
             <div className="dash-section-heading">
               <h2>
@@ -1583,8 +1609,11 @@ export function Dashboard() {
                       </span>
                     )}
                     <div className="dash-tile-actions">
+                      <button className="dash-text-button" onClick={() => setCarDetail(v.id)}>
+                        Details
+                      </button>
                       <button className="dash-text-button" onClick={() => changeVehicle(v)}>
-                        Edit details
+                        Edit
                       </button>
                       <button
                         className="dash-text-button muted"
@@ -1651,18 +1680,47 @@ export function Dashboard() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
-            {data.garages.filter((g) =>
-              `${g.name} ${g.city} ${g.services.join(' ')} ${(g.specializations || []).map(specLabel).join(' ')}`
-                .toLowerCase()
-                .includes(search.toLowerCase()),
-            ).length ? (
+            <div
+              className="mk-tabs md-scroll-x dx-filters"
+              role="group"
+              aria-label="Filter garages"
+            >
+              <button
+                className={here?.point ? 'active' : ''}
+                aria-pressed={!!here?.point}
+                onClick={() => (here?.point ? setHere(null) : nearMe())}
+              >
+                {here?.busy ? 'Finding you…' : 'Near me'}
+              </button>
+              <button
+                className={garageFilter.open ? 'active' : ''}
+                aria-pressed={garageFilter.open}
+                onClick={() => setGarageFilter({ ...garageFilter, open: !garageFilter.open })}
+              >
+                Open now
+              </button>
+              {SPECIALIZATIONS.map(([key, label]) => (
+                <button
+                  key={key}
+                  className={garageFilter.spec === key ? 'active' : ''}
+                  aria-pressed={garageFilter.spec === key}
+                  onClick={() =>
+                    setGarageFilter({ ...garageFilter, spec: garageFilter.spec === key ? '' : key })
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="dash-help">
+              {`${data.garages.filter(garageMatch).length} ${data.garages.filter(garageMatch).length === 1 ? 'garage' : 'garages'}${here?.point ? ' · Nearest first' : ''}`}
+            </p>
+            {here?.error && <p className="mk-note">{here.error}</p>}
+            {data.garages.filter(garageMatch).length ? (
               <div className="dash-grid">
                 {data.garages
-                  .filter((g) =>
-                    `${g.name} ${g.city} ${g.services.join(' ')} ${(g.specializations || []).map(specLabel).join(' ')}`
-                      .toLowerCase()
-                      .includes(search.toLowerCase()),
-                  )
+                  .filter(garageMatch)
+                  .sort((a, b) => (here?.point ? (kmTo(a) ?? Infinity) - (kmTo(b) ?? Infinity) : 0))
                   .map((g) => (
                     <article className="dash-tile" key={g.id}>
                       <StorefrontIcon size={29} />
@@ -1678,7 +1736,10 @@ export function Dashboard() {
                         </span>
                       )}
                       <p>
-                        {g.address}, {g.city}
+                        {g.address && g.city && g.address.includes(g.city)
+                          ? g.address
+                          : [g.address, g.city].filter(Boolean).join(', ')}
+                        {kmTo(g) != null && ` · ${distanceText(kmTo(g))}`}
                       </p>
                       <p>{g.description}</p>
                       <div className="gt-garage-meta">
@@ -1713,10 +1774,15 @@ export function Dashboard() {
                           ),
                         )}
                       </div>
-                      <button className="button button-small" onClick={() => book(g)}>
-                        {data.vehicles.length ? 'Book a service' : 'Add a vehicle to book'}{' '}
-                        <ArrowRightIcon size={16} />
-                      </button>
+                      <div className="ex-buttons">
+                        <button className="button button-small" onClick={() => book(g)}>
+                          {data.vehicles.length ? 'Book a service' : 'Add a vehicle to book'}{' '}
+                          <ArrowRightIcon size={16} />
+                        </button>
+                        <button className="dash-text-button" onClick={() => showGarage(g)}>
+                          Details
+                        </button>
+                      </div>
                     </article>
                   ))}
               </div>
@@ -1890,20 +1956,47 @@ export function Dashboard() {
                   Schedule appointment <PlusIcon size={16} />
                 </button>
               ) : (
-                <button className="button button-small" onClick={() => navigate('garages')}>
+                <button className="button button-small" onClick={() => book()}>
                   Book a service <PlusIcon size={16} />
                 </button>
               )}
             </div>
-            {isGarage && data.bookings.some((b) => b.state === 'waiting') && (
-              <>
-                <h3 className="dash-subheading">
-                  {`Incoming requests (${data.bookings.filter((b) => b.state === 'waiting').length})`}
-                </h3>
-                {rows(data.bookings.filter((b) => b.state === 'waiting'))}
-                <h3 className="dash-subheading">Appointments</h3>
-              </>
+            {isGarage && (
+              <div className="mk-tabs" role="tablist" aria-label="Bookings view">
+                {[
+                  ['list', 'List'],
+                  ['week', 'Week'],
+                  ['month', 'Month'],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    role="tab"
+                    aria-selected={bookingView === key}
+                    className={bookingView === key ? 'active' : ''}
+                    onClick={() => setBookingView(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             )}
+            {isGarage && bookingView === 'week' && (
+              <WeekView bookings={data.bookings} details={openDetails} />
+            )}
+            {isGarage && bookingView === 'month' && (
+              <MonthView bookings={data.bookings} details={openDetails} />
+            )}
+            {isGarage &&
+              bookingView === 'list' &&
+              data.bookings.some((b) => b.state === 'waiting') && (
+                <>
+                  <h3 className="dash-subheading">
+                    {`Incoming requests (${data.bookings.filter((b) => b.state === 'waiting').length})`}
+                  </h3>
+                  {rows(data.bookings.filter((b) => b.state === 'waiting'))}
+                  <h3 className="dash-subheading">Appointments</h3>
+                </>
+              )}
             {!isGarage &&
               data.bookings.some((b) => b.state === 'needs_approval' || b.review_due) && (
                 <>
@@ -1912,7 +2005,7 @@ export function Dashboard() {
                   <h3 className="dash-subheading">All appointments</h3>
                 </>
               )}
-            {data.bookings.length ? (
+            {isGarage && bookingView !== 'list' ? null : data.bookings.length ? (
               isGarage ? (
                 rows(data.bookings.filter((b) => b.state !== 'waiting'))
               ) : (
@@ -2006,6 +2099,24 @@ export function Dashboard() {
             </Empty>
           ))}
         {selected === 'reviews' && <ReviewsPanel open={open} />}
+        {selected === 'messages' && (
+          <MessagesPanel
+            bookings={data.bookings}
+            messages={data.messages}
+            user={user}
+            isGarage={isGarage}
+            open={messageBooking}
+          />
+        )}
+        {selected === 'mechanic' && (
+          <MyMechanic
+            data={data}
+            book={book}
+            chat={messageBooking}
+            navigate={navigate}
+            showGarage={showGarage}
+          />
+        )}
 
         {selected === 'memberships' &&
           (isGarage ? (
@@ -2250,6 +2361,16 @@ export function Dashboard() {
             setTourOpen(false);
             history.replaceState(null, '', `${location.pathname}${location.hash}`);
           }}
+        />
+      )}
+      {wizard && (
+        <BookingWizard
+          garages={data.garages}
+          vehicles={data.vehicles}
+          initialGarage={wizard.garage}
+          navigate={navigate}
+          onClose={() => setWizard(null)}
+          onDone={reload}
         />
       )}
       {dialog && (

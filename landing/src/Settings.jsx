@@ -30,6 +30,7 @@ export function AccountSettings({ user, onSaved }) {
     name: user.name,
     phone: user.phone || '',
     address: user.address || '',
+    notes: user.mechanicNotes || '',
   });
   const [prefs, setPrefs] = useState(user.prefs);
   const [busy, setBusy] = useState('');
@@ -38,7 +39,8 @@ export function AccountSettings({ user, onSaved }) {
   const changed =
     details.name !== user.name ||
     details.phone !== (user.phone || '') ||
-    details.address !== (user.address || '');
+    details.address !== (user.address || '') ||
+    details.notes !== (user.mechanicNotes || '');
   const save = async (nextPrefs = prefs, message = 'Profile saved') => {
     setBusy('profile');
     try {
@@ -48,6 +50,7 @@ export function AccountSettings({ user, onSaved }) {
           name: details.name.trim(),
           phone: details.phone.trim(),
           address: details.address.trim(),
+          ...(garage ? {} : { mechanic_notes: details.notes.trim() }),
           email_updates: nextPrefs.emailUpdates,
           email_chat: nextPrefs.emailChat,
           ...(garage ? { request_sound: nextPrefs.requestSound } : {}),
@@ -139,6 +142,19 @@ export function AccountSettings({ user, onSaved }) {
                 value={details.address}
                 onChange={(event) => setDetails({ ...details, address: event.target.value })}
               />
+            </label>
+          )}
+          {!garage && (
+            <label className="set-field set-wide">
+              <span>Notes for your mechanic</span>
+              <textarea
+                rows={3}
+                maxLength={1000}
+                placeholder="e.g. Please call before any extra work. The spare key is in the glovebox."
+                value={details.notes}
+                onChange={(event) => setDetails({ ...details, notes: event.target.value })}
+              />
+              <small>Shown to garages you book with.</small>
             </label>
           )}
         </div>
