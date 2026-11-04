@@ -91,6 +91,7 @@ const userView = (u) => ({
   demo: u.demo_persona || null,
   phone: u.phone || '',
   address: u.address || '',
+  mechanicNotes: u.mechanic_notes || '',
   termsAccepted: !!u.terms_accepted_at,
   suspended: !!u.suspended_at,
   hasPassword: !!u.password_hash && !String(u.password_hash).startsWith('oauth:'),
@@ -106,7 +107,7 @@ const photoOf = (column) =>
   `(SELECT '/api/photos/'||user_id||'?v='||updated_at FROM photos WHERE user_id=${column})`;
 
 const worldOf = (column) => `COALESCE((SELECT world FROM demo_users WHERE user_id=${column}),'')`;
-const userSelect = `SELECT u.*,${photoOf('u.id')} photo,COALESCE((SELECT id FROM garages WHERE owner_id=u.id),(SELECT garage_id FROM garage_staff WHERE user_id=u.id)) garage_id,(SELECT role FROM garage_staff WHERE user_id=u.id) staff_role,(SELECT permissions FROM garage_staff WHERE user_id=u.id) staff_permissions,(SELECT active FROM garage_staff WHERE user_id=u.id) staff_active,(SELECT world FROM demo_users WHERE user_id=u.id) demo_world,(SELECT persona FROM demo_users WHERE user_id=u.id) demo_persona,us.phone,us.address,us.email_updates,us.email_chat,us.request_sound,us.terms_accepted_at,us.onboarded_at FROM users u LEFT JOIN user_settings us ON us.user_id=u.id`;
+const userSelect = `SELECT u.*,${photoOf('u.id')} photo,COALESCE((SELECT id FROM garages WHERE owner_id=u.id),(SELECT garage_id FROM garage_staff WHERE user_id=u.id)) garage_id,(SELECT role FROM garage_staff WHERE user_id=u.id) staff_role,(SELECT permissions FROM garage_staff WHERE user_id=u.id) staff_permissions,(SELECT active FROM garage_staff WHERE user_id=u.id) staff_active,(SELECT world FROM demo_users WHERE user_id=u.id) demo_world,(SELECT persona FROM demo_users WHERE user_id=u.id) demo_persona,us.phone,us.address,us.mechanic_notes,us.email_updates,us.email_chat,us.request_sound,us.terms_accepted_at,us.onboarded_at FROM users u LEFT JOIN user_settings us ON us.user_id=u.id`;
 const ratingColumns = `(SELECT ROUND(AVG(rating),1) FROM reviews WHERE garage_id=g.id AND hidden=0) rating,(SELECT COUNT(*) FROM reviews WHERE garage_id=g.id AND hidden=0) review_count,g.verification`;
 const garageView = (g) => ({ ...g, services: JSON.parse(g.services), published: !!g.published });
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -776,6 +777,7 @@ export async function createApp({
         name: text(100).optional(),
         phone: phoneSchema,
         address: optional(200),
+        mechanic_notes: z.string().trim().max(1000).optional(),
         email_updates: z.boolean(),
         email_chat: z.boolean(),
         request_sound: z.boolean().optional(),
@@ -789,6 +791,7 @@ export async function createApp({
       email_updates: Number(d.email_updates),
       email_chat: Number(d.email_chat),
       ...(d.request_sound === undefined ? {} : { request_sound: Number(d.request_sound) }),
+      ...(d.mechanic_notes === undefined ? {} : { mechanic_notes: d.mechanic_notes }),
     });
     res.json({ ok: true });
   });
@@ -1223,7 +1226,7 @@ export async function createApp({
   app.get('/api/garages', async (req, res) => {
     const list = (
       await all(
-        `SELECT g.id,g.name,g.city,g.address,g.description,g.services,g.published,${ratingColumns} FROM garages g WHERE g.published=1 AND g.verification<>'rejected' AND ${worldOf('g.owner_id')}=? ORDER BY g.name`,
+        `SELECT g.id,g.name,g.city,g.address,g.description,g.services,g.published,${ratingColumns},COALESCE(c.phone,'') phone,COALESCE(c.mechanic_name,'') mechanic_name,o.email FROM garages g JOIN users o ON o.id=g.owner_id LEFT JOIN garage_contact c ON c.garage_id=g.id WHERE g.published=1 AND g.verification<>'rejected' AND ${worldOf('g.owner_id')}=? ORDER BY g.name`,
         world(req.user),
       )
     ).map(garageView);
@@ -1490,6 +1493,7 @@ export async function createApp({
     ownGarage,
     jobs,
     bookingEvent,
+    worldOf,
   });
   registerMarketplace(app, {
     one,
@@ -1576,8 +1580,11 @@ export async function createApp({
         garage_id: z.uuid(),
         vehicle_id: z.uuid(),
         service: text(80),
+        kind: z.enum(['service', 'diagnosis', 'custom']).default('service'),
         starts_at: z.iso.datetime(),
         notes: optional(1000),
+        mileage: z.number().int().min(0).max(5000000).optional(),
+        message: optional(2000),
       }),
       req,
     );
@@ -1596,21 +1603,46 @@ export async function createApp({
       d.garage_id,
       world(req.user),
     );
-    if (!garage || !JSON.parse(garage.services).includes(d.service))
+    if (!garage) throw fail(404, 'Garage not found.');
+    if (d.kind === 'service' && !JSON.parse(garage.services).includes(d.service))
       throw fail(400, 'Select a service offered by this garage.');
+    const service = d.kind === 'diagnosis' ? 'Diagnosis: I don’t know the issue' : d.service;
     const key = id();
-    await run(
-      'INSERT INTO bookings(id,driver_id,garage_id,vehicle_id,service,starts_at,notes) VALUES(?,?,?,?,?,?,?)',
-      key,
-      req.user.id,
-      d.garage_id,
-      d.vehicle_id,
-      d.service,
-      date.toISOString(),
-      d.notes,
-    );
-    await jobs.ensureJob(key);
-    await bookingEvent(key, req.user.id, 'requested');
+    await transaction(db, async () => {
+      await run(
+        'INSERT INTO bookings(id,driver_id,garage_id,vehicle_id,service,starts_at,notes) VALUES(?,?,?,?,?,?,?)',
+        key,
+        req.user.id,
+        d.garage_id,
+        d.vehicle_id,
+        service,
+        date.toISOString(),
+        d.notes,
+      );
+      await jobs.ensureJob(key);
+      await bookingEvent(
+        key,
+        req.user.id,
+        'requested',
+        d.kind === 'custom' ? 'Custom request' : '',
+      );
+      if (d.mileage !== undefined)
+        await run(
+          'UPDATE vehicles SET mileage=? WHERE id=? AND mileage<?',
+          d.mileage,
+          d.vehicle_id,
+          d.mileage,
+        );
+      if (d.message)
+        await run(
+          'INSERT INTO messages(id,booking_id,sender_id,body,created_at) VALUES(?,?,?,?,?)',
+          id(),
+          key,
+          req.user.id,
+          d.message,
+          new Date(clock()).toISOString(),
+        );
+    });
     res.status(201).json({ id: key });
   });
   app.patch('/api/bookings/:id', async (req, res) => {
@@ -1719,7 +1751,7 @@ export async function createApp({
   app.get('/api/customers', async (req, res) => {
     const g = await ownGarage(req.user, 'customers');
     const customers = await all(
-      `SELECT u.id,u.name,u.email,u.created_at joined_at,${photoOf('u.id')} photo,us.phone,COUNT(b.id) booking_count,COALESCE(n.notes,'') notes,COALESCE(n.tags,'') tags,MIN(b.starts_at) first_booking,MAX(CASE WHEN b.status='completed' THEN b.starts_at END) last_visit,(SELECT COALESCE(SUM(i.amount_cents),0) FROM invoices i WHERE i.driver_id=u.id AND i.garage_id=? AND i.status<>'void') spent_cents,EXISTS(SELECT 1 FROM memberships m JOIN plans p ON p.id=m.plan_id WHERE m.driver_id=u.id AND p.garage_id=? AND m.status='active') member FROM users u JOIN bookings b ON b.driver_id=u.id LEFT JOIN user_settings us ON us.user_id=u.id LEFT JOIN customer_notes n ON n.driver_id=u.id AND n.garage_id=b.garage_id WHERE b.garage_id=? GROUP BY u.id ORDER BY u.name`,
+      `SELECT u.id,u.name,u.email,u.created_at joined_at,${photoOf('u.id')} photo,us.phone,us.mechanic_notes,COUNT(b.id) booking_count,COALESCE(n.notes,'') notes,COALESCE(n.tags,'') tags,MIN(b.starts_at) first_booking,MAX(CASE WHEN b.status='completed' THEN b.starts_at END) last_visit,(SELECT COALESCE(SUM(i.amount_cents),0) FROM invoices i WHERE i.driver_id=u.id AND i.garage_id=? AND i.status<>'void') spent_cents,EXISTS(SELECT 1 FROM memberships m JOIN plans p ON p.id=m.plan_id WHERE m.driver_id=u.id AND p.garage_id=? AND m.status='active') member FROM users u JOIN bookings b ON b.driver_id=u.id LEFT JOIN user_settings us ON us.user_id=u.id LEFT JOIN customer_notes n ON n.driver_id=u.id AND n.garage_id=b.garage_id WHERE b.garage_id=? GROUP BY u.id ORDER BY u.name`,
       g.id,
       g.id,
       g.id,

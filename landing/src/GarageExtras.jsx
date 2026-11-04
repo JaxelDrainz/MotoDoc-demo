@@ -98,7 +98,12 @@ export function CustomersPanel({ customers, bookings, open, act, services, canRe
     );
   return (
     <>
-      <p className="dash-help">MotoDoc users who have booked with you and your members.</p>
+      <div className="dash-section-heading">
+        <p className="dash-help">MotoDoc users who have booked with you and your members.</p>
+        <a className="dash-secondary" href="#refer">
+          Invite customers
+        </a>
+      </div>
       <div className="ac-filters">
         <label className="dash-search">
           Search customers
@@ -174,6 +179,12 @@ export function CustomersPanel({ customers, bookings, open, act, services, canRe
                           .map((v) => `${v.make} ${v.model} · ${v.registration}`)
                           .join(', ') || '—'}
                       </dd>
+                      {c.mechanic_notes && (
+                        <>
+                          <dt>From the customer</dt>
+                          <dd>{c.mechanic_notes}</dd>
+                        </>
+                      )}
                       <dt>Internal notes</dt>
                       <dd>{c.notes || 'No notes yet. Only your team can see notes.'}</dd>
                     </dl>
@@ -209,6 +220,61 @@ export function CustomersPanel({ customers, bookings, open, act, services, canRe
                         }
                       >
                         {c.notes ? 'Edit note' : 'Add note'}
+                      </button>
+                      <button
+                        className="dash-text-button"
+                        onClick={() =>
+                          open({
+                            silent: true,
+                            title: `Set a reminder for ${c.name}`,
+                            note: 'They see it in their reminders and get a notification.',
+                            values: { type: 'other' },
+                            fields: [
+                              { name: 'title', label: 'Reminder', required: true, maxLength: 160 },
+                              {
+                                name: 'type',
+                                label: 'Type',
+                                required: true,
+                                options: [
+                                  ['oil', 'Oil change'],
+                                  ['tyres', 'Tyre change'],
+                                  ['inspection', 'Inspection'],
+                                  ['other', 'Other'],
+                                ].map(([value, label]) => ({ value, label })),
+                              },
+                              { name: 'due_date', label: 'Date', type: 'date', required: true },
+                              ...(c.vehicles.length
+                                ? [
+                                    {
+                                      name: 'vehicle_id',
+                                      label: 'Car (optional)',
+                                      options: c.vehicles.map((v) => ({
+                                        value: v.id,
+                                        label: `${v.make} ${v.model} · ${v.registration}`,
+                                      })),
+                                    },
+                                  ]
+                                : []),
+                              { name: 'note', label: 'Note (optional)', maxLength: 500 },
+                            ],
+                            submit: 'Send reminder',
+                            save: async (d) => {
+                              await api(`/customers/${c.id}/reminders`, {
+                                method: 'POST',
+                                body: {
+                                  title: d.title,
+                                  type: d.type,
+                                  due_date: d.due_date,
+                                  note: d.note || '',
+                                  ...(d.vehicle_id ? { vehicle_id: d.vehicle_id } : {}),
+                                },
+                              });
+                              toast(`Reminder sent to ${c.name}`);
+                            },
+                          })
+                        }
+                      >
+                        Set reminder
                       </button>
                       {canRecord && c.vehicles.length > 0 && (
                         <button
