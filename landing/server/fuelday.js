@@ -113,7 +113,11 @@ export function registerFuelDay(app, ctx) {
       req,
     );
     const car = vehicle_id
-      ? await one('SELECT * FROM vehicles WHERE id=? AND owner_id=?', vehicle_id, req.user.id)
+      ? await one(
+          'SELECT * FROM vehicles WHERE id=? AND owner_id=? AND archived_at IS NULL',
+          vehicle_id,
+          req.user.id,
+        )
       : null;
     if (!car?.registration) throw fail(400, 'Add your car first, with its plate number.');
     const day = await one('SELECT * FROM fuel_days WHERE id=? AND world=?', fuel_day_id, W(req));

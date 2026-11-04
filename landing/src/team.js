@@ -43,6 +43,7 @@ export const TAB_AREAS = {
   bookings: 'bookings',
   marketplace: 'bookings',
   refer: 'memberships',
+  reviews: 'customers',
   jobs: 'jobs',
   history: 'records',
   reminders: 'records',

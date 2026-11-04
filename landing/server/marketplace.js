@@ -89,7 +89,11 @@ export function registerMarketplace(app, ctx) {
     );
     if (d.preferred_date < now().slice(0, 10)) throw fail(400, 'Choose today or a later date.');
     if (
-      !(await one('SELECT id FROM vehicles WHERE id=? AND owner_id=?', d.vehicle_id, req.user.id))
+      !(await one(
+        'SELECT id FROM vehicles WHERE id=? AND owner_id=? AND archived_at IS NULL',
+        d.vehicle_id,
+        req.user.id,
+      ))
     )
       throw fail(404, 'Vehicle not found.');
     const key = id();

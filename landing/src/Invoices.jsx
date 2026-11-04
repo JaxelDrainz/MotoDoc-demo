@@ -68,8 +68,10 @@ function Modal({ title, onClose, children, wide }) {
 
 const blankLine = () => ({ description: '', quantity: '1', price: '', discount_pct: '' });
 
-export function InvoiceForm({ bookings, onClose, onSaved }) {
-  const [bookingId, setBookingId] = useState(bookings[0]?.id || '');
+export function InvoiceForm({ bookings, onClose, onSaved, initial }) {
+  const [bookingId, setBookingId] = useState(
+    bookings.some((b) => b.id === initial) ? initial : bookings[0]?.id || '',
+  );
   const booking = bookings.find((b) => b.id === bookingId);
   const [description, setDescription] = useState(
     booking ? `${booking.service} for ${booking.make} ${booking.model}.` : '',
@@ -681,6 +683,18 @@ export function InvoicesPanel({ invoices, bookings, isGarage, reload }) {
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState('');
   const [creating, setCreating] = useState(false);
+  const [initial, setInitial] = useState('');
+  useEffect(() => {
+    let wanted = '';
+    try {
+      wanted = sessionStorage.getItem('motodoc-invoice-for') || '';
+      sessionStorage.removeItem('motodoc-invoice-for');
+    } catch {}
+    if (wanted && isGarage) {
+      setInitial(wanted);
+      setCreating(true);
+    }
+  }, [isGarage]);
   const open = invoices.filter((i) => ['unpaid', 'overdue'].includes(i.state));
   const year = String(new Date().getFullYear());
   const tiles = isGarage
@@ -807,7 +821,12 @@ export function InvoicesPanel({ invoices, bookings, isGarage, reload }) {
         </p>
       )}
       {creating && (
-        <InvoiceForm bookings={invoiceable} onClose={() => setCreating(false)} onSaved={reload} />
+        <InvoiceForm
+          bookings={invoiceable}
+          initial={initial}
+          onClose={() => setCreating(false)}
+          onSaved={reload}
+        />
       )}
       {current && (
         <InvoiceDetail

@@ -39,7 +39,7 @@ import { Bell, SlotPicker, Status, ThemeToggle } from './DashParts.jsx';
 import { flash, toast } from './Toasts.jsx';
 import { DemoBar } from './Demo.jsx';
 import { AccountSettings } from './Settings.jsx';
-import { JobDetails, JobStatus, jobActions, toLocalInput } from './Jobs.jsx';
+import { JobDetails, JobStatus, STAGES, jobActions, toLocalInput } from './Jobs.jsx';
 import { InvoicesPanel } from './Invoices.jsx';
 import { AnalyticsPanel } from './GarageTools.jsx';
 import { SPECIALIZATIONS } from './finland.js';
@@ -64,6 +64,8 @@ import {
   ReferPanel,
 } from './Extras.jsx';
 import { NotificationsPage } from './Notifications.jsx';
+import { HistoryPanel } from './History.jsx';
+import { CustomersPanel, ReviewsPanel, recordDialog } from './GarageExtras.jsx';
 import { TAB_AREAS } from './team.js';
 import { FEEDBACK_KINDS } from './platform.js';
 import { siteFlag } from './site.jsx';
@@ -123,9 +125,64 @@ const vehicleFields = [
     max: new Date().getFullYear() + 1,
     required: true,
   },
-  { name: 'registration', label: 'Registration', required: true, maxLength: 24 },
+  {
+    name: 'registration',
+    label: 'Registration',
+    required: true,
+    maxLength: 8,
+    placeholder: 'ABC-123',
+  },
   { name: 'mileage', label: 'Mileage (km)', type: 'number', min: 0, max: 5000000, required: true },
+  {
+    name: 'fuel_type',
+    label: 'Fuel',
+    options: [
+      { value: 'petrol', label: 'Petrol' },
+      { value: 'diesel', label: 'Diesel' },
+      { value: 'hybrid', label: 'Hybrid' },
+      { value: 'electric', label: 'Electric' },
+      { value: 'gas', label: 'Gas' },
+    ],
+  },
+  { name: 'vin', label: 'VIN (optional)', maxLength: 17, placeholder: '17 letters and numbers' },
+  { name: 'inspection_due', label: 'Next inspection (katsastus)', type: 'date' },
+  { name: 'insurance_due', label: 'Insurance renews', type: 'date' },
+  { name: 'tax_due', label: 'Vehicle tax due', type: 'date' },
 ];
+const REMINDER_TYPES = [
+  ['oil', 'Oil change'],
+  ['tyres', 'Tyre change'],
+  ['inspection', 'Inspection'],
+  ['insurance', 'Insurance'],
+  ['tax', 'Vehicle tax'],
+  ['other', 'Other'],
+];
+const FUEL = {
+  petrol: 'Petrol',
+  diesel: 'Diesel',
+  hybrid: 'Hybrid',
+  electric: 'Electric',
+  gas: 'Gas',
+};
+export const deadlinesOf = (v) =>
+  [
+    ['Inspection', v.mot_due],
+    ['Insurance', v.insurance_due],
+    ['Vehicle tax', v.tax_due],
+  ]
+    .filter(([, due]) => due)
+    .map(([label, due]) => ({
+      label,
+      due,
+      days: Math.round((Date.parse(`${due}T12:00:00Z`) - Date.now()) / 86400000),
+    }))
+    .sort((a, b) => a.days - b.days);
+const deadlineText = (d) =>
+  d.days < 0
+    ? `${d.label} ${-d.days} ${-d.days === 1 ? 'day' : 'days'} late`
+    : d.days === 0
+      ? `${d.label} today`
+      : `${d.label} in ${d.days} ${d.days === 1 ? 'day' : 'days'}`;
 
 export function FormDialog({ config, onClose, onSave }) {
   const ref = useRef(null),
@@ -191,6 +248,7 @@ export function FormDialog({ config, onClose, onSave }) {
       await config.save(values);
       await onSave();
       onClose();
+      if (config.then) setTimeout(config.then, 60);
     } catch (err) {
       setError(err.message);
       toast(err.message, 'error');
@@ -632,7 +690,12 @@ export function Dashboard() {
         : ['vehicles', 'garages', 'fuel-day']),
     ];
     const results = await Promise.all(paths.map((p) => api('/' + p)));
-    setData(Object.fromEntries(paths.map((p, i) => [p, results[i]])));
+    const loaded = Object.fromEntries(paths.map((p, i) => [p, results[i]]));
+    if (loaded.vehicles) {
+      loaded.archivedVehicles = loaded.vehicles.filter((v) => v.archived_at);
+      loaded.vehicles = loaded.vehicles.filter((v) => !v.archived_at);
+    }
+    setData(loaded);
     setError('');
   }, []);
   useEffect(() => {
@@ -692,7 +755,12 @@ export function Dashboard() {
           ['inspections', CalendarCheckIcon, 'Inspections'],
         ]
       : []),
-    ...(isGarage ? [['customers', UsersIcon, 'Customers']] : []),
+    ...(isGarage
+      ? [
+          ['customers', UsersIcon, 'Customers'],
+          ['reviews', StarIcon, 'Reviews'],
+        ]
+      : []),
     ['memberships', GiftIcon, 'Memberships'],
     ['invoices', ReceiptIcon, 'Invoices'],
     ...(isGarage ? [['analytics', ChartBarIcon, 'Analytics']] : []),
@@ -728,11 +796,20 @@ export function Dashboard() {
     open({
       title: v ? 'Edit vehicle' : 'Add your vehicle',
       fields: vehicleFields,
-      values: v || defaultVehicle,
+      values: v ? { ...v, inspection_due: v.mot_due || '' } : defaultVehicle,
       save: (d) =>
         act(
           v ? `/vehicles/${v.id}` : '/vehicles',
-          { ...d, year: Number(d.year), mileage: Number(d.mileage) },
+          {
+            ...d,
+            year: Number(d.year),
+            mileage: Number(d.mileage),
+            fuel_type: d.fuel_type || '',
+            vin: d.vin || '',
+            inspection_due: d.inspection_due || null,
+            insurance_due: d.insurance_due || null,
+            tax_due: d.tax_due || null,
+          },
           v ? 'PATCH' : 'POST',
         ),
     });
@@ -887,20 +964,54 @@ export function Dashboard() {
     open({
       title: `Messages with ${isGarage ? b.driver_name : b.garage_name}`,
       note: `${b.service} · ${b.registration} · ${time(b.starts_at)}`,
-      content: thread.length ? (
-        <ul className="dash-thread">
-          {thread.map((m) => (
-            <li key={m.id} className={m.sender_id === user.id ? 'mine' : ''}>
-              <Avatar name={m.sender_name} photo={m.sender_photo} className="small" />
-              <p>{m.body}</p>
-              <small>
-                {m.sender_id === user.id ? 'You' : m.sender_name} · {time(m.created_at)}
-              </small>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="dash-help">No messages about this booking yet.</p>
+      content: (
+        <>
+          {thread.length ? (
+            <ul className="dash-thread">
+              {thread.map((m) => (
+                <li key={m.id} className={m.sender_id === user.id ? 'mine' : ''}>
+                  <Avatar name={m.sender_name} photo={m.sender_photo} className="small" />
+                  <p>{m.body}</p>
+                  <small>
+                    {m.sender_id === user.id ? 'You' : m.sender_name} · {time(m.created_at)}
+                  </small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="dash-help">No messages about this booking yet.</p>
+          )}
+          <div className="dash-quick-replies" aria-label="Quick replies">
+            {(isGarage
+              ? [
+                  'Your car is ready for pickup!',
+                  'We need an extra hour, sorry for the delay.',
+                  'Found an extra issue — may I proceed?',
+                ]
+              : [
+                  'What’s the status?',
+                  'Can I pick it up later today?',
+                  'Please call me before extra work.',
+                ]
+            ).map((reply) => (
+              <button
+                type="button"
+                key={reply}
+                onClick={(e) => {
+                  const box = e.currentTarget
+                    .closest('dialog')
+                    ?.querySelector('textarea[name="body"]');
+                  if (box) {
+                    box.value = reply;
+                    box.focus();
+                  }
+                }}
+              >
+                {reply}
+              </button>
+            ))}
+          </div>
+        </>
       ),
       fields: [
         { name: 'body', label: 'Your message', type: 'textarea', required: true, maxLength: 2000 },
@@ -1267,6 +1378,101 @@ export function Dashboard() {
                 <ArrowRightIcon size={18} />
               </a>
             )}
+            {!isGarage &&
+              data.bookings
+                .filter(
+                  (b) =>
+                    b.status === 'confirmed' &&
+                    ['in_progress', 'finished', 'ready_for_pickup'].includes(b.stage),
+                )
+                .slice(0, 2)
+                .map((b) => {
+                  const step = STAGES.findIndex(([k]) => k === b.stage);
+                  return (
+                    <a className="dash-tile dash-tracker" href="#bookings" key={b.id}>
+                      <span className="eyebrow">
+                        {b.stage === 'ready_for_pickup'
+                          ? 'READY FOR PICKUP'
+                          : b.stage === 'finished'
+                            ? 'WORK FINISHED'
+                            : 'REPAIR IN PROGRESS'}
+                      </span>
+                      <strong>{`${b.service} · ${b.garage_name}`}</strong>
+                      <div className="dash-tracker-bar" aria-hidden="true">
+                        {STAGES.map(([k], i) => (
+                          <span key={k} className={i <= step ? 'done' : ''} />
+                        ))}
+                      </div>
+                      <small>
+                        {b.stage === 'ready_for_pickup' && b.pickup_at
+                          ? `Pick up from ${time(b.pickup_at)}`
+                          : `${b.make} ${b.model} · ${b.registration}`}
+                      </small>
+                    </a>
+                  );
+                })}
+            {!isGarage &&
+              (() => {
+                const rate = data.bookings.find((b) => b.review_due);
+                const unpaid = (data.invoices || []).filter(
+                  (i) => i.state === 'unpaid' || i.state === 'overdue',
+                );
+                const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+                const items = [
+                  ...(unpaid.length
+                    ? [
+                        [
+                          'invoices',
+                          `${unpaid.length} unpaid ${unpaid.length === 1 ? 'invoice' : 'invoices'}: ${euro(unpaid.reduce((s, i) => s + i.totals.total, 0))}${unpaid.some((i) => i.state === 'overdue') ? ` · ${unpaid.filter((i) => i.state === 'overdue').length} overdue` : ''}`,
+                          unpaid.some((i) => i.state === 'overdue'),
+                        ],
+                      ]
+                    : []),
+                  ...data.vehicles.flatMap((v) =>
+                    deadlinesOf(v)
+                      .filter((d) => d.days <= 30)
+                      .map((d) => [
+                        'vehicles',
+                        `${v.registration}: ${deadlineText(d)}`,
+                        d.days < 0,
+                      ]),
+                  ),
+                  ...data.reminders
+                    .filter((r) => !r.done && r.due_date <= soon)
+                    .slice(0, 3)
+                    .map((r) => ['reminders', `${r.title} · ${date(r.due_date)}`, false]),
+                ];
+                return (
+                  <>
+                    {rate && (
+                      <a className="dash-tile dash-rate" href="#bookings">
+                        <StarIcon size={24} />
+                        <span>
+                          <strong>How did it go?</strong>
+                          <small>{`Rate ${rate.service} · ${rate.garage_name}`}</small>
+                        </span>
+                        <ArrowRightIcon size={18} />
+                      </a>
+                    )}
+                    {items.length > 0 && (
+                      <article className="dash-tile dash-attention">
+                        <h2>Needs attention</h2>
+                        <ul>
+                          {items.map(([target, label, late]) => (
+                            <li key={label}>
+                              <a href={`#${target}`} className={late ? 'late' : ''}>
+                                <WarningCircleIcon size={18} />
+                                <span>{label}</span>
+                                <ArrowRightIcon size={15} />
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </article>
+                    )}
+                  </>
+                );
+              })()}
             <div className="dash-stats">
               {[
                 [CalendarBlankIcon, 'Upcoming bookings', data.overview.upcoming],
@@ -1365,8 +1571,17 @@ export function Dashboard() {
                       {v.make} {v.model}
                     </h3>
                     <p>
-                      {v.year} · {v.mileage.toLocaleString()} km
+                      {[v.year, `${v.mileage.toLocaleString()} km`, FUEL[v.fuel_type]]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </p>
+                    {deadlinesOf(v)[0] && (
+                      <span
+                        className={`dash-deadline ${deadlinesOf(v)[0].days < 0 ? 'late' : deadlinesOf(v)[0].days <= 30 ? 'soon' : 'ok'}`}
+                      >
+                        {deadlineText(deadlinesOf(v)[0])}
+                      </span>
+                    )}
                     <div className="dash-tile-actions">
                       <button className="dash-text-button" onClick={() => changeVehicle(v)}>
                         Edit details
@@ -1375,8 +1590,8 @@ export function Dashboard() {
                         className="dash-text-button muted"
                         onClick={() =>
                           confirm(
-                            'Remove vehicle',
-                            `${v.make} ${v.model} · ${v.registration}. Vehicles with booking history are kept for your records.`,
+                            'Remove this vehicle?',
+                            `${v.make} ${v.model} · ${v.registration}. Its service history, bookings and invoices are kept. You’ll still find them in Service history.`,
                             `/vehicles/${v.id}`,
                             {},
                             'DELETE',
@@ -1401,6 +1616,26 @@ export function Dashboard() {
               >
                 Add your first car to keep its details and service records together.
               </Empty>
+            )}
+            {data.archivedVehicles?.length > 0 && (
+              <>
+                <div className="dash-section-heading">
+                  <h2>Removed vehicles</h2>
+                </div>
+                <div className="dash-list">
+                  {data.archivedVehicles.map((v) => (
+                    <article className="dash-row" key={v.id}>
+                      <div className="dash-row-body">
+                        <div className="dash-row-title">
+                          <h3>{`${v.make} ${v.model} · ${v.registration}`}</h3>
+                          <span className="mem-pill">Vehicle removed</span>
+                        </div>
+                        <p>Its service history, bookings and invoices are kept.</p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </>
             )}
           </>
         )}
@@ -1678,10 +1913,36 @@ export function Dashboard() {
                 </>
               )}
             {data.bookings.length ? (
-              rows(
-                isGarage
-                  ? data.bookings.filter((b) => b.state !== 'waiting')
-                  : data.bookings.filter((b) => b.state !== 'needs_approval' && !b.review_due),
+              isGarage ? (
+                rows(data.bookings.filter((b) => b.state !== 'waiting'))
+              ) : (
+                (() => {
+                  const rest = data.bookings.filter(
+                    (b) => b.state !== 'needs_approval' && !b.review_due,
+                  );
+                  const upcoming = rest
+                    .filter((b) => ['pending', 'confirmed'].includes(b.status))
+                    .sort((a, b) => (a.starts_at < b.starts_at ? -1 : 1));
+                  const past = rest.filter((b) => !['pending', 'confirmed'].includes(b.status));
+                  return (
+                    <>
+                      <h3 className="dash-subheading">{`Upcoming (${upcoming.length})`}</h3>
+                      {upcoming.length ? (
+                        rows(upcoming)
+                      ) : (
+                        <p className="dash-help">
+                          Nothing booked. Book when your car needs a service.
+                        </p>
+                      )}
+                      {past.length > 0 && (
+                        <>
+                          <h3 className="dash-subheading">{`Past (${past.length})`}</h3>
+                          {rows(past)}
+                        </>
+                      )}
+                    </>
+                  );
+                })()
               )
             ) : (
               <Empty
@@ -1699,25 +1960,22 @@ export function Dashboard() {
           </>
         )}
 
+        {selected === 'history' && isGarage && allowed('records') && data.customers?.length > 0 && (
+          <div className="dash-section-heading">
+            <h2>Service records</h2>
+            <button
+              className="button button-small"
+              onClick={() =>
+                recordDialog(open, data.customers, data['garage/profile']?.services || [])
+              }
+            >
+              New record <PlusIcon size={16} />
+            </button>
+          </div>
+        )}
         {selected === 'history' &&
           (data['service-history'].length ? (
-            <div className="dash-list">
-              {data['service-history'].map((r) => (
-                <article className="dash-row" key={r.id}>
-                  <div className="dash-row-icon">
-                    <CheckCircleIcon size={24} />
-                  </div>
-                  <div className="dash-row-body">
-                    <h3>{r.service}</h3>
-                    <p>
-                      {r.garage_name} · {r.registration} · {date(r.performed_at)}
-                    </p>
-                    <p>{r.summary}</p>
-                    <small>{r.mileage.toLocaleString()} km</small>
-                  </div>
-                </article>
-              ))}
-            </div>
+            <HistoryPanel records={data['service-history']} isGarage={isGarage} />
           ) : (
             <Empty
               icon={ClockCounterClockwiseIcon}
@@ -1730,43 +1988,14 @@ export function Dashboard() {
 
         {selected === 'customers' &&
           (data.customers.length ? (
-            <div className="dash-list">
-              {data.customers.map((c) => (
-                <article className="dash-row" key={c.id}>
-                  <Avatar name={c.name} photo={c.photo} className="row" />
-                  <div className="dash-row-body">
-                    <h3>{c.name}</h3>
-                    <p>
-                      {c.email} · {c.booking_count} bookings
-                    </p>
-                    {c.tags && <small>{c.tags}</small>}
-                    {c.notes && <p>{c.notes}</p>}
-                  </div>
-                  <button
-                    className="dash-text-button"
-                    onClick={() =>
-                      open({
-                        title: `Notes for ${c.name}`,
-                        note: 'These notes are private to your garage.',
-                        values: c,
-                        fields: [
-                          { name: 'tags', label: 'Tags', maxLength: 300 },
-                          {
-                            name: 'notes',
-                            label: 'Customer notes',
-                            type: 'textarea',
-                            maxLength: 3000,
-                          },
-                        ],
-                        save: (d) => act(`/customers/${c.id}`, d, 'PUT'),
-                      })
-                    }
-                  >
-                    Edit notes
-                  </button>
-                </article>
-              ))}
-            </div>
+            <CustomersPanel
+              customers={data.customers}
+              bookings={data.bookings}
+              open={open}
+              act={act}
+              services={data['garage/profile']?.services || []}
+              canRecord={allowed('records')}
+            />
           ) : (
             <Empty
               icon={UsersIcon}
@@ -1776,6 +2005,7 @@ export function Dashboard() {
               Drivers who book with your garage will appear here.
             </Empty>
           ))}
+        {selected === 'reviews' && <ReviewsPanel open={open} />}
 
         {selected === 'memberships' &&
           (isGarage ? (
@@ -1807,7 +2037,8 @@ export function Dashboard() {
                 onClick={() =>
                   open({
                     title: 'Add a reminder',
-                    note: 'Reminders appear in your account. Email and push notifications are not connected.',
+                    note: 'Reminders appear in your notifications a week before the date.',
+                    values: { type: 'other' },
                     fields: [
                       {
                         name: 'title',
@@ -1815,9 +2046,35 @@ export function Dashboard() {
                         required: true,
                         maxLength: 160,
                       },
+                      {
+                        name: 'type',
+                        label: 'Type',
+                        required: true,
+                        options: REMINDER_TYPES.map(([value, label]) => ({ value, label })),
+                      },
                       { name: 'due_date', label: 'Date', type: 'date', required: true },
+                      ...(!isGarage && data.vehicles?.length
+                        ? [
+                            {
+                              name: 'vehicle_id',
+                              label: 'Car (optional)',
+                              options: data.vehicles.map((v) => ({
+                                value: v.id,
+                                label: `${v.make} ${v.model} · ${v.registration}`,
+                              })),
+                            },
+                          ]
+                        : []),
+                      { name: 'note', label: 'Note (optional)', type: 'textarea', maxLength: 500 },
                     ],
-                    save: (d) => act('/reminders', d),
+                    save: (d) =>
+                      act('/reminders', {
+                        title: d.title,
+                        type: d.type,
+                        due_date: d.due_date,
+                        note: d.note || '',
+                        ...(d.vehicle_id ? { vehicle_id: d.vehicle_id } : {}),
+                      }),
                   })
                 }
               >
@@ -1833,7 +2090,16 @@ export function Dashboard() {
                     </div>
                     <div className="dash-row-body">
                       <h3>{r.title}</h3>
-                      <p>{date(r.due_date)}</p>
+                      <p>
+                        {[
+                          date(r.due_date),
+                          REMINDER_TYPES.find(([k]) => k === r.type)?.[1],
+                          r.registration,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                      {r.note && <p>{r.note}</p>}
                       <Status>
                         {r.done
                           ? 'done'
@@ -1854,6 +2120,19 @@ export function Dashboard() {
                       }
                     >
                       {r.done ? 'Reopen' : 'Mark done'}
+                    </button>
+                    <button
+                      className="dash-text-button muted"
+                      onClick={() =>
+                        open({
+                          title: 'Delete this reminder?',
+                          note: r.title,
+                          submit: 'Delete',
+                          save: () => act(`/reminders/${r.id}`, {}, 'DELETE'),
+                        })
+                      }
+                    >
+                      Delete
                     </button>
                   </article>
                 ))}

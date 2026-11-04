@@ -23,6 +23,7 @@ const STATE = {
 const EVENTS = {
   requested: 'Request sent',
   'quote-accepted': 'Quote accepted',
+  'record-added': 'Service record added by the garage',
   confirmed: 'Booking approved',
   'approved-new-time': 'Approved for a new time',
   declined: 'Request declined',
@@ -283,6 +284,20 @@ export function jobActions(b, { isGarage, open, act, quick, details, rebook }) {
             mileage: Number(d.mileage),
             ...(d.cost ? { cost: Number(d.cost) } : {}),
             parts: d.parts,
+          }),
+        then: () =>
+          open({
+            silent: true,
+            title: 'Create the invoice now?',
+            note: `${b.service} for ${b.driver_name} is complete and the service record is saved.`,
+            cancel: 'Later',
+            submit: 'Create invoice',
+            save: async () => {
+              try {
+                sessionStorage.setItem('motodoc-invoice-for', b.id);
+              } catch {}
+              location.hash = 'invoices';
+            },
           }),
       }),
   ];

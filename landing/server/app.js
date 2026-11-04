@@ -34,6 +34,7 @@ import { registerMarketplace } from './marketplace.js';
 import { platformSettings, registerAdmin, registerFeedback } from './admin.js';
 import { registerFuelDay } from './fuelday.js';
 import { registerExtras } from './extras.js';
+import { registerGarageExtras } from './garagex.js';
 import { registerNotifications } from './notifications.js';
 import { AREA_KEYS } from '../src/team.js';
 import {
@@ -1065,7 +1066,7 @@ export async function createApp({
       await Promise.all(
         (
           await all(
-            'SELECT v.*,c.oil_life,c.brake_wear,c.mot_due,c.updated_at condition_updated_at FROM vehicles v LEFT JOIN vehicle_condition c ON c.vehicle_id=v.id WHERE v.owner_id=? ORDER BY v.make,v.model',
+            'SELECT v.*,c.oil_life,c.brake_wear,c.mot_due,c.updated_at condition_updated_at FROM vehicles v LEFT JOIN vehicle_condition c ON c.vehicle_id=v.id WHERE v.owner_id=? ORDER BY v.archived_at IS NOT NULL,v.make,v.model',
             req.user.id,
           )
         ).map(async (v) => ({
@@ -1108,16 +1109,38 @@ export async function createApp({
       .int()
       .min(1900)
       .max(new Date().getFullYear() + 1),
-    registration: text(24).transform((v) => v.toUpperCase()),
+    registration: text(24)
+      .transform((v) => v.toUpperCase().replace(/\s+/g, ''))
+      .refine((v) => FI_PLATE.test(v), 'Use the Finnish format, for example ABC-123.')
+      .transform((v) => (v.includes('-') ? v : v.replace(/^([A-ZÅÄÖ]+)(\d+)$/, '$1-$2'))),
     mileage: z.number().int().min(0).max(5000000),
+    fuel_type: z.enum(['', 'petrol', 'diesel', 'hybrid', 'electric', 'gas']).default(''),
+    vin: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .refine((v) => !v || /^[A-HJ-NPR-Z0-9]{17}$/.test(v), 'A VIN has 17 letters and numbers.')
+      .default(''),
+    inspection_due: dateSchema.nullable().optional(),
+    insurance_due: dateSchema.nullable().optional(),
+    tax_due: dateSchema.nullable().optional(),
   });
+  const saveInspection = async (vehicleId, date) => {
+    if (date === undefined) return;
+    await run(
+      'INSERT INTO vehicle_condition(vehicle_id,mot_due,updated_at) VALUES(?,?,?) ON CONFLICT(vehicle_id) DO UPDATE SET mot_due=excluded.mot_due',
+      vehicleId,
+      date,
+      new Date(clock()).toISOString(),
+    );
+  };
   app.post('/api/vehicles', async (req, res) => {
     driverOnly(req.user);
     await extras.freeLimit(req.user, 'vehicles');
     const d = parse(vehicleSchema, req),
       key = id();
     await run(
-      'INSERT INTO vehicles VALUES(?,?,?,?,?,?,?)',
+      'INSERT INTO vehicles(id,owner_id,make,model,year,registration,mileage,fuel_type,vin,insurance_due,tax_due) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
       key,
       req.user.id,
       d.make,
@@ -1125,7 +1148,12 @@ export async function createApp({
       d.year,
       d.registration,
       d.mileage,
+      d.fuel_type,
+      d.vin,
+      d.insurance_due ?? null,
+      d.tax_due ?? null,
     );
+    await saveInspection(key, d.inspection_due);
     res.status(201).json(await one('SELECT * FROM vehicles WHERE id=?', key));
   });
   app.patch('/api/vehicles/:id', async (req, res) => {
@@ -1134,18 +1162,23 @@ export async function createApp({
     if (
       !(
         await run(
-          'UPDATE vehicles SET make=?,model=?,year=?,registration=?,mileage=? WHERE id=? AND owner_id=?',
+          'UPDATE vehicles SET make=?,model=?,year=?,registration=?,mileage=?,fuel_type=?,vin=?,insurance_due=?,tax_due=? WHERE id=? AND owner_id=? AND archived_at IS NULL',
           d.make,
           d.model,
           d.year,
           d.registration,
           d.mileage,
+          d.fuel_type,
+          d.vin,
+          d.insurance_due ?? null,
+          d.tax_due ?? null,
           req.params.id,
           req.user.id,
         )
       ).changes
     )
       throw fail(404, 'Vehicle not found.');
+    await saveInspection(req.params.id, d.inspection_due);
     res.json({ ok: true });
   });
   app.delete('/api/vehicles/:id', async (req, res) => {
@@ -1154,8 +1187,28 @@ export async function createApp({
       !(await one('SELECT id FROM vehicles WHERE id=? AND owner_id=?', req.params.id, req.user.id))
     )
       throw fail(404, 'Vehicle not found.');
-    if (await one('SELECT id FROM bookings WHERE vehicle_id=?', req.params.id))
-      throw fail(409, 'Vehicles with bookings or service history cannot be deleted.');
+    if (
+      await one(
+        "SELECT 1 FROM membership_vehicles mv JOIN memberships m ON m.id=mv.membership_id WHERE mv.vehicle_id=? AND m.status='active'",
+        req.params.id,
+      )
+    )
+      throw fail(409, 'This car is covered by a membership. Cancel the membership first.');
+    if (
+      await one(
+        "SELECT 1 FROM bookings WHERE vehicle_id=? AND status IN ('pending','confirmed')",
+        req.params.id,
+      )
+    )
+      throw fail(409, 'This car has an upcoming booking. Cancel it first.');
+    if (await one('SELECT id FROM bookings WHERE vehicle_id=?', req.params.id)) {
+      await run(
+        'UPDATE vehicles SET archived_at=? WHERE id=?',
+        new Date(clock()).toISOString(),
+        req.params.id,
+      );
+      return res.json({ ok: true, archived: true });
+    }
     if (
       await one(
         "SELECT 1 FROM membership_vehicles mv JOIN memberships m ON m.id=mv.membership_id WHERE mv.vehicle_id=? AND m.status='active'",
@@ -1424,6 +1477,20 @@ export async function createApp({
     text,
     optional,
   });
+  registerGarageExtras(app, {
+    one,
+    all,
+    run,
+    db,
+    transaction,
+    fail,
+    parse,
+    id,
+    clock,
+    ownGarage,
+    jobs,
+    bookingEvent,
+  });
   registerMarketplace(app, {
     one,
     all,
@@ -1516,7 +1583,11 @@ export async function createApp({
     );
     const date = appointment(d.starts_at);
     if (
-      !(await one('SELECT id FROM vehicles WHERE id=? AND owner_id=?', d.vehicle_id, req.user.id))
+      !(await one(
+        'SELECT id FROM vehicles WHERE id=? AND owner_id=? AND archived_at IS NULL',
+        d.vehicle_id,
+        req.user.id,
+      ))
     )
       throw fail(404, 'Vehicle not found.');
     await ops.checkSlot(d.garage_id, date.toISOString());
@@ -1578,25 +1649,47 @@ export async function createApp({
     if (!driver && !can(req.user, 'records')) return res.json([]);
     res.json(
       await all(
-        `SELECT r.*,g.name garage_name,v.registration,b.service,(SELECT rating FROM reviews WHERE booking_id=r.booking_id) rating FROM service_records r JOIN garages g ON r.garage_id=g.id JOIN vehicles v ON v.id=r.vehicle_id JOIN bookings b ON b.id=r.booking_id WHERE ${driver ? 'r.driver_id' : 'r.garage_id'}=? ORDER BY r.performed_at DESC`,
+        `SELECT r.*,g.name garage_name,v.registration,v.make,v.model,b.service,(SELECT rating FROM reviews WHERE booking_id=r.booking_id) rating,(SELECT amount_cents FROM invoices WHERE booking_id=r.booking_id AND status<>'void') cost_cents FROM service_records r JOIN garages g ON r.garage_id=g.id JOIN vehicles v ON v.id=r.vehicle_id JOIN bookings b ON b.id=r.booking_id WHERE ${driver ? 'r.driver_id' : 'r.garage_id'}=? ORDER BY r.performed_at DESC`,
         driver ? req.user.id : req.user.garage_id,
       ),
     );
   });
   app.get('/api/reminders', async (req, res) =>
     res.json(
-      await all('SELECT * FROM reminders WHERE user_id=? ORDER BY done,due_date', req.user.id),
+      await all(
+        'SELECT r.*,v.registration,v.make,v.model FROM reminders r LEFT JOIN vehicles v ON v.id=r.vehicle_id WHERE r.user_id=? ORDER BY r.done,r.due_date',
+        req.user.id,
+      ),
     ),
   );
   app.post('/api/reminders', async (req, res) => {
-    const d = parse(z.object({ title: text(160), due_date: dateSchema }), req),
+    const d = parse(
+        z.object({
+          title: text(160),
+          due_date: dateSchema,
+          type: z
+            .enum(['oil', 'tyres', 'inspection', 'insurance', 'tax', 'other'])
+            .default('other'),
+          vehicle_id: z.string().max(64).optional(),
+          note: optional(500),
+        }),
+        req,
+      ),
       key = id();
+    if (
+      d.vehicle_id &&
+      !(await one('SELECT 1 FROM vehicles WHERE id=? AND owner_id=?', d.vehicle_id, req.user.id))
+    )
+      throw fail(404, 'Vehicle not found.');
     await run(
-      'INSERT INTO reminders(id,user_id,title,due_date) VALUES(?,?,?,?)',
+      'INSERT INTO reminders(id,user_id,title,due_date,type,vehicle_id,note) VALUES(?,?,?,?,?,?,?)',
       key,
       req.user.id,
       d.title,
       d.due_date,
+      d.type,
+      d.vehicle_id || null,
+      d.note,
     );
     res.status(201).json({ id: key });
   });
@@ -1615,10 +1708,20 @@ export async function createApp({
       throw fail(404, 'Reminder not found.');
     res.json({ ok: true });
   });
+  app.delete('/api/reminders/:id', async (req, res) => {
+    if (
+      !(await run('DELETE FROM reminders WHERE id=? AND user_id=?', req.params.id, req.user.id))
+        .changes
+    )
+      throw fail(404, 'Reminder not found.');
+    res.json({ ok: true });
+  });
   app.get('/api/customers', async (req, res) => {
     const g = await ownGarage(req.user, 'customers');
     const customers = await all(
-      `SELECT u.id,u.name,u.email,${photoOf('u.id')} photo,COUNT(b.id) booking_count,COALESCE(n.notes,'') notes,COALESCE(n.tags,'') tags FROM users u JOIN bookings b ON b.driver_id=u.id LEFT JOIN customer_notes n ON n.driver_id=u.id AND n.garage_id=b.garage_id WHERE b.garage_id=? GROUP BY u.id ORDER BY u.name`,
+      `SELECT u.id,u.name,u.email,u.created_at joined_at,${photoOf('u.id')} photo,us.phone,COUNT(b.id) booking_count,COALESCE(n.notes,'') notes,COALESCE(n.tags,'') tags,MIN(b.starts_at) first_booking,MAX(CASE WHEN b.status='completed' THEN b.starts_at END) last_visit,(SELECT COALESCE(SUM(i.amount_cents),0) FROM invoices i WHERE i.driver_id=u.id AND i.garage_id=? AND i.status<>'void') spent_cents,EXISTS(SELECT 1 FROM memberships m JOIN plans p ON p.id=m.plan_id WHERE m.driver_id=u.id AND p.garage_id=? AND m.status='active') member FROM users u JOIN bookings b ON b.driver_id=u.id LEFT JOIN user_settings us ON us.user_id=u.id LEFT JOIN customer_notes n ON n.driver_id=u.id AND n.garage_id=b.garage_id WHERE b.garage_id=? GROUP BY u.id ORDER BY u.name`,
+      g.id,
+      g.id,
       g.id,
     );
     for (const customer of customers)
