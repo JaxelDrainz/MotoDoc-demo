@@ -130,7 +130,7 @@ function useSuggestions(path) {
   return items;
 }
 
-function SetupWizard({ user, profile }) {
+function SetupWizard({ user, profile, preview = false, firstCar = null }) {
   const garage = user.role === 'garage';
   const steps = garage
     ? ['You', 'Your garage', 'Services', 'Hours', 'Alerts']
@@ -142,10 +142,10 @@ function SetupWizard({ user, profile }) {
   const [emailUpdates, setEmailUpdates] = useState(true);
   const [sound, setSound] = useState(true);
   const [car, setCar] = useState({
-    plate: '',
-    make: '',
-    model: '',
-    year: String(new Date().getFullYear() - 5),
+    plate: firstCar?.registration || '',
+    make: firstCar?.make || '',
+    model: firstCar?.model || '',
+    year: String(firstCar?.year || new Date().getFullYear() - 5),
   });
   const defaultName = profile?.name && !/’s garage$/.test(profile.name) ? profile.name : '';
   const [shop, setShop] = useState({
@@ -199,6 +199,11 @@ function SetupWizard({ user, profile }) {
   const setDay = (key, patch) =>
     setShop((s) => ({ ...s, hours: { ...s.hours, [key]: { ...s.hours[key], ...patch } } }));
   const finish = async () => {
+    if (preview) {
+      flash('That’s how new accounts are set up. Here’s a quick tour of MotoDoc.');
+      location.assign('/app?from=onboarding');
+      return;
+    }
     setBusy(true);
     try {
       const body = {
@@ -240,6 +245,15 @@ function SetupWizard({ user, profile }) {
 
   return (
     <Shell>
+      {preview && (
+        <p className="ob-demo-note" role="note">
+          <span>
+            Demo: these are the steps a new account goes through, filled in with sample answers.
+            Nothing you change here is saved.
+          </span>
+          <a href="/app?from=onboarding">Skip to the tour</a>
+        </p>
+      )}
       <Progress steps={steps} current={step} />
       <section className="ob-card" aria-labelledby="ob-title" key={step}>
         {name === 'You' && (
@@ -966,9 +980,12 @@ export function Onboarding() {
           if (profile.membership_launched_at) return location.replace('/app#memberships');
           return setState({ user, profile });
         }
-        if (user.onboarded) return location.replace('/app');
+        const preview = !!user.demo && new URLSearchParams(location.search).get('demo') === '1';
+        if (user.onboarded && !preview) return location.replace('/app');
         const profile = user.role === 'garage' ? await api('/garage/profile') : null;
-        setState({ user, profile });
+        const firstCar =
+          preview && user.role === 'driver' ? (await api('/vehicles'))[0] || null : null;
+        setState({ user, profile, preview, firstCar });
       })
       .catch((error) => {
         if (error.status === 401) location.replace('/signup');
@@ -986,6 +1003,11 @@ export function Onboarding() {
   return membership ? (
     <MembershipWizard profile={state.profile} fromOnboarding={fromOnboarding} />
   ) : (
-    <SetupWizard user={state.user} profile={state.profile} />
+    <SetupWizard
+      user={state.user}
+      profile={state.profile}
+      preview={state.preview}
+      firstCar={state.firstCar}
+    />
   );
 }

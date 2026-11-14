@@ -174,3 +174,56 @@
     transform: none;
   }
 }
+
+.desktop-nav {
+  align-items: center;
+}
+.desktop-nav a:not(.nav-demo) {
+  position: relative;
+  padding: 6px 0;
+}
+.desktop-nav a:not(.nav-demo)::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--green, #087658);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 200ms var(--motion-ease, ease);
+}
+.desktop-nav a:not(.nav-demo):hover::after,
+.desktop-nav a:not(.nav-demo):focus-visible::after {
+  transform: scaleX(1);
+}
+.desktop-nav .nav-demo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px 7px 11px;
+  border-radius: 999px;
+  background: var(--mint, #eaf6f0);
+  color: var(--green, #087658);
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background-color 150ms var(--motion-ease, ease),
+    transform 150ms var(--motion-ease, ease);
+}
+.desktop-nav .nav-demo:hover {
+  background: #d6efe3;
+  color: var(--green-dark, #065c45);
+  transform: translateY(-1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .desktop-nav a::after,
+  .nav-demo {
+    transition: none;
+  }
+  .desktop-nav .nav-demo:hover {
+    transform: none;
+  }
+}

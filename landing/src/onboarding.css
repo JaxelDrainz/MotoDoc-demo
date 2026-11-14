@@ -709,3 +709,23 @@
     align-items: flex-start;
   }
 }
+
+.ob-demo-note {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 16px;
+  width: min(640px, 100%);
+  margin: 0 auto 16px;
+  padding: 10px 14px;
+  border: 1px dashed var(--green, #087658);
+  border-radius: 12px;
+  background: var(--mint, #eaf6f0);
+  font-size: 14px;
+  color: var(--ink, #111827);
+}
+.ob-demo-note a {
+  color: var(--green, #087658);
+  font-weight: 600;
+  white-space: nowrap;
+}

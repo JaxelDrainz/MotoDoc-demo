@@ -20,8 +20,18 @@ export const demoRoles = [
 
 async function enter(persona) {
   const result = await api('/demo', { method: 'POST', body: { persona } });
-  flash('Demo ready. Sample data resets after a day.');
-  location.assign(result.redirect);
+  let intro = ['driver', 'driver-basic', 'garage'].includes(persona);
+  try {
+    const key = `motodoc-demo-intro-${persona}`;
+    if (localStorage.getItem(key)) intro = false;
+    else if (intro) localStorage.setItem(key, '1');
+  } catch {}
+  flash(
+    intro
+      ? 'Demo ready. First, the setup steps a new account goes through.'
+      : 'Demo ready. Sample data resets after a day.',
+  );
+  location.assign(intro ? '/onboarding?demo=1' : result.redirect);
 }
 
 const TRY = {

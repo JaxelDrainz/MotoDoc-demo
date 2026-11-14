@@ -12,6 +12,7 @@ import {
   ArrowRightIcon,
   ArrowUpRightIcon,
   CaretRightIcon,
+  PlayCircleIcon,
   BellIcon,
   CalendarBlankIcon,
   CarIcon,
@@ -210,7 +211,10 @@ function LandingPage() {
             <a href="#features">Features</a>
             <a href="#membership">Membership</a>
             <a href="#how-it-works">How it works</a>
-            <a href="#demo">Try the demo</a>
+            <a href="#demo" className="nav-demo">
+              <PlayCircleIcon size={18} weight="fill" aria-hidden="true" />
+              Try the demo
+            </a>
           </nav>
           <div className="header-actions">
             <span data-lang-switch />
