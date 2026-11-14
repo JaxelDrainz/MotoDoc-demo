@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowRightIcon,
+  CaretDownIcon,
   DotsThreeIcon,
   WarningCircleIcon,
   BellIcon,
@@ -1331,10 +1332,10 @@ export function Dashboard() {
               aria-current={hiddenDesktop.includes(selected) ? 'page' : undefined}
               onClick={() => setMore(true)}
             >
-              <DotsThreeIcon size={20} weight="bold" />
               <span>
                 {hiddenDesktop.includes(selected) ? nav.find(([k]) => k === selected)?.[2] : 'More'}
               </span>
+              <CaretDownIcon className="dash-more-caret" size={14} weight="bold" aria-hidden="true" />
               {hiddenDesktop.reduce((n, k) => n + notificationCount(k), 0) > 0 ? (
                 <span className="dash-nav-badge">
                   {Math.min(
@@ -2487,22 +2488,26 @@ export function Dashboard() {
       </nav>
       {more && (
         <MoreSheet onClose={() => setMore(false)}>
-          {grouped(moreKeys).map(([title, items]) => (
-            <section key={title} className="dash-more-group">
-              <h3>{title}</h3>
-              {items.map((item) => navItem(item, 21))}
-            </section>
-          ))}
-          {!isGarage && (
-            <a href="/dashboard">
-              <GaugeIcon size={21} />
-              Car dashboard
-            </a>
-          )}
-          <button onClick={logout}>
-            <SignOutIcon size={21} />
-            Log out
-          </button>
+          <div className="dash-more-groups">
+            {grouped(moreKeys).map(([title, items]) => (
+              <section key={title} className="dash-more-group">
+                <h3>{title}</h3>
+                {items.map((item) => navItem(item, 21))}
+              </section>
+            ))}
+          </div>
+          <div className="dash-more-footer">
+            {!isGarage && (
+              <a href="/dashboard">
+                <GaugeIcon size={21} />
+                Car dashboard
+              </a>
+            )}
+            <button onClick={logout}>
+              <SignOutIcon size={21} />
+              Log out
+            </button>
+          </div>
         </MoreSheet>
       )}
       {tourOpen && !isStaff && (
