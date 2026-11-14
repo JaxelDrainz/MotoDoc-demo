@@ -6,42 +6,48 @@ const driverSteps = [
   [
     'overview',
     'Your car care at a glance',
-    'Deadlines, bookings and anything needing attention appear here.',
+    'Repairs in progress, deadlines, unpaid invoices and anything needing attention appear here.',
   ],
   [
-    'vehicles',
-    'Keep every car together',
-    'Add a vehicle, update its mileage and keep its service story in one place.',
+    'bookings',
+    'Book in 6 easy steps',
+    'Tap Book a service: pick a garage, the service, your car and a free time on the calendar.',
   ],
   [
     'garages',
     'Find a garage you trust',
-    'Compare garages, services and availability before you book.',
+    'Filter by what’s open now or by specialisation, or tap Near me to sort by distance.',
   ],
   [
-    'bookings',
-    'Follow every appointment',
-    'See requests, confirmed visits and past work without chasing messages.',
+    'messages',
+    'All your chats in one place',
+    'Every conversation with your garages, one per booking, with quick replies.',
   ],
   [
-    'history',
-    'Your service history',
-    'Completed work and recorded mileage stay attached to the right car.',
+    'mechanic',
+    'Your mechanic',
+    'Your garage’s contact details, prices, opening hours and your member benefits.',
+  ],
+  [
+    'vehicles',
+    'Keep every car together',
+    'Add fuel type and inspection, insurance and tax dates. Open Details for each car’s history.',
+  ],
+  [
+    'recommendations',
+    'What your car needs next',
+    'Oil, brakes, tyres and inspection, worked out from each car’s mileage and history.',
   ],
   [
     'memberships',
     'Benefits from your mechanic',
     'Join a garage plan and choose which of your cars it covers.',
   ],
-  [
-    'reminders',
-    'A little help remembering',
-    'Keep inspection, insurance and maintenance dates in view.',
-  ],
+  ['plan', 'Free or Pro', 'Pro is free while MotoDoc is new. Switch plans any time.'],
   [
     'account',
     'Make MotoDoc yours',
-    'Update your details, notification choices, password and account settings.',
+    'Your details, notes for your mechanic, notifications, password and account settings. Everything else is under More.',
   ],
 ];
 
@@ -49,7 +55,7 @@ const garageSteps = [
   [
     'overview',
     'Your workshop at a glance',
-    'See incoming work, active customers and anything needing attention.',
+    'Your online switch, today’s hours, incoming work and anything needing attention.',
   ],
   [
     'profile',
@@ -59,37 +65,34 @@ const garageSteps = [
   [
     'bookings',
     'Manage every appointment',
-    'Review requests, confirm times and keep the customer informed.',
+    'Approve requests and switch between List, Week and Month to plan the workshop.',
   ],
   [
-    'history',
-    'Completed work',
-    'Service records create a clear history for your garage and the driver.',
+    'jobs',
+    'The jobs board',
+    'Move each job from Booked to Started, Finished and Ready for pickup. Completing one offers to create the invoice.',
   ],
+  ['messages', 'Every customer chat', 'One conversation per booking, with quick replies.'],
   [
     'customers',
     'Know your customers',
-    'Find MotoDoc customers and keep private notes for your team.',
+    'Total spent, last visit, private notes, reminders you send them and records added by hand.',
   ],
   [
-    'memberships',
-    'Reward regular customers',
-    'Launch your plan, see your members and send them updates.',
+    'reviews',
+    'Reviews and replies',
+    'Your rating breakdown, and reviews still waiting for a public reply.',
   ],
   [
     'invoices',
     'Keep invoices organised',
-    'Create records for completed work and track payment status.',
+    'Line items, discounts, VAT, reference numbers and payment reminders.',
   ],
-  [
-    'reminders',
-    'Stay ahead of follow-ups',
-    'Keep customer and workshop reminders where the team can see them.',
-  ],
+  ['team', 'Your team', 'Invite a manager, mechanic or receptionist and choose what each can see.'],
   [
     'account',
     'Your garage settings',
-    'Update your details, alerts, sign-in security and account settings.',
+    'Your details, alerts, sign-in security and account settings. Everything else is under More.',
   ],
 ];
 

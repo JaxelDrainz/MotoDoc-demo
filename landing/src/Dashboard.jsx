@@ -160,6 +160,43 @@ const vehicleFields = [
   { name: 'insurance_due', label: 'Insurance renews', type: 'date' },
   { name: 'tax_due', label: 'Vehicle tax due', type: 'date' },
 ];
+const WHATS_NEW_VERSION = '2026-11';
+const WHATS_NEW = {
+  driver: [
+    [
+      'bookings',
+      'Book in 6 easy steps',
+      'Pick a service, your car and a free time on the calendar.',
+    ],
+    ['mechanic', 'Meet your mechanic', 'Contact, prices, opening hours and your member benefits.'],
+    [
+      'recommendations',
+      'What your car needs next',
+      'Oil, brakes, tyres and inspection, for each car.',
+    ],
+    [
+      'messages',
+      'All your chats in one place',
+      'Every conversation with your garages, newest first.',
+    ],
+    ['plan', 'Pro is free during our launch', 'Unlimited cars and bookings while MotoDoc is new.'],
+  ],
+  garage: [
+    ['bookings', 'Week and month calendars', 'See your workshop’s days at a glance.'],
+    [
+      'reviews',
+      'Reviews and replies',
+      'Your rating breakdown, and reviews still waiting for a reply.',
+    ],
+    [
+      'customers',
+      'Know your customers',
+      'Total spent, last visit, notes and reminders you send them.',
+    ],
+    ['history', 'Add service records by hand', 'For work done outside a booking.'],
+    ['refer', 'Invite & refer', 'Bring garages and drivers you trust to MotoDoc.'],
+  ],
+};
 const REMINDER_TYPES = [
   ['oil', 'Oil change'],
   ['tyres', 'Tyre change'],
@@ -666,6 +703,20 @@ export function Dashboard() {
     return () => clearTimeout(timer);
   }, [opening]);
   const [more, setMore] = useState(false);
+  const [seen, setSeen] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('motodoc-seen') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [hiddenNews, setHiddenNews] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`motodoc-whats-new-${WHATS_NEW_VERSION}`) || '[]');
+    } catch {
+      return [];
+    }
+  });
   const [tourOpen, setTourOpen] = useState(
     () => new URLSearchParams(location.search).get('from') === 'onboarding',
   );
@@ -827,6 +878,65 @@ export function Dashboard() {
     ? { overview: 'Overview', bookings: 'Bookings', customers: 'Customers', profile: 'Profile' }
     : { overview: 'Overview', vehicles: 'Vehicles', garages: 'Garages', bookings: 'Bookings' };
   const notificationCount = (key) => notificationFeed.counts?.[key] || 0;
+  const primary = isGarage
+    ? ['overview', 'bookings', 'jobs', 'messages', 'customers', 'profile']
+    : ['overview', 'bookings', 'garages', 'messages', 'mechanic', 'vehicles'];
+  const groups = isGarage
+    ? [
+        ['Work', ['jobs', 'messages', 'marketplace', 'history', 'reminders']],
+        ['Customers', ['customers', 'reviews', 'memberships', 'refer']],
+        ['Business', ['profile', 'services', 'invoices', 'analytics', 'team', 'plan']],
+        ['Account', ['notifications', 'account']],
+      ]
+    : [
+        ['Your garage', ['mechanic', 'messages', 'marketplace', 'memberships']],
+        ['Car care', ['fuel-day', 'history', 'recommendations', 'inspections', 'reminders']],
+        ['Money', ['invoices', 'plan']],
+        ['Account', ['notifications', 'refer', 'account']],
+      ];
+  const newTabs = isGarage
+    ? ['messages', 'reviews', 'refer', 'plan', 'marketplace']
+    : ['messages', 'mechanic', 'recommendations', 'inspections', 'plan', 'refer', 'fuel-day'];
+  const isNew = (key) => newTabs.includes(key) && !seen.includes(key);
+  useEffect(() => {
+    if (!user || !newTabs.includes(selected) || seen.includes(selected)) return;
+    const next = [...seen, selected];
+    setSeen(next);
+    try {
+      localStorage.setItem('motodoc-seen', JSON.stringify(next));
+    } catch {}
+  }, [selected, user]);
+  const grouped = (keys) => {
+    const known = groups.flatMap(([, list]) => list);
+    const out = groups
+      .map(([title, list]) => [title, nav.filter(([k]) => keys.includes(k) && list.includes(k))])
+      .filter(([, items]) => items.length);
+    const rest = nav.filter(([k]) => keys.includes(k) && !known.includes(k));
+    if (rest.length) out.push(['Other', rest]);
+    return out;
+  };
+  const hiddenDesktop = nav.map(([k]) => k).filter((k) => !primary.includes(k));
+  const hiddenMobile = nav.map(([k]) => k).filter((k) => !quick[k]);
+  const moreKeys = window.matchMedia('(max-width: 760px)').matches ? hiddenMobile : hiddenDesktop;
+  const navItem = ([key, Icon, label], size = 20) => (
+    <a
+      href={`#${key}`}
+      className={selected === key ? 'active' : ''}
+      aria-current={selected === key ? 'page' : undefined}
+      key={key}
+      data-tour-active={tourTarget === key ? 'true' : undefined}
+    >
+      <Icon size={size} />
+      <span>{label}</span>
+      {notificationCount(key) > 0 ? (
+        <span className="dash-nav-badge" aria-label={`${notificationCount(key)} unread`}>
+          {Math.min(notificationCount(key), 99)}
+        </span>
+      ) : (
+        isNew(key) && <span className="dash-new-dot" aria-label="New" />
+      )}
+    </a>
+  );
   const go = (target, label) => (
     <button className="button button-small" onClick={() => navigate(target)}>
       {label} <ArrowRightIcon size={16} />
@@ -1212,28 +1322,30 @@ export function Dashboard() {
           {isStaff ? 'GARAGE TEAM' : isGarage ? 'FOR GARAGES' : 'FOR DRIVERS'}
         </span>
         <nav aria-label="Account navigation">
-          {nav.map(([key, Icon, label]) => (
-            <a
-              href={`#${key}`}
-              className={selected === key ? 'active' : ''}
-              aria-current={selected === key ? 'page' : undefined}
-              key={key}
-              data-tour-active={tourTarget === key ? 'true' : undefined}
+          {nav.filter(([key]) => primary.includes(key)).map((item) => navItem(item))}
+          {hiddenDesktop.length > 0 && (
+            <button
+              type="button"
+              className={`dash-more-button${hiddenDesktop.includes(selected) ? ' active' : ''}`}
+              aria-haspopup="dialog"
+              aria-current={hiddenDesktop.includes(selected) ? 'page' : undefined}
+              onClick={() => setMore(true)}
             >
-              <Icon size={20} />
-              <span>{label}</span>
-              {notificationCount(key) > 0 && (
-                <span className="dash-nav-badge" aria-label={`${notificationCount(key)} unread`}>
-                  {Math.min(notificationCount(key), 99)}
+              <DotsThreeIcon size={20} weight="bold" />
+              <span>
+                {hiddenDesktop.includes(selected) ? nav.find(([k]) => k === selected)?.[2] : 'More'}
+              </span>
+              {hiddenDesktop.reduce((n, k) => n + notificationCount(k), 0) > 0 ? (
+                <span className="dash-nav-badge">
+                  {Math.min(
+                    hiddenDesktop.reduce((n, k) => n + notificationCount(k), 0),
+                    99,
+                  )}
                 </span>
+              ) : (
+                hiddenDesktop.some(isNew) && <span className="dash-new-dot" aria-label="New" />
               )}
-            </a>
-          ))}
-          {!isGarage && (
-            <a href="/dashboard">
-              <GaugeIcon size={20} />
-              <span>Car dashboard</span>
-            </a>
+            </button>
           )}
         </nav>
         <div className="dash-account">
@@ -1370,6 +1482,50 @@ export function Dashboard() {
 
         {selected === 'overview' && (
           <>
+            {!isStaff && !hiddenNews.includes(user.role) && (
+              <article className="dash-tile dash-whats-new">
+                <div className="dash-whats-new-head">
+                  <div>
+                    <span className="eyebrow">WHAT’S NEW</span>
+                    <h2>New in MotoDoc</h2>
+                  </div>
+                  <button
+                    type="button"
+                    className="dash-text-button"
+                    onClick={() => {
+                      const next = [...hiddenNews, user.role];
+                      setHiddenNews(next);
+                      try {
+                        localStorage.setItem(
+                          `motodoc-whats-new-${WHATS_NEW_VERSION}`,
+                          JSON.stringify(next),
+                        );
+                      } catch {}
+                    }}
+                  >
+                    Got it
+                  </button>
+                </div>
+                <ul>
+                  {WHATS_NEW[isGarage ? 'garage' : 'driver'].map(([target, title, text]) => (
+                    <li key={title}>
+                      <a
+                        href={`#${target}`}
+                        onClick={(e) => {
+                          if (!isGarage && target === 'bookings') {
+                            e.preventDefault();
+                            book();
+                          }
+                        }}
+                      >
+                        <strong>{title}</strong>
+                        <span>{text}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            )}
             {!isStaff && <SetupChecklist user={user} data={data} navigate={navigate} />}
             {isGarage && <AvailabilityCard canEdit={allowed('bookings')} />}
             {!isGarage && fuelOffer(data) && !fuelOffer(data).pass && (
@@ -2326,21 +2482,17 @@ export function Dashboard() {
         >
           <DotsThreeIcon size={22} weight="bold" />
           <span>More</span>
+          {hiddenMobile.some(isNew) && <span className="dash-new-dot" aria-label="New" />}
         </button>
       </nav>
       {more && (
         <MoreSheet onClose={() => setMore(false)}>
-          {nav
-            .filter(([key]) => !quick[key])
-            .map(([key, Icon, label]) => (
-              <a href={`#${key}`} aria-current={selected === key ? 'page' : undefined} key={key}>
-                <Icon size={21} />
-                <span>{label}</span>
-                {notificationCount(key) > 0 && (
-                  <span className="dash-nav-badge">{Math.min(notificationCount(key), 99)}</span>
-                )}
-              </a>
-            ))}
+          {grouped(moreKeys).map(([title, items]) => (
+            <section key={title} className="dash-more-group">
+              <h3>{title}</h3>
+              {items.map((item) => navItem(item, 21))}
+            </section>
+          ))}
           {!isGarage && (
             <a href="/dashboard">
               <GaugeIcon size={21} />

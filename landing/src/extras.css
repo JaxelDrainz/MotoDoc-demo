@@ -242,10 +242,10 @@ span.dash-status {
 :root[data-theme='dark'] .md-splash {
   color: #e7efe9;
 }
-:root[data-theme='dark'] .dash-sidebar nav a {
+:root[data-theme='dark'] .dash-sidebar nav :is(a, .dash-more-button) {
   color: #9aa9a1;
 }
-:root[data-theme='dark'] .dash-sidebar nav a.active,
+:root[data-theme='dark'] .dash-sidebar nav :is(a, .dash-more-button).active,
 :root[data-theme='dark'] .dashboard .icon-button,
 :root[data-theme='dark'] .dash-dialog .icon-button {
   color: #e7efe9;

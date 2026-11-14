@@ -51,7 +51,7 @@
   flex-direction: column;
   gap: 6px;
 }
-.dash-sidebar nav a {
+.dash-sidebar nav :is(a, .dash-more-button) {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -61,10 +61,10 @@
   color: #69776e;
   min-height: 44px;
 }
-.dash-sidebar nav a:hover {
+.dash-sidebar nav :is(a, .dash-more-button):hover {
   background: #f4f8fa;
 }
-.dash-sidebar nav a.active {
+.dash-sidebar nav :is(a, .dash-more-button).active {
   color: #087658;
   background: #eaf5ee;
   font-weight: 600;
@@ -663,7 +663,7 @@
     gap: 5px;
     padding-bottom: 5px;
   }
-  .dash-sidebar nav a {
+  .dash-sidebar nav :is(a, .dash-more-button) {
     white-space: nowrap;
     flex-shrink: 0;
     font-size: 12px;
@@ -833,7 +833,7 @@
   gap: 22px;
   overflow-x: auto;
 }
-.dash-sidebar nav a {
+.dash-sidebar nav :is(a, .dash-more-button) {
   flex-shrink: 0;
   white-space: nowrap;
   padding: 10px 0;
@@ -841,14 +841,14 @@
   font-size: 16px;
   color: #5e646c;
 }
-.dash-sidebar nav a svg {
+.dash-sidebar nav :is(a, .dash-more-button) svg {
   display: none;
 }
-.dash-sidebar nav a:hover {
+.dash-sidebar nav :is(a, .dash-more-button):hover {
   background: none;
   color: var(--green);
 }
-.dash-sidebar nav a.active {
+.dash-sidebar nav :is(a, .dash-more-button).active {
   background: none;
   color: var(--ink);
   font-weight: 400;
@@ -1155,7 +1155,7 @@
   .dash-user-name {
     display: none;
   }
-  .dash-sidebar nav a {
+  .dash-sidebar nav :is(a, .dash-more-button) {
     font-size: 15px;
     padding: 10px 0;
   }
@@ -1675,14 +1675,14 @@ img.dash-avatar {
 .dash-sidebar nav {
   column-gap: 24px;
 }
-.dash-sidebar nav a {
+.dash-sidebar nav :is(a, .dash-more-button) {
   position: relative;
   font-size: 14px;
   padding: 12px 0 13px;
   min-height: 0;
   transition: color var(--motion-fast, 150ms) var(--motion-ease, ease);
 }
-.dash-sidebar nav a::after {
+.dash-sidebar nav :is(a, .dash-more-button)::after {
   content: '';
   position: absolute;
   left: 0;
@@ -1697,18 +1697,18 @@ img.dash-avatar {
     transform var(--motion-base, 220ms) var(--motion-ease, ease),
     opacity var(--motion-fast, 150ms) var(--motion-ease, ease);
 }
-.dash-sidebar nav a:hover::after {
+.dash-sidebar nav :is(a, .dash-more-button):hover::after {
   opacity: 0.35;
   transform: scaleX(1);
 }
-.dash-sidebar nav a.active {
+.dash-sidebar nav :is(a, .dash-more-button).active {
   color: var(--ink);
 }
-.dash-sidebar nav a.active::after {
+.dash-sidebar nav :is(a, .dash-more-button).active::after {
   opacity: 1;
   transform: scaleX(1);
 }
-.dash-sidebar nav a:focus-visible {
+.dash-sidebar nav :is(a, .dash-more-button):focus-visible {
   outline: 3px solid #4da58b;
   outline-offset: 2px;
 }
@@ -1730,7 +1730,7 @@ img.dash-avatar {
   margin-left: auto;
 }
 @media (prefers-reduced-motion: reduce) {
-  .dash-sidebar nav a::after {
+  .dash-sidebar nav :is(a, .dash-more-button)::after {
     transition: none;
   }
 }

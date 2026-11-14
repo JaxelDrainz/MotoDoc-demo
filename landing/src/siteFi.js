@@ -256,6 +256,79 @@ export const fiStrings = {
   'Awaiting garage confirmation': 'Odottaa korjaamon vahvistusta',
   'Awaiting payment': 'Odottaa maksua',
   'Back to home': 'Takaisin etusivulle',
+  'Car care': 'Auton hoito',
+  Money: 'Raha-asiat',
+  Work: 'Työt',
+  Business: 'Liiketoiminta',
+  'WHAT’S NEW': 'UUTTA',
+  'New in MotoDoc': 'Uutta MotoDocissa',
+  'Got it': 'Selvä',
+  'Book in 6 easy steps': 'Varaa kuudessa helpossa vaiheessa',
+  'Pick a service, your car and a free time on the calendar.':
+    'Valitse palvelu, autosi ja vapaa aika kalenterista.',
+  'Meet your mechanic': 'Tutustu mekaanikkoosi',
+  'Contact, prices, opening hours and your member benefits.':
+    'Yhteystiedot, hinnat, aukioloajat ja jäsenetusi.',
+  'What your car needs next': 'Mitä autosi tarvitsee seuraavaksi',
+  'Oil, brakes, tyres and inspection, for each car.':
+    'Öljy, jarrut, renkaat ja katsastus jokaiselle autolle.',
+  'All your chats in one place': 'Kaikki keskustelusi yhdessä paikassa',
+  'Every conversation with your garages, newest first.':
+    'Kaikki keskustelut korjaamojesi kanssa, uusimmat ensin.',
+  'Pro is free during our launch': 'Pro on ilmainen julkaisun ajan',
+  'Unlimited cars and bookings while MotoDoc is new.':
+    'Rajattomasti autoja ja varauksia, kun MotoDoc on uusi.',
+  'Week and month calendars': 'Viikko- ja kuukausikalenterit',
+  'See your workshop’s days at a glance.': 'Näe korjaamosi päivät yhdellä silmäyksellä.',
+  'Reviews and replies': 'Arviot ja vastaukset',
+  'Your rating breakdown, and reviews still waiting for a reply.':
+    'Arvosanojesi jakauma ja vastausta odottavat arviot.',
+  'Total spent, last visit, notes and reminders you send them.':
+    'Käytetty summa, viimeisin käynti, muistiinpanot ja lähettämäsi muistutukset.',
+  'Add service records by hand': 'Lisää huoltomerkintöjä käsin',
+  'For work done outside a booking.': 'Varauksen ulkopuolella tehdylle työlle.',
+  'Bring garages and drivers you trust to MotoDoc.':
+    'Tuo luotettavat korjaamot ja kuljettajat MotoDociin.',
+  'Tap Book a service: pick a garage, the service, your car and a free time on the calendar.':
+    'Napauta Varaa huolto: valitse korjaamo, palvelu, autosi ja vapaa aika kalenterista.',
+  'Filter by what’s open now or by specialisation, or tap Near me to sort by distance.':
+    'Suodata auki olevat tai erikoisala, tai napauta Lähelläni lajitellaksesi etäisyyden mukaan.',
+  'Every conversation with your garages, one per booking, with quick replies.':
+    'Kaikki keskustelut korjaamojesi kanssa, yksi per varaus, pikavastauksin.',
+  'Your mechanic': 'Mekaanikkosi',
+  'Your garage’s contact details, prices, opening hours and your member benefits.':
+    'Korjaamosi yhteystiedot, hinnat, aukioloajat ja jäsenetusi.',
+  'Add fuel type and inspection, insurance and tax dates. Open Details for each car’s history.':
+    'Lisää polttoaine sekä katsastus-, vakuutus- ja veropäivät. Avaa Tiedot nähdäksesi auton historian.',
+  'Oil, brakes, tyres and inspection, worked out from each car’s mileage and history.':
+    'Öljy, jarrut, renkaat ja katsastus jokaisen auton kilometrien ja historian perusteella.',
+  'Free or Pro': 'Free tai Pro',
+  'Pro is free while MotoDoc is new. Switch plans any time.':
+    'Pro on ilmainen, kun MotoDoc on uusi. Vaihda tilausta milloin tahansa.',
+  'Your details, notes for your mechanic, notifications, password and account settings. Everything else is under More.':
+    'Tietosi, viesti mekaanikolle, ilmoitukset, salasana ja tilin asetukset. Kaikki muu löytyy kohdasta Lisää.',
+  'Repairs in progress, deadlines, unpaid invoices and anything needing attention appear here.':
+    'Käynnissä olevat korjaukset, määräajat, maksamattomat laskut ja kaikki huomiota vaativa näkyvät täällä.',
+  'Your online switch, today’s hours, incoming work and anything needing attention.':
+    'Paikalla-kytkin, tämän päivän aukiolo, tulevat työt ja kaikki huomiota vaativa.',
+  'Approve requests and switch between List, Week and Month to plan the workshop.':
+    'Hyväksy pyyntöjä ja vaihda Lista-, Viikko- ja Kuukausinäkymän välillä.',
+  'The jobs board': 'Työtaulu',
+  'Move each job from Booked to Started, Finished and Ready for pickup. Completing one offers to create the invoice.':
+    'Siirrä työ tilasta Varattu tilaan Aloitettu, Valmis ja Noudettavissa. Valmistuneesta työstä voi luoda laskun heti.',
+  'Every customer chat': 'Kaikki asiakaskeskustelut',
+  'One conversation per booking, with quick replies.':
+    'Yksi keskustelu per varaus, pikavastauksin.',
+  'Total spent, last visit, private notes, reminders you send them and records added by hand.':
+    'Käytetty summa, viimeisin käynti, omat muistiinpanot, muistutukset ja käsin lisätyt merkinnät.',
+  'Your rating breakdown, and reviews still waiting for a public reply.':
+    'Arvosanojesi jakauma ja julkista vastausta odottavat arviot.',
+  'Line items, discounts, VAT, reference numbers and payment reminders.':
+    'Rivit, alennukset, ALV, viitenumerot ja maksumuistutukset.',
+  'Invite a manager, mechanic or receptionist and choose what each can see.':
+    'Kutsu esihenkilö, mekaanikko tai asiakaspalvelija ja valitse, mitä kukin näkee.',
+  'Your details, alerts, sign-in security and account settings. Everything else is under More.':
+    'Tietosi, hälytykset, kirjautumisen turvallisuus ja tilin asetukset. Kaikki muu löytyy kohdasta Lisää.',
   'Try the demo': 'Kokeile demoa',
   'TRY IT NOW': 'KOKEILE NYT',
   'See MotoDoc from every side.': 'Näe MotoDoc joka puolelta.',
