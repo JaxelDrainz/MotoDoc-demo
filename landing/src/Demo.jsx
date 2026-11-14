@@ -24,6 +24,56 @@ async function enter(persona) {
   location.assign(result.redirect);
 }
 
+const TRY = {
+  driver: 'Book in 6 steps, track a repair, chat with your mechanic, claim a Fuel Day pass.',
+  'driver-basic':
+    'See MotoDoc before joining: compare garage memberships and request emergency help.',
+  garage: 'Approve requests, run the jobs board, invoice, manage members, the team and reviews.',
+  mechanic: 'The garage as a team member sees it: only the areas the owner has shared.',
+  admin: 'Verify garages, moderate reviews, send announcements and run Fuel Day.',
+};
+
+export function LandingDemo() {
+  const [busy, setBusy] = useState('');
+  return (
+    <section className="section landing-demo" id="demo" aria-labelledby="demo-heading">
+      <div className="container">
+        <div className="section-heading steps-heading">
+          <span className="eyebrow">TRY IT NOW</span>
+          <h2 id="demo-heading">See MotoDoc from every side.</h2>
+          <p>
+            Open a demo account with one tap. Sample data, nothing to sign up for, and it resets
+            after a day.
+          </p>
+        </div>
+        <div className="landing-demo-grid">
+          {demoRoles.map(([persona, Icon, label]) => (
+            <button
+              key={persona}
+              type="button"
+              disabled={!!busy}
+              aria-busy={busy === persona}
+              onClick={async () => {
+                setBusy(persona);
+                try {
+                  await enter(persona);
+                } catch (error) {
+                  toast(error.message, 'error');
+                  setBusy('');
+                }
+              }}
+            >
+              <Icon size={26} aria-hidden="true" />
+              <strong>{busy === persona ? 'Opening…' : label}</strong>
+              <span>{TRY[persona]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function DemoAccounts({ disabled }) {
   const [busy, setBusy] = useState('');
   return (

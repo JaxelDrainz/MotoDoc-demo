@@ -6,6 +6,7 @@ import { InfoPage, Proof } from './Pages.jsx';
 import { Admin } from './Admin.jsx';
 import { AdminConsole } from './AdminConsole.jsx';
 import { Onboarding } from './Onboarding.jsx';
+import { LandingDemo } from './Demo.jsx';
 import { Lines, useSite } from './site.jsx';
 import {
   ArrowRightIcon,
@@ -209,6 +210,7 @@ function LandingPage() {
             <a href="#features">Features</a>
             <a href="#membership">Membership</a>
             <a href="#how-it-works">How it works</a>
+            <a href="#demo">Try the demo</a>
           </nav>
           <div className="header-actions">
             <span data-lang-switch />
@@ -242,6 +244,7 @@ function LandingPage() {
                 ['#membership', 'Membership'],
                 ['#how-it-works', 'How it works'],
                 ['#garages', 'For garages'],
+                ['#demo', 'Try the demo'],
               ].map(([href, label]) => (
                 <a key={href} href={href} onClick={() => setMenuOpen(false)}>
                   {label}
@@ -468,6 +471,7 @@ function LandingPage() {
           </div>
         </section>
 
+        <LandingDemo />
         <Proof />
         <section className="closing-section" aria-labelledby="closing-heading">
           <div className="container closing-inner">

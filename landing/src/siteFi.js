@@ -256,6 +256,21 @@ export const fiStrings = {
   'Awaiting garage confirmation': 'Odottaa korjaamon vahvistusta',
   'Awaiting payment': 'Odottaa maksua',
   'Back to home': 'Takaisin etusivulle',
+  'Try the demo': 'Kokeile demoa',
+  'TRY IT NOW': 'KOKEILE NYT',
+  'See MotoDoc from every side.': 'Näe MotoDoc joka puolelta.',
+  'Open a demo account with one tap. Sample data, nothing to sign up for, and it resets after a day.':
+    'Avaa demotili yhdellä napautuksella. Esimerkkitiedot, ei rekisteröitymistä, ja kaikki nollautuu vuorokauden kuluttua.',
+  'Book in 6 steps, track a repair, chat with your mechanic, claim a Fuel Day pass.':
+    'Varaa kuudessa vaiheessa, seuraa korjausta, keskustele mekaanikon kanssa, hae polttoainepäivän passi.',
+  'See MotoDoc before joining: compare garage memberships and request emergency help.':
+    'Tutustu MotoDociin ennen liittymistä: vertaile korjaamojäsenyyksiä ja pyydä hätäapua.',
+  'Approve requests, run the jobs board, invoice, manage members, the team and reviews.':
+    'Hyväksy pyyntöjä, hallitse töitä, laskuta sekä hoida jäseniä, tiimiä ja arvioita.',
+  'The garage as a team member sees it: only the areas the owner has shared.':
+    'Korjaamo tiimiläisen silmin: vain omistajan jakamat osiot.',
+  'Verify garages, moderate reviews, send announcements and run Fuel Day.':
+    'Vahvista korjaamoja, valvo arvioita, lähetä tiedotteita ja järjestä polttoainepäivä.',
   'Choose a garage': 'Valitse korjaamo',
   'What does your car need?': 'Mitä autosi tarvitsee?',
   'When suits you?': 'Milloin sinulle sopii?',

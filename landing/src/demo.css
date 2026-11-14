@@ -118,3 +118,59 @@
 .admin-demo .demo-bar {
   margin: 0;
 }
+.landing-demo {
+  background: var(--surface, #f4f8fa);
+}
+.landing-demo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-top: 38px;
+}
+.landing-demo-grid button {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 22px 20px;
+  border: 1px solid var(--line, #d7dce0);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink, #111827);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast, 150ms) var(--motion-ease, ease),
+    transform var(--motion-fast, 150ms) var(--motion-ease, ease);
+}
+.landing-demo-grid button svg {
+  color: var(--green, #087658);
+}
+.landing-demo-grid button strong {
+  font-size: 16px;
+}
+.landing-demo-grid button span {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted, #626a72);
+}
+.landing-demo-grid button:hover:not(:disabled) {
+  border-color: var(--green, #087658);
+  transform: translateY(-2px);
+}
+.landing-demo-grid button:focus-visible {
+  outline: 3px solid #4da58b;
+  outline-offset: 2px;
+}
+.landing-demo-grid button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-demo-grid button {
+    transition: none;
+  }
+  .landing-demo-grid button:hover:not(:disabled) {
+    transform: none;
+  }
+}
