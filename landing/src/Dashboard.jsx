@@ -855,30 +855,39 @@ export function Dashboard() {
   }, []);
   useEffect(() => {
     let active = true;
-    api('/auth/me')
+    const paidSession = new URLSearchParams(location.search).get('paid');
+    if (paidSession) history.replaceState(null, '', `${location.pathname}${location.hash}`);
+    // Confirm a returning Stripe payment first, even if this browser is signed in as someone else.
+    let paymentNote = null;
+    (paidSession
+      ? api('/payments/confirm', { method: 'POST', body: { session_id: paidSession } })
+          .then((r) => {
+            paymentNote = [
+              r.paid
+                ? `Payment received${r.number ? ` for invoice ${r.number}` : ''}. Thank you!`
+                : 'Your payment is being processed. The invoice updates when it’s confirmed.',
+              'success',
+            ];
+          })
+          .catch((e) => {
+            paymentNote = [e.message, 'error'];
+          })
+      : Promise.resolve()
+    )
+      .then(() => api('/auth/me'))
       .then(async ({ user: u }) => {
         if (!active) return;
+        if (paymentNote) toast(...paymentNote);
         if (!u.onboarded) return location.replace('/onboarding');
         setUser(u);
         if (u.suspended || ['paused', 'removed'].includes(u.teamStatus)) return;
-        const paidSession = new URLSearchParams(location.search).get('paid');
-        if (paidSession) {
-          history.replaceState(null, '', `${location.pathname}${location.hash}`);
-          await api('/payments/confirm', { method: 'POST', body: { session_id: paidSession } })
-            .then((r) =>
-              toast(
-                r.paid
-                  ? `Payment received${r.number ? ` for invoice ${r.number}` : ''}. Thank you!`
-                  : 'Your payment is being processed. The invoice updates when it’s confirmed.',
-              ),
-            )
-            .catch((e) => toast(e.message, 'error'));
-        }
         await load(u);
       })
       .catch((e) => {
-        if (e.status === 401) location.replace('/login');
-        else if (active) setError(e.message);
+        if (e.status === 401) {
+          if (paymentNote) flash(...paymentNote);
+          location.replace('/login');
+        } else if (active) setError(e.message);
       })
       .finally(() => {
         if (active) setLoading(false);

@@ -577,6 +577,20 @@ export async function createApp({
         .catch(() => null);
     res.json({ received: true });
   });
+  // Stripe sends the payer back here with the Checkout Session id. The id can't be guessed
+  // and the result is read from Stripe, so this works whoever is (or isn't) signed in.
+  app.post('/api/payments/confirm', async (req, res) => {
+    if (!stripe) throw fail(503, 'Online payment isn’t set up yet.');
+    const { session_id } = parse(
+      z.object({ session_id: z.string().regex(/^cs_[A-Za-z0-9_]{4,250}$/) }),
+      req,
+    );
+    await rateLimit(req, 'payment-confirm', 30);
+    const session = await stripe.getCheckout(session_id).catch(() => null);
+    if (!session?.metadata?.invoice_id) throw fail(404, 'Payment not found.');
+    const paid = await stripePaid(session);
+    res.json({ paid: !!paid, number: paid?.number || '' });
+  });
   let lastCron = 0;
   app.get('/api/cron/deliver', async (req, res) => {
     const secret = process.env.CRON_SECRET;

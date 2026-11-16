@@ -304,19 +304,5 @@ export function registerInvoices(app, ctx) {
     res.json({ url: session.url });
   });
 
-  app.post('/api/payments/confirm', async (req, res) => {
-    if (!stripe) throw fail(503, 'Online payment isn’t set up yet.');
-    const { session_id } = parse(z.object({ session_id: z.string().min(8).max(255) }), req);
-    const session = await stripe.getCheckout(session_id);
-    const owned = await one(
-      'SELECT 1 FROM invoices WHERE id=? AND driver_id=?',
-      session.metadata?.invoice_id || '',
-      req.user.id,
-    );
-    if (!owned) throw fail(404, 'Payment not found.');
-    const paid = await markPaidFromStripe(session);
-    res.json({ paid: !!paid, number: paid?.number || '' });
-  });
-
   return { markPaidFromStripe };
 }

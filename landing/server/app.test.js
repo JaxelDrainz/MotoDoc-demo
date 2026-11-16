@@ -996,7 +996,12 @@ test('online invoice payment with Stripe Checkout, confirmed with Stripe', async
     (await driver('/api/payments/confirm', { session_id: 'cs_test_1' })).data.paid,
     false,
   );
-  assert.equal((await other('/api/payments/confirm', { session_id: 'cs_test_1' })).status, 404);
+  // Anyone holding the session id can trigger the check; the answer comes from Stripe.
+  assert.equal(
+    (await other('/api/payments/confirm', { session_id: 'cs_test_1' })).data.paid,
+    false,
+  );
+  assert.equal((await other('/api/payments/confirm', { session_id: 'nope' })).status, 400);
   // A forged webhook can't mark it paid: the session is fetched from Stripe.
   const hook = (body) =>
     fetch(`${base}/api/stripe/webhook`, {
