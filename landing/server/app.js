@@ -36,6 +36,9 @@ import { registerFuelDay } from './fuelday.js';
 import { registerExtras } from './extras.js';
 import { registerGarageExtras } from './garagex.js';
 import { registerNotifications } from './notifications.js';
+import { emailProvider } from './mailer.js';
+import { stripeClient } from './payments.js';
+import { registerAssistant } from './assistant.js';
 import { AREA_KEYS } from '../src/team.js';
 import {
   FI_PLATE,
@@ -164,6 +167,8 @@ export async function createApp({
   imageLookup = wikimediaImages(),
   adminEmails = process.env.ADMIN_EMAILS || '',
   sendNotificationEmail,
+  sendEmail = emailProvider(),
+  stripe = stripeClient(),
 } = {}) {
   if (production && !database && !process.env.TURSO_DATABASE_URL)
     throw new Error(
@@ -246,7 +251,7 @@ export async function createApp({
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'no-referrer',
       });
-      if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.path !== '/stripe/webhook') {
         const requestOrigin = req.get('origin');
         const sameOrigin = production && requestOrigin === `https://${req.get('host')}`;
         if (
@@ -432,7 +437,7 @@ export async function createApp({
   app.post('/api/auth/forgot-password', async (req, res) => {
     const { email } = parse(z.object({ email: emailSchema }), req);
     await rateLimit(req, 'recovery', 5, email);
-    if (production)
+    if (production && !sendEmail)
       throw fail(503, 'Password recovery email is not configured. Contact the site administrator.');
     const user = await one('SELECT id FROM users WHERE email=?', email);
     if (user) {
@@ -441,25 +446,32 @@ export async function createApp({
         await run('DELETE FROM resets WHERE user_id=?', user.id);
         await run('INSERT INTO resets VALUES(?,?,?)', hash(token), user.id, clock() + 30 * 60000);
       });
-      await mkdir(outboxPath, { recursive: true });
-      await writeFile(
-        join(outboxPath, `${id()}.json`),
-        JSON.stringify(
-          {
-            to: email,
-            subject: 'Reset your MotoDoc password',
-            url: `${origin}/reset-password#token=${token}`,
-            expiresInMinutes: 30,
-          },
-          null,
-          2,
-        ),
-        { mode: 0o600 },
-      );
+      const url = `${origin}/reset-password#token=${token}`;
+      if (sendEmail)
+        await sendEmail({
+          to: email,
+          subject: 'Reset your MotoDoc password',
+          text: 'Someone asked to reset the password for your MotoDoc account. The link works once and expires in 30 minutes. If it wasn’t you, ignore this email and your password stays the same.',
+          url,
+          button: 'Choose a new password',
+        });
+      else {
+        await mkdir(outboxPath, { recursive: true });
+        await writeFile(
+          join(outboxPath, `${id()}.json`),
+          JSON.stringify(
+            { to: email, subject: 'Reset your MotoDoc password', url, expiresInMinutes: 30 },
+            null,
+            2,
+          ),
+          { mode: 0o600 },
+        );
+      }
     }
     res.json({
-      message:
-        'If this account exists, a reset link has been saved to the local development mailbox. No external email was sent.',
+      message: sendEmail
+        ? 'If this account exists, we’ve emailed a reset link. It expires in 30 minutes.'
+        : 'If this account exists, a reset link has been saved to the local development mailbox. No external email was sent.',
     });
   });
   app.post('/api/auth/reset-password', async (req, res) => {
@@ -541,8 +553,41 @@ export async function createApp({
     rateLimit,
     text,
     garageFor: ownerGarage,
+    sendEmail,
+    origin,
   };
   registerInviteRoutes(app, teamCtx);
+  // Daily scheduler (Vercel Cron, see vercel.json). With CRON_SECRET set, only a request
+  // carrying it runs; without it, only Vercel's cron agent. A run at most every 10 minutes.
+  let deliverAll = async () => ({ users: 0, sent: 0 });
+  // Stripe calls this; the event body is only a hint. The session is fetched from Stripe.
+  let stripePaid = async () => null;
+  app.post('/api/stripe/webhook', async (req, res) => {
+    const kind = req.body?.type;
+    const sessionId = req.body?.data?.object?.id;
+    if (
+      stripe &&
+      ['checkout.session.completed', 'checkout.session.async_payment_succeeded'].includes(kind) &&
+      typeof sessionId === 'string' &&
+      sessionId.startsWith('cs_')
+    )
+      await stripe
+        .getCheckout(sessionId)
+        .then(stripePaid)
+        .catch(() => null);
+    res.json({ received: true });
+  });
+  let lastCron = 0;
+  app.get('/api/cron/deliver', async (req, res) => {
+    const secret = process.env.CRON_SECRET;
+    const trusted = secret
+      ? req.get('authorization') === `Bearer ${secret}`
+      : !production || /vercel-cron/i.test(req.get('user-agent') || '');
+    if (!trusted) return res.status(401).json({ error: 'Not allowed.' });
+    if (clock() - lastCron < 10 * 60000) return res.json({ skipped: true });
+    lastCron = clock();
+    res.json(await deliverAll());
+  });
   app.use('/api', async (req, res, next) => {
     const token = sessionToken(req);
     req.user =
@@ -570,6 +615,7 @@ export async function createApp({
       });
     next();
   });
+  registerAssistant(app, { one, all, parse, clock, rateLimit });
   const extras = registerExtras(app, {
     one,
     all,
@@ -1354,7 +1400,8 @@ export async function createApp({
       ).map((row) => row.starts_at),
     );
   });
-  registerNotifications(app, {
+  ({ deliverAll } = registerNotifications(app, {
+    userSelect,
     one,
     all,
     run,
@@ -1363,8 +1410,8 @@ export async function createApp({
     outboxPath,
     appOrigin,
     production,
-    sendNotificationEmail,
-  });
+    sendNotificationEmail: sendNotificationEmail || sendEmail,
+  }));
   app.get('/api/messages', async (req, res) => {
     const driver = req.user.role === 'driver';
     if (!driver && !can(req.user, 'jobs')) return res.json([]);
@@ -1445,7 +1492,7 @@ export async function createApp({
     world,
     worldOf,
   });
-  registerInvoices(app, {
+  ({ markPaidFromStripe: stripePaid } = registerInvoices(app, {
     one,
     all,
     run,
@@ -1460,7 +1507,9 @@ export async function createApp({
     text,
     optional,
     dateSchema,
-  });
+    stripe,
+    origin,
+  }));
   const jobs = registerJobs(app, {
     checkSlot: (...args) => ops.checkSlot(...args),
     one,

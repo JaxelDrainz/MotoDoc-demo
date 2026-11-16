@@ -13,13 +13,14 @@ import { validBusinessId } from './finland.js';
 import { EINVOICE_ADDRESS, OPERATORS, VAT_RATE, invoiceTotals } from './invoiceMath.js';
 import './invoices.css';
 
+import { loc } from './locale.js';
 const money = (cents) =>
-  new Intl.NumberFormat(document.documentElement.lang === 'fi' ? 'fi-FI' : 'en-FI', {
+  new Intl.NumberFormat(document.documentElement.lang === 'fi' ? 'fi-FI' : loc(), {
     style: 'currency',
     currency: 'EUR',
   }).format((cents || 0) / 100);
 const day = (value) =>
-  new Date(value.length === 10 ? `${value}T12:00:00` : value).toLocaleDateString(undefined, {
+  new Date(value.length === 10 ? `${value}T12:00:00` : value).toLocaleDateString(loc(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -375,7 +376,7 @@ export function InvoiceForm({ bookings, onClose, onSaved, initial }) {
             </div>
             <div>
               <dt>Mileage</dt>
-              <dd>{mileage ? `${Number(mileage).toLocaleString()} km` : '—'}</dd>
+              <dd>{mileage ? `${Number(mileage).toLocaleString(loc())} km` : '—'}</dd>
             </div>
             {totals.savings > 0 && (
               <>
@@ -440,7 +441,18 @@ export function InvoiceForm({ bookings, onClose, onSaved, initial }) {
   );
 }
 
-export function InvoiceDetail({ invoice: i, isGarage, onClose, onChanged }) {
+export function InvoiceDetail({ invoice: i, isGarage, onClose, onChanged, online = false }) {
+  const [paying, setPaying] = useState(false);
+  const payOnline = async () => {
+    setPaying(true);
+    try {
+      const { url } = await api(`/invoices/${i.id}/pay`, { method: 'POST', body: {} });
+      location.assign(url);
+    } catch (e) {
+      toast(e.message, 'error');
+      setPaying(false);
+    }
+  };
   const [mode, setMode] = useState('');
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
@@ -519,7 +531,7 @@ export function InvoiceDetail({ invoice: i, isGarage, onClose, onChanged }) {
           </div>
         </div>
         <p className="inv-vehicle">
-          {`${i.make} ${i.model} · ${i.registration}${i.mileage ? ` · ${i.mileage.toLocaleString()} km at service` : ''}`}
+          {`${i.make} ${i.model} · ${i.registration}${i.mileage ? ` · ${i.mileage.toLocaleString(loc())} km at service` : ''}`}
         </p>
         <p>{i.description}</p>
         <table className="inv-table">
@@ -579,10 +591,20 @@ export function InvoiceDetail({ invoice: i, isGarage, onClose, onChanged }) {
             <li key={r}>{`Reminder ${n + 1} · ${day(r)}`}</li>
           ))}
           {i.state === 'paid' && (
-            <li>{`Paid ${day(i.paid_at || i.created_at)}${i.paid_method === 'bank_transfer' ? ' · Bank transfer' : ''}`}</li>
+            <li>{`Paid ${day(i.paid_at || i.created_at)}${i.paid_method === 'bank_transfer' ? ' · Bank transfer' : i.paid_method === 'online' ? ' · Paid online' : ''}`}</li>
           )}
         </ol>
-        {!isGarage && i.state !== 'paid' && i.state !== 'void' && (
+        {!isGarage && i.state !== 'paid' && i.state !== 'void' && online && (
+          <div className="inv-pay">
+            <button type="button" className="button" disabled={paying} onClick={payOnline}>
+              {paying ? 'Opening secure payment…' : `Pay ${money(i.totals.total)} now`}
+            </button>
+            <p className="dash-help">
+              {`Card, Apple Pay, Google Pay, MobilePay or Klarna (pay later), through Stripe. Or pay by bank transfer with reference ${i.reference}.`}
+            </p>
+          </div>
+        )}
+        {!isGarage && i.state !== 'paid' && i.state !== 'void' && !online && (
           <p className="job-banner amber">
             {`Online payments are being set up. Please pay by bank transfer using the reference number ${i.reference}.`}
           </p>
@@ -684,6 +706,13 @@ export function InvoicesPanel({ invoices, bookings, isGarage, reload }) {
   const [openId, setOpenId] = useState('');
   const [creating, setCreating] = useState(false);
   const [initial, setInitial] = useState('');
+  const [online, setOnline] = useState(false);
+  useEffect(() => {
+    if (isGarage) return;
+    api('/payments/config')
+      .then((c) => setOnline(!!c.online))
+      .catch(() => {});
+  }, [isGarage]);
   useEffect(() => {
     let wanted = '';
     try {
@@ -832,6 +861,7 @@ export function InvoicesPanel({ invoices, bookings, isGarage, reload }) {
         <InvoiceDetail
           invoice={current}
           isGarage={isGarage}
+          online={online}
           onClose={() => setOpenId('')}
           onChanged={reload}
         />

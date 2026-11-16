@@ -14,26 +14,27 @@ import { toast } from './Toasts.jsx';
 import { FUEL_FUNNEL_DAYS, FUEL_TARGET, normalisePass, passLink } from './fuelday.js';
 import './fuelday.css';
 
+import { loc } from './locale.js';
 const euro = (cents) =>
-  new Intl.NumberFormat('en-FI', {
+  new Intl.NumberFormat(loc(), {
     style: 'currency',
     currency: 'EUR',
     maximumFractionDigits: cents % 100 ? 2 : 0,
   }).format(cents / 100);
 const dayText = (date) =>
-  new Date(`${date}T12:00:00Z`).toLocaleDateString('en-FI', {
+  new Date(`${date}T12:00:00Z`).toLocaleDateString(loc(), {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
   });
 const clock = (iso) =>
-  new Date(iso).toLocaleTimeString('en-FI', {
+  new Date(iso).toLocaleTimeString(loc(), {
     hour: '2-digit',
     minute: '2-digit',
     timeZone: 'Europe/Helsinki',
   });
 const stamp = (iso) =>
-  new Date(iso).toLocaleString('en-FI', {
+  new Date(iso).toLocaleString(loc(), {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',

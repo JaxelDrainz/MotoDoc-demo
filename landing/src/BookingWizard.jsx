@@ -5,6 +5,7 @@ import { toast } from './Toasts.jsx';
 import { SPECIALIZATIONS } from './finland.js';
 import './booking-wizard.css';
 
+import { loc } from './locale.js';
 const STEPS = [
   'Choose a garage',
   'What does your car need?',
@@ -21,13 +22,13 @@ const priceOf = (s) =>
       : `from €${s.price_min_cents / 100}`;
 const minutesOf = (s) => (s.minutes ? `~${s.minutes} min` : 'Varies');
 const timeOf = (value) =>
-  new Date(value).toLocaleTimeString('en-FI', {
+  new Date(value).toLocaleTimeString(loc(), {
     hour: '2-digit',
     minute: '2-digit',
     timeZone: 'Europe/Helsinki',
   });
 const longDate = (value) =>
-  new Date(value).toLocaleString('en-FI', {
+  new Date(value).toLocaleString(loc(), {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -77,7 +78,7 @@ function Calendar({ garageId, value, onChange }) {
           ←
         </button>
         <strong>
-          {shown.toLocaleDateString('en-FI', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+          {shown.toLocaleDateString(loc(), { month: 'long', year: 'numeric', timeZone: 'UTC' })}
         </strong>
         <button type="button" disabled={month >= 2} onClick={() => setMonth(month + 1)}>
           →
@@ -182,7 +183,7 @@ export function BookingWizard({ garages, vehicles, initialGarage, onClose, onDon
     () => (!form.starts_at ? 'Choose a day and time.' : ''),
     () =>
       form.mileage && car && Number(form.mileage) < car.mileage
-        ? `The mileage can’t be lower than the last recorded ${car.mileage.toLocaleString('en-FI')} km.`
+        ? `The mileage can’t be lower than the last recorded ${car.mileage.toLocaleString(loc())} km.`
         : '',
     () => '',
   ];
@@ -406,7 +407,7 @@ export function BookingWizard({ garages, vehicles, initialGarage, onClose, onDon
                     onClick={() => set({ vehicle: v.id })}
                   >
                     <strong>{`${v.make} ${v.model}`}</strong>
-                    <span>{`${v.registration} · ${v.mileage.toLocaleString('en-FI')} km`}</span>
+                    <span>{`${v.registration} · ${v.mileage.toLocaleString(loc())} km`}</span>
                   </button>
                 ))}
               </div>
@@ -446,7 +447,7 @@ export function BookingWizard({ garages, vehicles, initialGarage, onClose, onDon
                   onChange={(e) => set({ mileage: e.target.value })}
                 />
                 {car && (
-                  <small className="dash-help">{`Last recorded: ${car.mileage.toLocaleString('en-FI')} km`}</small>
+                  <small className="dash-help">{`Last recorded: ${car.mileage.toLocaleString(loc())} km`}</small>
                 )}
               </label>
               <label className="dash-field">
@@ -490,7 +491,7 @@ export function BookingWizard({ garages, vehicles, initialGarage, onClose, onDon
                 {form.mileage && (
                   <>
                     <dt>Mileage</dt>
-                    <dd>{`${Number(form.mileage).toLocaleString('en-FI')} km`}</dd>
+                    <dd>{`${Number(form.mileage).toLocaleString(loc())} km`}</dd>
                   </>
                 )}
                 {(form.notes || form.details) && (

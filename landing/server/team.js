@@ -110,7 +110,18 @@ export function registerInviteRoutes(app, ctx) {
 }
 
 export function registerTeam(app, ctx) {
-  const { one, all, run, db, transaction, fail, parse, clock, garageFor, text } = ctx;
+  const { one, all, run, db, transaction, fail, parse, clock, garageFor, text, sendEmail, origin } =
+    ctx;
+  const emailInvite = async (g, invite) =>
+    sendEmail
+      ? sendEmail({
+          to: invite.email,
+          subject: `${g.name} invited you to MotoDoc`,
+          text: `Hi ${invite.name}, ${g.name} added you to their team on MotoDoc. Set your password to get started. The link is just for you.`,
+          url: `${origin}/auth?invite=${invite.code}`,
+          button: 'Join the team',
+        }).catch(() => false)
+      : false;
   const presets = (role) => JSON.stringify(ROLES[role][2]);
 
   app.get('/api/team', async (req, res) => {
@@ -181,7 +192,8 @@ export function registerTeam(app, ctx) {
       new Date(clock()).toISOString(),
       req.user.id,
     );
-    res.status(201).json({ code });
+    const emailed = await emailInvite(g, { ...d, code });
+    res.status(201).json({ code, emailed });
   });
 
   app.post('/api/team/invites/:code/resend', async (req, res) => {
@@ -193,7 +205,11 @@ export function registerTeam(app, ctx) {
       g.id,
     );
     if (!result.changes) throw fail(404, 'Invite not found.');
-    res.json({ ok: true });
+    const invite = await one(
+      'SELECT code,name,email FROM team_invites WHERE code=?',
+      req.params.code,
+    );
+    res.json({ ok: true, emailed: await emailInvite(g, invite) });
   });
 
   app.delete('/api/team/invites/:code', async (req, res) => {

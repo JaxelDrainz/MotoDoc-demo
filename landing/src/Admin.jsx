@@ -20,6 +20,7 @@ import { toast } from './Toasts.jsx';
 import './admin.css';
 import { DemoBar } from './Demo.jsx';
 
+import { loc } from './locale.js';
 const tabs = [
   ['look', PaletteIcon, 'Colours & shape'],
   ['motion', LightningIcon, 'Motion'],
@@ -86,7 +87,7 @@ const fieldNames = {
 const long = new Set(['description', 'text', 'title']);
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const when = (value) =>
-  new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  new Date(value).toLocaleString(loc(), { dateStyle: 'medium', timeStyle: 'short' });
 
 function Toggle({ checked, onChange, label, hint }) {
   return (

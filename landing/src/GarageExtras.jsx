@@ -4,12 +4,13 @@ import { api } from './api.js';
 import { Status } from './DashParts.jsx';
 import { toast } from './Toasts.jsx';
 
+import { loc } from './locale.js';
 const euro = (cents) =>
-  new Intl.NumberFormat('en-FI', { style: 'currency', currency: 'EUR' }).format(cents / 100);
+  new Intl.NumberFormat(loc(), { style: 'currency', currency: 'EUR' }).format(cents / 100);
 const iso = (value) => (value.includes('T') ? value : `${value.replace(' ', 'T')}Z`);
 const day = (value) =>
   value
-    ? new Date(iso(value)).toLocaleDateString('en-FI', {
+    ? new Date(iso(value)).toLocaleDateString(loc(), {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
@@ -403,5 +404,143 @@ export function ReviewsPanel({ open }) {
         </p>
       )}
     </>
+  );
+}
+
+const helsinkiDay = (value) =>
+  new Date(value).toLocaleDateString('en-CA', { timeZone: 'Europe/Helsinki' });
+const clock = (value) =>
+  new Date(iso(value)).toLocaleTimeString(loc(), {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/Helsinki',
+  });
+
+export function GarageHome({ data, allowed, navigate, feed, onSchedule }) {
+  const [toReply, setToReply] = useState(0);
+  const canCustomers = allowed('customers');
+  useEffect(() => {
+    if (!canCustomers) return;
+    api('/garage/reviews')
+      .then((r) => setToReply(r.reviews.filter((x) => !x.reply && !x.hidden).length))
+      .catch(() => {});
+  }, [canCustomers]);
+  const bookings = data.bookings || [];
+  const requests = bookings.filter((b) => b.status === 'pending' && b.requested_by !== 'garage');
+  const ready = bookings.filter((b) => b.status === 'confirmed' && b.stage === 'ready_for_pickup');
+  const overdue = (data.invoices || []).filter((i) => i.state === 'overdue');
+  const unread = (feed.items || []).filter((i) => i.type === 'reply-reminder').length;
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const items = [
+    allowed('bookings') &&
+      requests.length > 0 && [
+        'bookings',
+        `${plural(requests.length, 'booking request', 'booking requests')} to answer`,
+        true,
+      ],
+    allowed('jobs') &&
+      ready.length > 0 && [
+        'jobs',
+        `${plural(ready.length, 'car', 'cars')} ready for pickup`,
+        false,
+      ],
+    allowed('invoicing') &&
+      overdue.length > 0 && [
+        'invoices',
+        `${plural(overdue.length, 'overdue invoice', 'overdue invoices')}`,
+        true,
+      ],
+    allowed('jobs') &&
+      unread > 0 && [
+        'messages',
+        `${plural(unread, 'message', 'messages')} waiting for your reply`,
+        false,
+      ],
+    toReply > 0 && [
+      'reviews',
+      `${plural(toReply, 'review', 'reviews')} waiting for your reply`,
+      false,
+    ],
+  ].filter(Boolean);
+  const today = helsinkiDay(Date.now());
+  const todays = bookings
+    .filter(
+      (b) => ['pending', 'confirmed'].includes(b.status) && helsinkiDay(iso(b.starts_at)) === today,
+    )
+    .sort((a, b) => Date.parse(iso(a.starts_at)) - Date.parse(iso(b.starts_at)));
+  const actions = [
+    allowed('bookings') && ['Schedule an appointment', onSchedule],
+    allowed('invoicing') && ['Create an invoice', () => navigate('invoices')],
+    allowed('jobs') && ['Message a customer', () => navigate('messages')],
+    allowed('customers') && ['Find a customer', () => navigate('customers')],
+  ].filter(Boolean);
+  return (
+    <div className="gx-home">
+      <article className="dash-tile dash-attention">
+        <h2>Needs attention</h2>
+        {items.length ? (
+          <ul>
+            {items.map(([target, label, urgent]) => (
+              <li key={target}>
+                <a href={`#${target}`} className={urgent ? 'late' : ''}>
+                  <span className="gx-dot" aria-hidden="true" />
+                  <span>{label}</span>
+                  <span aria-hidden="true">→</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="dash-help">All clear. Nothing is waiting on you right now.</p>
+        )}
+      </article>
+      <article className="dash-tile gx-today">
+        <h2>Today</h2>
+        {todays.length ? (
+          <ul>
+            {todays.slice(0, 6).map((b) => (
+              <li key={b.id}>
+                <strong>{clock(b.starts_at)}</strong>
+                <span>{`${b.service} · ${b.driver_name}`}</span>
+                <small>
+                  {b.status === 'pending'
+                    ? 'Waiting for approval'
+                    : `${b.make} ${b.model} · ${b.registration}`}
+                </small>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="dash-help">No appointments today.</p>
+        )}
+      </article>
+      <article className="dash-tile gx-quick">
+        <h2>Quick actions</h2>
+        <div>
+          {actions.map(([label, run]) => (
+            <button key={label} type="button" className="dash-secondary" onClick={run}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </article>
+      <article className="dash-tile gx-activity">
+        <h2>Recent activity</h2>
+        {feed.items?.length ? (
+          <ul>
+            {feed.items.slice(0, 5).map((item) => (
+              <li key={item.id}>
+                <a href={item.link}>
+                  <strong>{item.title}</strong>
+                  <small>{`${item.body} · ${day(item.at)}`}</small>
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="dash-help">Bookings, messages and payments will show up here.</p>
+        )}
+      </article>
+    </div>
   );
 }

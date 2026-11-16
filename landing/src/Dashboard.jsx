@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowRightIcon,
   CaretDownIcon,
+  ChatTeardropTextIcon,
   DotsThreeIcon,
   WarningCircleIcon,
   BellIcon,
@@ -9,6 +10,8 @@ import {
   GaugeIcon,
   CalendarBlankIcon,
   CarIcon,
+  SnowflakeIcon,
+  SmileyIcon,
   CheckCircleIcon,
   ClockCounterClockwiseIcon,
   GiftIcon,
@@ -66,7 +69,7 @@ import {
 } from './Extras.jsx';
 import { NotificationsPage } from './Notifications.jsx';
 import { HistoryPanel } from './History.jsx';
-import { CustomersPanel, ReviewsPanel, recordDialog } from './GarageExtras.jsx';
+import { CustomersPanel, GarageHome, ReviewsPanel, recordDialog } from './GarageExtras.jsx';
 import {
   CarDetail,
   GarageSheet,
@@ -77,22 +80,24 @@ import {
   WeekView,
 } from './DriverExtras.jsx';
 import { BookingWizard } from './BookingWizard.jsx';
+import { AssistantPanel } from './Assistant.jsx';
 import { cityPoint, distanceKm, distanceText } from './fiCities.js';
 import { TAB_AREAS } from './team.js';
 import { FEEDBACK_KINDS } from './platform.js';
 import { siteFlag } from './site.jsx';
 import './dashboard.css';
 
+import { loc } from './locale.js';
 const euro = (cents) =>
-  new Intl.NumberFormat('en-FI', { style: 'currency', currency: 'EUR' }).format(cents / 100);
+  new Intl.NumberFormat(loc(), { style: 'currency', currency: 'EUR' }).format(cents / 100);
 const date = (value) =>
-  new Date(value).toLocaleDateString(undefined, {
+  new Date(value).toLocaleDateString(loc(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
 const time = (value) =>
-  new Date(value).toLocaleString(undefined, {
+  new Date(value).toLocaleString(loc(), {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -239,7 +244,8 @@ export function FormDialog({ config, onClose, onSave }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [suggestions, setSuggestions] = useState({}),
-    [preview, setPreview] = useState(null);
+    [preview, setPreview] = useState(null),
+    [confirming, setConfirming] = useState('');
 
   async function suggest(e) {
     const input = e.target;
@@ -294,6 +300,12 @@ export function FormDialog({ config, onClose, onSave }) {
     try {
       if (config.fields?.some((field) => field.type === 'slots' && !values[field.name]))
         throw new Error('Choose an available appointment time before continuing.');
+      // An optional second step for changes that affect other people (prices, access).
+      const check = !confirming && config.confirm?.(values);
+      if (check) {
+        setConfirming(check);
+        return;
+      }
       await config.save(values);
       await onSave();
       onClose();
@@ -333,7 +345,10 @@ export function FormDialog({ config, onClose, onSave }) {
         onInput={suggest}
         onFocus={suggest}
         onBlur={showCar}
-        onChange={showCar}
+        onChange={(e) => {
+          if (confirming) setConfirming('');
+          showCar(e);
+        }}
       >
         {(config.fields || []).map((f) =>
           f.type === 'slots' ? (
@@ -413,12 +428,26 @@ export function FormDialog({ config, onClose, onSave }) {
             {error}
           </p>
         )}
+        {confirming && (
+          <p role="alert" className="dash-confirm-step">
+            {confirming}
+          </p>
+        )}
         <div className="dash-form-actions">
-          <button type="button" className="dash-secondary" disabled={busy} onClick={onClose}>
-            {config.cancel || 'Cancel'}
+          <button
+            type="button"
+            className="dash-secondary"
+            disabled={busy}
+            onClick={() => (confirming ? setConfirming('') : onClose())}
+          >
+            {confirming ? 'Go back' : config.cancel || 'Cancel'}
           </button>
           <button className="button button-small" disabled={busy}>
-            {busy ? 'Saving…' : config.submit || 'Save'}
+            {busy
+              ? 'Saving…'
+              : confirming
+                ? `Yes, ${(config.submit || 'save').toLowerCase()}`
+                : config.submit || 'Save'}
           </button>
         </div>
       </form>
@@ -474,7 +503,8 @@ function Avatar({ name, photo, className = '' }) {
 function PhotoUpload({ user, onChange }) {
   const input = useRef(null),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useState(''),
+    [askRemove, setAskRemove] = useState(false);
   async function save(work, message) {
     setBusy(true);
     setError('');
@@ -526,13 +556,32 @@ function PhotoUpload({ user, onChange }) {
           <button className="dash-secondary" disabled={busy} onClick={() => input.current.click()}>
             {busy ? 'Saving…' : user.photo ? 'Change photo' : 'Upload a photo'}
           </button>
-          {user.photo && (
+          {user.photo && askRemove && (
+            <>
+              <span className="dash-help">Remove your photo?</span>
+              <button
+                className="dash-text-button"
+                disabled={busy}
+                onClick={() => {
+                  setAskRemove(false);
+                  save(
+                    () => api('/account/photo', { method: 'DELETE', body: {} }),
+                    'Photo removed.',
+                  );
+                }}
+              >
+                Yes, remove
+              </button>
+              <button className="dash-text-button muted" onClick={() => setAskRemove(false)}>
+                Keep it
+              </button>
+            </>
+          )}
+          {user.photo && !askRemove && (
             <button
               className="dash-text-button muted"
               disabled={busy}
-              onClick={() =>
-                save(() => api('/account/photo', { method: 'DELETE', body: {} }), 'Photo removed.')
-              }
+              onClick={() => setAskRemove(true)}
             >
               Remove
             </button>
@@ -722,6 +771,12 @@ export function Dashboard() {
     () => new URLSearchParams(location.search).get('from') === 'onboarding',
   );
   const [tourTarget, setTourTarget] = useState('');
+  const [, setLangTick] = useState(0);
+  useEffect(() => {
+    const rerender = () => setLangTick((n) => n + 1);
+    window.addEventListener('motodoc-lang', rerender);
+    return () => window.removeEventListener('motodoc-lang', rerender);
+  }, []);
   useEffect(() => {
     if (!notice) return;
     toast(notice);
@@ -806,6 +861,19 @@ export function Dashboard() {
         if (!u.onboarded) return location.replace('/onboarding');
         setUser(u);
         if (u.suspended || ['paused', 'removed'].includes(u.teamStatus)) return;
+        const paidSession = new URLSearchParams(location.search).get('paid');
+        if (paidSession) {
+          history.replaceState(null, '', `${location.pathname}${location.hash}`);
+          await api('/payments/confirm', { method: 'POST', body: { session_id: paidSession } })
+            .then((r) =>
+              toast(
+                r.paid
+                  ? `Payment received${r.number ? ` for invoice ${r.number}` : ''}. Thank you!`
+                  : 'Your payment is being processed. The invoice updates when it’s confirmed.',
+              ),
+            )
+            .catch((e) => toast(e.message, 'error'));
+        }
         await load(u);
       })
       .catch((e) => {
@@ -851,6 +919,7 @@ export function Dashboard() {
     ...(!isGarage && data?.['fuel-day']?.day ? [['fuel-day', GasPumpIcon, 'Fuel Day']] : []),
     ...(isGarage ? [['jobs', ListChecksIcon, 'Jobs']] : []),
     ['history', ClockCounterClockwiseIcon, 'Service history'],
+    ['assistant', ChatTeardropTextIcon, 'Ask MotoDoc'],
     ...(!isGarage
       ? [
           ['recommendations', ThumbsUpIcon, 'Recommendations'],
@@ -884,20 +953,32 @@ export function Dashboard() {
     : ['overview', 'bookings', 'garages', 'messages', 'mechanic', 'vehicles'];
   const groups = isGarage
     ? [
-        ['Work', ['jobs', 'messages', 'marketplace', 'history', 'reminders']],
+        ['Work', ['jobs', 'messages', 'marketplace', 'history', 'reminders', 'assistant']],
         ['Customers', ['customers', 'reviews', 'memberships', 'refer']],
         ['Business', ['profile', 'services', 'invoices', 'analytics', 'team', 'plan']],
         ['Account', ['notifications', 'account']],
       ]
     : [
         ['Your garage', ['mechanic', 'messages', 'marketplace', 'memberships']],
-        ['Car care', ['fuel-day', 'history', 'recommendations', 'inspections', 'reminders']],
+        [
+          'Car care',
+          ['assistant', 'fuel-day', 'history', 'recommendations', 'inspections', 'reminders'],
+        ],
         ['Money', ['invoices', 'plan']],
         ['Account', ['notifications', 'refer', 'account']],
       ];
   const newTabs = isGarage
-    ? ['messages', 'reviews', 'refer', 'plan', 'marketplace']
-    : ['messages', 'mechanic', 'recommendations', 'inspections', 'plan', 'refer', 'fuel-day'];
+    ? ['messages', 'reviews', 'refer', 'plan', 'marketplace', 'assistant']
+    : [
+        'messages',
+        'mechanic',
+        'recommendations',
+        'inspections',
+        'plan',
+        'refer',
+        'fuel-day',
+        'assistant',
+      ];
   const isNew = (key) => newTabs.includes(key) && !seen.includes(key);
   useEffect(() => {
     if (!user || !newTabs.includes(selected) || seen.includes(selected)) return;
@@ -1335,7 +1416,12 @@ export function Dashboard() {
               <span>
                 {hiddenDesktop.includes(selected) ? nav.find(([k]) => k === selected)?.[2] : 'More'}
               </span>
-              <CaretDownIcon className="dash-more-caret" size={14} weight="bold" aria-hidden="true" />
+              <CaretDownIcon
+                className="dash-more-caret"
+                size={14}
+                weight="bold"
+                aria-hidden="true"
+              />
               {hiddenDesktop.reduce((n, k) => n + notificationCount(k), 0) > 0 ? (
                 <span className="dash-nav-badge">
                   {Math.min(
@@ -1452,17 +1538,19 @@ export function Dashboard() {
                               ? 'What each of your cars needs next, and why.'
                               : selected === 'inspections'
                                 ? 'Katsastus dates and reminders for your cars.'
-                                : selected === 'refer'
-                                  ? 'Bring people you trust to MotoDoc.'
-                                  : selected === 'fuel-day'
-                                    ? 'Free fuel from MotoDoc at a partner station, one day only.'
-                                    : selected === 'marketplace'
-                                      ? 'Emergency help from nearby garages, with prices up front.'
-                                      : selected === 'team'
-                                        ? 'Who works with you, and what each person can see and do.'
-                                        : selected === 'no-access'
-                                          ? 'This part of the garage account isn’t shared with you.'
-                                          : 'Keep the details that matter together.'}
+                                : selected === 'assistant'
+                                  ? 'Quick answers about your car and MotoDoc, any time.'
+                                  : selected === 'refer'
+                                    ? 'Bring people you trust to MotoDoc.'
+                                    : selected === 'fuel-day'
+                                      ? 'Free fuel from MotoDoc at a partner station, one day only.'
+                                      : selected === 'marketplace'
+                                        ? 'Emergency help from nearby garages, with prices up front.'
+                                        : selected === 'team'
+                                          ? 'Who works with you, and what each person can see and do.'
+                                          : selected === 'no-access'
+                                            ? 'This part of the garage account isn’t shared with you.'
+                                            : 'Keep the details that matter together.'}
             </p>
           </div>
           <span className="dash-connected">
@@ -1529,6 +1617,15 @@ export function Dashboard() {
             )}
             {!isStaff && <SetupChecklist user={user} data={data} navigate={navigate} />}
             {isGarage && <AvailabilityCard canEdit={allowed('bookings')} />}
+            {isGarage && (
+              <GarageHome
+                data={data}
+                allowed={allowed}
+                navigate={navigate}
+                feed={notificationFeed}
+                onSchedule={scheduleForCustomer}
+              />
+            )}
             {!isGarage && fuelOffer(data) && !fuelOffer(data).pass && (
               <a className="dash-tile fd-promo" href="#fuel-day">
                 <GasPumpIcon size={26} />
@@ -1541,6 +1638,66 @@ export function Dashboard() {
                 <ArrowRightIcon size={18} />
               </a>
             )}
+            {!isGarage &&
+              data.vehicles.length > 0 &&
+              (() => {
+                const car = [...data.vehicles].sort(
+                  (a, b) =>
+                    (deadlinesOf(a)[0]?.days ?? Infinity) - (deadlinesOf(b)[0]?.days ?? Infinity),
+                )[0];
+                const next = deadlinesOf(car)[0];
+                const upcoming = data.bookings
+                  .filter(
+                    (b) =>
+                      ['pending', 'confirmed'].includes(b.status) &&
+                      Date.parse(b.starts_at) > Date.now(),
+                  )
+                  .sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at))[0];
+                return (
+                  <article className="dash-tile dash-car-hero">
+                    <CarPicture vehicle={car} />
+                    <div>
+                      <span className="eyebrow">
+                        {data.vehicles.length > 1 ? 'NEEDS YOU FIRST' : 'YOUR CAR'}
+                      </span>
+                      <h2>{`${car.make} ${car.model}`}</h2>
+                      <p>
+                        <span className="dash-plate">{car.registration}</span>
+                        {` ${[car.year, `${car.mileage.toLocaleString(loc())} km`].join(' · ')}`}
+                      </p>
+                      {next ? (
+                        <span
+                          className={`dash-deadline ${next.days < 0 ? 'late' : next.days <= 30 ? 'soon' : 'ok'}`}
+                        >
+                          {deadlineText(next)}
+                        </span>
+                      ) : (
+                        <span className="dash-deadline ok">No deadlines added</span>
+                      )}
+                      {upcoming && (
+                        <p className="dash-car-next">
+                          <CalendarBlankIcon size={17} />
+                          {`Next: ${upcoming.service} · ${upcoming.garage_name} · ${time(upcoming.starts_at)}`}
+                        </p>
+                      )}
+                      <div className="dash-tile-actions">
+                        <button className="button button-small" onClick={() => book()}>
+                          Book a service <ArrowRightIcon size={16} />
+                        </button>
+                        <button
+                          className="dash-text-button"
+                          onClick={() => {
+                            setCarDetail(car.id);
+                            navigate('vehicles');
+                          }}
+                        >
+                          Car details
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })()}
             {!isGarage &&
               data.bookings
                 .filter(
@@ -1617,6 +1774,46 @@ export function Dashboard() {
                         <ArrowRightIcon size={18} />
                       </a>
                     )}
+                    {[10, 11].includes(
+                      Number(
+                        new Date().toLocaleDateString('en-CA', {
+                          timeZone: 'Europe/Helsinki',
+                          month: 'numeric',
+                        }),
+                      ),
+                    ) &&
+                      data.vehicles.length > 0 && (
+                        <button
+                          type="button"
+                          className="dash-tile dash-rate dash-winter"
+                          onClick={() => book()}
+                        >
+                          <SnowflakeIcon size={24} />
+                          <span>
+                            <strong>Winter tyre season</strong>
+                            <small>
+                              Studded tyres are allowed from 1 November. Book a tyre change before
+                              the first frost.
+                            </small>
+                          </span>
+                          <ArrowRightIcon size={18} />
+                        </button>
+                      )}
+                    {!items.length &&
+                      !rate &&
+                      !data.bookings.some(
+                        (b) =>
+                          b.status === 'confirmed' &&
+                          ['in_progress', 'finished', 'ready_for_pickup'].includes(b.stage),
+                      ) && (
+                        <article className="dash-tile dash-rate dash-all-good">
+                          <SmileyIcon size={24} />
+                          <span>
+                            <strong>All good</strong>
+                            <small>Nothing needs your attention right now.</small>
+                          </span>
+                        </article>
+                      )}
                     {items.length > 0 && (
                       <article className="dash-tile dash-attention">
                         <h2>Needs attention</h2>
@@ -1754,7 +1951,7 @@ export function Dashboard() {
                       {v.make} {v.model}
                     </h3>
                     <p>
-                      {[v.year, `${v.mileage.toLocaleString()} km`, FUEL[v.fuel_type]]
+                      {[v.year, `${v.mileage.toLocaleString(loc())} km`, FUEL[v.fuel_type]]
                         .filter(Boolean)
                         .join(' · ')}
                     </p>
@@ -2256,6 +2453,9 @@ export function Dashboard() {
             </Empty>
           ))}
         {selected === 'reviews' && <ReviewsPanel open={open} />}
+        {selected === 'assistant' && (
+          <AssistantPanel role={user.role} navigate={navigate} book={() => book()} />
+        )}
         {selected === 'messages' && (
           <MessagesPanel
             bookings={data.bookings}

@@ -895,6 +895,173 @@ test('notification email preferences, area badges and server reply reminders', a
   await shop('/api/notifications/seen', {});
   assert.deepEqual((await shop('/api/notifications')).data.counts, {});
 });
+test('the daily scheduler emails due car deadlines once, without anyone opening the app', async (t) => {
+  let now = Date.UTC(2026, 10, 2, 10, 0, 0);
+  const sent = [];
+  const { client, base } = await fixture(t, {
+      clock: () => now,
+      sendNotificationEmail: async (message) => {
+        sent.push(message);
+        return true;
+      },
+    }),
+    driver = client();
+  await signup(driver, 'cron-driver@example.test');
+  await driver('/api/vehicles', {
+    make: 'Toyota',
+    model: 'Corolla',
+    year: 2021,
+    registration: 'CRN-1',
+    mileage: 1000,
+    insurance_due: new Date(now + 5 * 86400000).toISOString().slice(0, 10),
+    tax_due: new Date(now + 90 * 86400000).toISOString().slice(0, 10),
+  });
+  const run = () => fetch(`${base}/api/cron/deliver`).then((r) => r.json());
+  const first = await run();
+  assert.equal(first.users >= 1, true);
+  const due = sent.filter((m) => m.notification_id.startsWith('deadline:'));
+  assert.equal(due.length, 1);
+  assert.equal(due[0].to, 'cron-driver@example.test');
+  assert.match(due[0].subject, /Insurance due soon/);
+  assert.equal((await run()).skipped, true);
+  now += 11 * 60000;
+  const before = sent.length;
+  await run();
+  assert.equal(sent.length, before);
+  const feed = (await driver('/api/notifications')).data;
+  assert(feed.items.some((item) => item.id.startsWith('deadline:') && item.link === '#vehicles'));
+});
+test('online invoice payment with Stripe Checkout, confirmed with Stripe', async (t) => {
+  const sessions = new Map();
+  const stripe = {
+    mode: 'test',
+    createCheckout: async (params) => {
+      const id = `cs_test_${sessions.size + 1}`;
+      sessions.set(id, { id, params, payment_status: 'unpaid' });
+      return { id, url: `https://checkout.stripe.test/${id}` };
+    },
+    getCheckout: async (id) => {
+      const s = sessions.get(id);
+      return {
+        id,
+        payment_status: s.payment_status,
+        amount_total: s.params.line_items[0].price_data.unit_amount,
+        metadata: s.params.metadata,
+        payment_intent: `pi_${id}`,
+      };
+    },
+  };
+  const { client, base } = await fixture(t, { stripe }),
+    shop = client(),
+    driver = client(),
+    other = client();
+  await garage(shop);
+  await signup(driver, 'stripe-driver@example.test');
+  await signup(other, 'stripe-other@example.test');
+  const car = (await vehicle(driver)).data.id;
+  const g = (await driver('/api/garages')).data[0];
+  const start = new Date(Date.now() + 30 * 3600000);
+  start.setUTCMinutes(0, 0, 0);
+  const b = (
+    await driver('/api/bookings', {
+      garage_id: g.id,
+      vehicle_id: car,
+      service: 'Oil change',
+      starts_at: start.toISOString(),
+    })
+  ).data.id;
+  await shop(`/api/bookings/${b}/approve`, {});
+  await shop(`/api/bookings/${b}/complete`, { summary: 'Oil and filter', mileage: 13000 });
+  const invoice = (
+    await shop('/api/invoices', {
+      booking_id: b,
+      service_description: 'Oil and filter change with a check-up.',
+      lines: [{ description: 'Oil change', quantity: 1, unit_cents: 9000 }],
+    })
+  ).data;
+  assert.deepEqual((await driver('/api/payments/config')).data, { online: true, mode: 'test' });
+  assert.equal((await shop(`/api/invoices/${invoice.id}/pay`, {})).status, 403);
+  assert.equal((await other(`/api/invoices/${invoice.id}/pay`, {})).status, 404);
+  const pay = await driver(`/api/invoices/${invoice.id}/pay`, {});
+  assert.equal(pay.status, 200);
+  assert.equal(pay.data.url, 'https://checkout.stripe.test/cs_test_1');
+  const params = sessions.get('cs_test_1').params;
+  const total = (await driver('/api/invoices')).data[0].totals.total;
+  assert.equal(params.line_items[0].price_data.unit_amount, total);
+  assert.equal(params.line_items[0].price_data.currency, 'eur');
+  assert.match(params.success_url, /\/app\?paid=\{CHECKOUT_SESSION_ID\}#invoices$/);
+
+  // Not paid yet: nothing changes, whoever asks.
+  assert.equal(
+    (await driver('/api/payments/confirm', { session_id: 'cs_test_1' })).data.paid,
+    false,
+  );
+  assert.equal((await other('/api/payments/confirm', { session_id: 'cs_test_1' })).status, 404);
+  // A forged webhook can't mark it paid: the session is fetched from Stripe.
+  const hook = (body) =>
+    fetch(`${base}/api/stripe/webhook`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  assert.equal(
+    (await hook({ type: 'checkout.session.completed', data: { object: { id: 'cs_test_1' } } }))
+      .status,
+    200,
+  );
+  assert.equal((await driver('/api/invoices')).data[0].status, 'unpaid');
+
+  sessions.get('cs_test_1').payment_status = 'paid';
+  await hook({ type: 'checkout.session.completed', data: { object: { id: 'cs_test_1' } } });
+  const paid = (await driver('/api/invoices')).data[0];
+  assert.deepEqual(
+    [paid.status, paid.paid_method, paid.payment_reference],
+    ['paid', 'online', 'pi_cs_test_1'],
+  );
+  assert.equal(
+    (await driver('/api/payments/confirm', { session_id: 'cs_test_1' })).data.paid,
+    true,
+  );
+  assert.equal((await driver(`/api/invoices/${invoice.id}/pay`, {})).status, 404);
+  const garageFeed = (await shop('/api/notifications')).data;
+  assert(garageFeed.items.some((item) => item.type === 'invoice-paid'));
+});
+test('Ask MotoDoc answers from the local model with the person’s own data', async (t) => {
+  const { client } = await fixture(t),
+    driver = client(),
+    shop = client();
+  await signup(driver, 'ask@example.test');
+  await garage(shop, 'ask-garage@example.test');
+  await driver('/api/vehicles', {
+    make: 'Skoda',
+    model: 'Octavia',
+    year: 2018,
+    registration: 'ASK-1',
+    mileage: 90000,
+    insurance_due: new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10),
+  });
+  const ask = (c, message, lang) => c('/api/assistant', { message, ...(lang ? { lang } : {}) });
+  const insurance = (await ask(driver, 'When is my insurance due?')).data;
+  assert.equal(insurance.topic, 'insurance');
+  assert.match(insurance.text, /Skoda Octavia \(ASK-1\): insurance is due .*in 10 days/);
+  assert.deepEqual(insurance.actions, [{ label: 'My vehicles', href: '#vehicles' }]);
+  const fi = (await ask(driver, 'milloin vakuutus erääntyy', 'fi')).data;
+  assert.equal(fi.topic, 'insurance');
+  assert.match(fi.text, /erääntyy .* 10 päivän päästä/);
+  const light = (await ask(driver, 'my check engine light came on')).data;
+  assert.equal(light.topic, 'engine_light');
+  const unknown = (await ask(driver, 'what is the capital of France')).data;
+  assert.equal(unknown.topic, null);
+  assert.equal(unknown.suggestions.length, 4);
+  const invoices = (await ask(driver, 'how do I pay my invoice')).data;
+  assert.match(invoices.text, /all paid up/);
+  // Garages get garage topics and their own numbers.
+  const requests = (await ask(shop, 'booking requests')).data;
+  assert.equal(requests.topic, 'requests');
+  assert.match(requests.text, /You have 0 booking requests waiting/);
+  assert.equal((await ask(shop, 'when is my insurance due')).data.topic === 'insurance', false);
+  assert.equal((await driver('/api/assistant', { message: '' })).status, 400);
+});
 test('only administrators can change site settings, which are versioned and public', async (t) => {
   const { client, base } = await fixture(t, { adminEmails: 'boss@example.test' }),
     admin = client(),

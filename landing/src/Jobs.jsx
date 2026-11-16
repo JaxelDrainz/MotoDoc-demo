@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import './jobs.css';
 
+import { loc } from './locale.js';
 export const STAGES = [
   ['booked', 'Booked'],
   ['in_progress', 'Started'],
@@ -63,7 +64,7 @@ const fromLocal = (value) => {
 };
 const nextHour = () => toLocalInput(new Date(Date.now() + 3600000).toISOString());
 const when = (iso) =>
-  new Intl.DateTimeFormat(document.documentElement.lang === 'fi' ? 'fi-FI' : 'en-GB', {
+  new Intl.DateTimeFormat(loc(), {
     weekday: 'short',
     day: 'numeric',
     month: 'short',

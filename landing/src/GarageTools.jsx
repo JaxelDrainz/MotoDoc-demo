@@ -5,13 +5,18 @@ import { toast } from './Toasts.jsx';
 import { SPECIALIZATIONS, WEEKDAYS, hoursProblem } from './finland.js';
 import './garage-tools.css';
 
+import { loc } from './locale.js';
 const euros = (cents) =>
-  `€${(cents / 100).toLocaleString('fi-FI', { maximumFractionDigits: cents % 100 ? 2 : 0 })}`;
+  new Intl.NumberFormat(loc(), {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: cents % 100 ? 2 : 0,
+  }).format(cents / 100);
 export const priceText = (s) =>
   s.price_min_cents != null && s.price_max_cents != null
     ? s.price_min_cents === s.price_max_cents
       ? euros(s.price_min_cents)
-      : `${euros(s.price_min_cents)}–${euros(s.price_max_cents).slice(1)}`
+      : `${euros(s.price_min_cents)}–${euros(s.price_max_cents)}`
     : s.price_min_cents != null
       ? `from ${euros(s.price_min_cents)}`
       : s.price_max_cents != null
@@ -211,7 +216,7 @@ function BlockedDays({ blocked, onClose, onSaved }) {
             <li key={b.date}>
               <span>
                 <strong>
-                  {new Date(`${b.date}T12:00:00`).toLocaleDateString(undefined, {
+                  {new Date(`${b.date}T12:00:00`).toLocaleDateString(loc(), {
                     weekday: 'short',
                     day: 'numeric',
                     month: 'short',
@@ -334,6 +339,18 @@ export function ServicesPanel({ open, canEdit }) {
         { name: 'description', label: 'Short description', maxLength: 300 },
       ],
       submit: s ? 'Save changes' : 'Add service',
+      confirm: (d) => {
+        if (!s) return '';
+        const cents = (v) => (v === '' || v == null ? null : Math.round(Number(v) * 100));
+        const before = priceText(s);
+        const after = priceText({
+          price_min_cents: cents(d.price_min),
+          price_max_cents: cents(d.price_max),
+        });
+        return before === after
+          ? ''
+          : `The price of ${s.name} changes from ${before} to ${after}. Drivers see it on your profile straight away.`;
+      },
       save: async (d) => {
         const num = (v) => (v === '' || v == null ? null : Number(v));
         const body = {
@@ -465,7 +482,7 @@ export function AnalyticsPanel({ data }) {
   const top = popular[0]?.[1] || 1;
   const repeat = customers.filter((c) => Number(c.booking_count) > 1).length;
   const euro = (cents) =>
-    new Intl.NumberFormat('en-FI', { style: 'currency', currency: 'EUR' }).format(cents / 100);
+    new Intl.NumberFormat(loc(), { style: 'currency', currency: 'EUR' }).format(cents / 100);
   const tiles = [
     ['Total customers', customers.length],
     ['Active customers (90 days)', active.size],

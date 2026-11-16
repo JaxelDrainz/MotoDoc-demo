@@ -315,6 +315,7 @@ Direct contact with garage',1200,'basic' FROM garage_details WHERE membership_la
     ],
   ],
   [14, ["ALTER TABLE user_settings ADD COLUMN mechanic_notes TEXT NOT NULL DEFAULT ''"]],
+  [15, ['ALTER TABLE invoices ADD COLUMN stripe_session TEXT']],
 ];
 
 export function openDatabase(path) {

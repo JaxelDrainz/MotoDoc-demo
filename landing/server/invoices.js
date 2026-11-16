@@ -19,6 +19,8 @@ export function registerInvoices(app, ctx) {
     text,
     optional,
     dateSchema,
+    stripe,
+    origin,
   } = ctx;
   const today = () => new Date(clock()).toISOString().slice(0, 10);
 
@@ -235,4 +237,86 @@ export function registerInvoices(app, ctx) {
     );
     res.json({ ok: true, reminders: reminders.length });
   });
+
+  // Online payment with Stripe Checkout. Which methods appear (card, Apple Pay, Google Pay,
+  // MobilePay, Klarna) is chosen in the Stripe dashboard.
+  const markPaidFromStripe = async (session) => {
+    const invoiceId = session?.metadata?.invoice_id;
+    if (!invoiceId || session.payment_status !== 'paid') return null;
+    const [invoice] = await view(await all(`${select} WHERE i.id=?`, invoiceId));
+    if (!invoice) return null;
+    if (invoice.status === 'paid') return invoice;
+    if (invoice.status !== 'unpaid' || session.amount_total !== invoice.totals.total) return null;
+    await transaction(db, async () => {
+      const result = await run(
+        "UPDATE invoices SET status='paid',payment_reference=?,paid_at=?,paid_method='online' WHERE id=? AND status='unpaid'",
+        String(session.payment_intent || session.id),
+        new Date(clock()).toISOString(),
+        invoice.id,
+      );
+      if (result.changes)
+        await bookingEvent(
+          invoice.booking_id,
+          invoice.driver_id,
+          'invoice-paid',
+          invoice.number || '',
+        );
+    });
+    return { ...invoice, status: 'paid' };
+  };
+
+  app.get('/api/payments/config', (_req, res) =>
+    res.json({ online: !!stripe, mode: stripe?.mode || null }),
+  );
+
+  app.post('/api/invoices/:id/pay', async (req, res) => {
+    if (!stripe) throw fail(503, 'Online payment isn’t set up yet. Pay by bank transfer.');
+    if (req.user.role !== 'driver') throw fail(403, 'Only the customer can pay an invoice.');
+    if (req.user.demo_world)
+      throw fail(400, 'Online payment is switched off in the demo. Nothing is charged.');
+    const [invoice] = await view(
+      await all(`${select} WHERE i.id=? AND i.driver_id=?`, req.params.id, req.user.id),
+    );
+    if (!invoice || invoice.status !== 'unpaid') throw fail(404, 'Unpaid invoice not found.');
+    const session = await stripe.createCheckout({
+      mode: 'payment',
+      client_reference_id: invoice.id,
+      customer_email: invoice.driver_email,
+      metadata: { invoice_id: invoice.id },
+      payment_intent_data: { metadata: { invoice_id: invoice.id } },
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'eur',
+            unit_amount: invoice.totals.total,
+            product_data: {
+              name: `Invoice ${invoice.number || ''} · ${invoice.garage_name}`.replace('  ', ' '),
+              description: `${invoice.service} · ${invoice.registration}`,
+            },
+          },
+        },
+      ],
+      success_url: `${origin}/app?paid={CHECKOUT_SESSION_ID}#invoices`,
+      cancel_url: `${origin}/app#invoices`,
+    });
+    await run('UPDATE invoices SET stripe_session=? WHERE id=?', session.id, invoice.id);
+    res.json({ url: session.url });
+  });
+
+  app.post('/api/payments/confirm', async (req, res) => {
+    if (!stripe) throw fail(503, 'Online payment isn’t set up yet.');
+    const { session_id } = parse(z.object({ session_id: z.string().min(8).max(255) }), req);
+    const session = await stripe.getCheckout(session_id);
+    const owned = await one(
+      'SELECT 1 FROM invoices WHERE id=? AND driver_id=?',
+      session.metadata?.invoice_id || '',
+      req.user.id,
+    );
+    if (!owned) throw fail(404, 'Payment not found.');
+    const paid = await markPaidFromStripe(session);
+    res.json({ paid: !!paid, number: paid?.number || '' });
+  });
+
+  return { markPaidFromStripe };
 }

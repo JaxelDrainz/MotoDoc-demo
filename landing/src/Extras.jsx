@@ -16,14 +16,15 @@ import { toast } from './Toasts.jsx';
 import { COMING_SOON, FREE_LIMITS, PLAN_FEATURES, PRIORITY } from './extras.js';
 import './extras-panels.css';
 
+import { loc } from './locale.js';
 const euro = (value) =>
-  new Intl.NumberFormat('en-FI', {
+  new Intl.NumberFormat(loc(), {
     style: 'currency',
     currency: 'EUR',
     maximumFractionDigits: value % 1 ? 2 : 0,
   }).format(value);
 const dayText = (date) =>
-  new Date(`${date}T12:00:00Z`).toLocaleDateString('en-FI', {
+  new Date(`${date}T12:00:00Z`).toLocaleDateString(loc(), {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -233,7 +234,7 @@ export function RecommendationsPanel({ navigate }) {
                         <dt>Last done</dt>
                         <dd>
                           {i.last_done
-                            ? `${dayText(i.last_done.date)} · ${i.last_done.mileage.toLocaleString('en-FI')} km`
+                            ? `${dayText(i.last_done.date)} · ${i.last_done.mileage.toLocaleString(loc())} km`
                             : 'Not on record'}
                         </dd>
                         <dt>Interval</dt>
@@ -341,15 +342,16 @@ export function InspectionsPanel({ open }) {
 
 export function PayLaterCard({ invoices }) {
   const unpaid = (invoices || []).filter((i) => i.state === 'unpaid' || i.state === 'overdue');
+  const [config] = useLoad('/payments/config');
   return (
     <article className="dash-tile ex-paylater">
       <ClockIcon size={24} />
       <div>
         <h3>Pay later</h3>
         <p>
-          Split a repair bill or pay it in 30 days with Klarna, right from your invoice. Pay later
-          arrives when online payments are connected. Until then, pay by bank transfer with the
-          reference number on the invoice.
+          {config?.online
+            ? 'Split a repair bill or pay it in 30 days with Klarna. Open an invoice, choose Pay now and pick Klarna at checkout.'
+            : 'Split a repair bill or pay it in 30 days with Klarna, right from your invoice. Pay later arrives when online payments are connected. Until then, pay by bank transfer with the reference number on the invoice.'}
         </p>
         {unpaid.length > 0 && (
           <p className="dash-help">

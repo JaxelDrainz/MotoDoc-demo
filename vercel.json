@@ -45,5 +45,11 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/deliver",
+      "schedule": "0 6 * * *"
+    }
   ]
 }

@@ -42,8 +42,18 @@ const areaFor = (item) => {
 };
 
 export function registerNotifications(app, ctx) {
-  const { one, all, run, id, clock, outboxPath, appOrigin, production, sendNotificationEmail } =
-    ctx;
+  const {
+    one,
+    all,
+    run,
+    id,
+    clock,
+    outboxPath,
+    appOrigin,
+    production,
+    sendNotificationEmail,
+    userSelect,
+  } = ctx;
   const now = () => new Date(clock()).toISOString();
 
   const localMailer = async (message) => {
@@ -97,7 +107,7 @@ export function registerNotifications(app, ctx) {
     if (!scope && !driver) return [];
     const today = now().slice(0, 10);
     const soon = new Date(clock() + 7 * DAY).toISOString().slice(0, 10);
-    const [messages, events, reminders, notices, waitingReplies] = await Promise.all([
+    const [messages, events, reminders, notices, waitingReplies, cars] = await Promise.all([
       all(
         `SELECT m.id,m.body,m.created_at at,m.booking_id,u.name sender_name
        FROM messages m JOIN bookings b ON b.id=m.booking_id JOIN users u ON u.id=m.sender_id
@@ -122,7 +132,33 @@ export function registerNotifications(app, ctx) {
         user.id,
       ),
       replyReminders(user),
+      driver
+        ? all(
+            `SELECT v.id,v.make,v.model,v.registration,c.mot_due,v.insurance_due,v.tax_due
+             FROM vehicles v LEFT JOIN vehicle_condition c ON c.vehicle_id=v.id
+             WHERE v.owner_id=? AND v.archived_at IS NULL`,
+            user.id,
+          )
+        : [],
     ]);
+    const deadlineSoon = new Date(clock() + 14 * DAY).toISOString().slice(0, 10);
+    const deadlines = cars.flatMap((car) =>
+      [
+        ['inspection', 'Inspection', car.mot_due],
+        ['insurance', 'Insurance', car.insurance_due],
+        ['tax', 'Vehicle tax', car.tax_due],
+      ]
+        .filter(([, , due]) => due && due <= deadlineSoon)
+        .map(([kind, label, due]) => ({
+          id: `deadline:${car.id}:${kind}:${due}`,
+          type: due < today ? 'overdue' : 'reminder',
+          title: due < today ? `${label} date has passed` : `${label} due soon`,
+          body: `${car.make} ${car.model} · ${car.registration} · ${due}`,
+          at: new Date(Date.parse(`${due}T06:00:00Z`) - 14 * DAY).toISOString(),
+          due_date: due,
+          link: '#vehicles',
+        })),
+    );
     return [
       ...notices.map((notice) => ({
         id: `notice:${notice.id}`,
@@ -161,6 +197,7 @@ export function registerNotifications(app, ctx) {
         link: '#reminders',
       })),
       ...waitingReplies,
+      ...deadlines,
     ]
       .filter((item) => item.at <= now())
       .sort((a, b) => (a.at < b.at ? 1 : -1));
@@ -180,7 +217,9 @@ export function registerNotifications(app, ctx) {
       : (await mailer({
             to: user.email,
             subject: item.title,
-            text: `${item.body}\n\nOpen MotoDoc: ${new URL(`/app${linkFor(item)}`, appOrigin).href}`,
+            text: item.body,
+            url: new URL(`/app${linkFor(item)}`, appOrigin).href,
+            button: 'Open MotoDoc',
             notification_id: item.id,
           }))
         ? 'sent'
@@ -220,6 +259,23 @@ export function registerNotifications(app, ctx) {
   };
 
   app.get('/api/notifications', async (req, res) => res.json(await feedFor(req.user)));
+
+  // Runs from the daily scheduler: sends whatever is due to everyone who wants email,
+  // so reminders arrive even when nobody opens the app. Deliveries are recorded, so each
+  // item is sent once however often this runs.
+  const deliverAll = async () => {
+    const users = await all(
+      `${userSelect} WHERE u.suspended_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM demo_users d WHERE d.user_id=u.id)
+         AND (COALESCE(us.email_updates,1)=1 OR us.email_chat=1)`,
+    );
+    let sent = 0;
+    for (const user of users) {
+      const items = (await rawFeed(user)).slice(0, 100);
+      for (const item of items) if ((await deliver(user, item)) === 'sent') sent += 1;
+    }
+    return { users: users.length, checked_at: now(), sent };
+  };
   app.post('/api/notifications/seen', async (req, res) => {
     await run(
       'INSERT INTO notification_reads(user_id,seen_at) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET seen_at=excluded.seen_at',
@@ -229,5 +285,5 @@ export function registerNotifications(app, ctx) {
     res.json({ ok: true });
   });
 
-  return { feedFor };
+  return { feedFor, deliverAll };
 }

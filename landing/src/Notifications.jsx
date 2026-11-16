@@ -18,6 +18,7 @@ import { api } from './api.js';
 import { toast } from './Toasts.jsx';
 import './notifications.css';
 
+import { loc } from './locale.js';
 const iconFor = (item) => {
   if (item.type === 'message' || item.type === 'reply-reminder') return ChatCircleIcon;
   if (item.type === 'reminder' || item.type === 'overdue') return ClockCountdownIcon;
@@ -38,13 +39,13 @@ const iconFor = (item) => {
 const dayKey = (value) =>
   new Date(value).toLocaleDateString('en-CA', { timeZone: 'Europe/Helsinki' });
 const time = (value) =>
-  new Date(value).toLocaleTimeString(undefined, {
+  new Date(value).toLocaleTimeString(loc(), {
     hour: '2-digit',
     minute: '2-digit',
     timeZone: 'Europe/Helsinki',
   });
 const date = (value) =>
-  new Date(value).toLocaleDateString(undefined, {
+  new Date(value).toLocaleDateString(loc(), {
     weekday: 'short',
     day: 'numeric',
     month: 'short',

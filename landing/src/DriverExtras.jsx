@@ -3,6 +3,8 @@ import {
   ArrowLeftIcon,
   CalendarBlankIcon,
   ChatCircleIcon,
+  CheckIcon,
+  GiftIcon,
   EnvelopeSimpleIcon,
   MapPinIcon,
   PhoneIcon,
@@ -15,18 +17,19 @@ import { BASIC_BENEFITS, FULL_EXTRAS } from './membership.js';
 import { WEEKDAYS } from './finland.js';
 import './driver-extras.css';
 
+import { loc } from './locale.js';
 const euro = (cents) =>
-  new Intl.NumberFormat('en-FI', { style: 'currency', currency: 'EUR' }).format(cents / 100);
+  new Intl.NumberFormat(loc(), { style: 'currency', currency: 'EUR' }).format(cents / 100);
 const iso = (value) => (value.includes('T') ? value : `${value.replace(' ', 'T')}Z`);
 const day = (value) =>
-  new Date(value.length === 10 ? `${value}T12:00:00Z` : iso(value)).toLocaleDateString('en-FI', {
+  new Date(value.length === 10 ? `${value}T12:00:00Z` : iso(value)).toLocaleDateString(loc(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
     timeZone: 'Europe/Helsinki',
   });
 const clock = (value) =>
-  new Date(iso(value)).toLocaleTimeString('en-FI', {
+  new Date(iso(value)).toLocaleTimeString(loc(), {
     hour: '2-digit',
     minute: '2-digit',
     timeZone: 'Europe/Helsinki',
@@ -96,7 +99,7 @@ export function CarDetail({ vehicle: v, history, onBack, onEdit, onRemove }) {
       </div>
       <dl className="mk-summary dash-tile">
         <dt>Mileage</dt>
-        <dd>{`${v.mileage.toLocaleString('en-FI')} km`}</dd>
+        <dd>{`${v.mileage.toLocaleString(loc())} km`}</dd>
         <dt>Fuel</dt>
         <dd>{FUEL[v.fuel_type] || '—'}</dd>
         <dt>VIN</dt>
@@ -127,7 +130,7 @@ export function CarDetail({ vehicle: v, history, onBack, onEdit, onRemove }) {
                   <h3>{r.service}</h3>
                   {r.cost_cents ? <span className="mem-pill">{euro(r.cost_cents)}</span> : null}
                 </div>
-                <p>{`${r.garage_name} · ${day(r.performed_at)} · ${r.mileage.toLocaleString('en-FI')} km`}</p>
+                <p>{`${r.garage_name} · ${day(r.performed_at)} · ${r.mileage.toLocaleString(loc())} km`}</p>
                 <p>{r.summary}</p>
               </div>
             </article>
@@ -321,16 +324,24 @@ export function MyMechanic({ data, book, chat, navigate, showGarage }) {
             <Status>{membership.state}</Status>
           </div>
           <ul className="mem-benefits dash-tile">
-            {[
-              ...BASIC_BENEFITS,
-              ...(membership.plan_kind === 'basic'
-                ? []
-                : [...FULL_EXTRAS, ...membership.benefits.split('\n').filter(Boolean)]),
-            ].map((b) => (
-              <li key={b}>
-                <span>{`✓ ${b}`}</span>
-              </li>
-            ))}
+            {[...BASIC_BENEFITS, ...(membership.plan_kind === 'basic' ? [] : FULL_EXTRAS)].map(
+              (b) => (
+                <li key={b}>
+                  <CheckIcon size={15} weight="bold" />
+                  <span>{b}</span>
+                </li>
+              ),
+            )}
+            {membership.plan_kind !== 'basic' &&
+              membership.benefits
+                .split('\n')
+                .filter(Boolean)
+                .map((b) => (
+                  <li key={`perk-${b}`} className="mem-perk">
+                    <GiftIcon size={15} />
+                    <span>{b}</span>
+                  </li>
+                ))}
           </ul>
         </>
       )}
@@ -422,7 +433,7 @@ export function WeekView({ bookings, details }) {
           ← Previous
         </button>
         <strong>
-          {`${days[0].toLocaleDateString('en-FI', { day: 'numeric', month: 'short' })} – ${days[6].toLocaleDateString('en-FI', { day: 'numeric', month: 'short' })}`}
+          {`${days[0].toLocaleDateString(loc(), { day: 'numeric', month: 'short' })} – ${days[6].toLocaleDateString(loc(), { day: 'numeric', month: 'short' })}`}
         </strong>
         <button className="dash-text-button" onClick={() => setOffset(offset + 1)}>
           Next →
@@ -435,7 +446,7 @@ export function WeekView({ bookings, details }) {
             .sort((a, b) => (a.starts_at < b.starts_at ? -1 : 1));
           return (
             <section key={key(d)} className={key(d) === key(now) ? 'today' : ''}>
-              <h4>{d.toLocaleDateString('en-FI', { weekday: 'short', day: 'numeric' })}</h4>
+              <h4>{d.toLocaleDateString(loc(), { weekday: 'short', day: 'numeric' })}</h4>
               {items.length ? (
                 items.map((b) => (
                   <button key={b.id} className={`dx-slot ${b.state}`} onClick={() => details(b)}>
@@ -483,7 +494,7 @@ export function MonthView({ bookings, details }) {
         <button className="dash-text-button" onClick={() => setOffset(offset - 1)}>
           ← Previous
         </button>
-        <strong>{first.toLocaleDateString('en-FI', { month: 'long', year: 'numeric' })}</strong>
+        <strong>{first.toLocaleDateString(loc(), { month: 'long', year: 'numeric' })}</strong>
         <button className="dash-text-button" onClick={() => setOffset(offset + 1)}>
           Next →
         </button>
@@ -511,7 +522,7 @@ export function MonthView({ bookings, details }) {
       {pick && (
         <div className="dx-month-day">
           <h4>
-            {new Date(`${pick}T12:00:00`).toLocaleDateString('en-FI', {
+            {new Date(`${pick}T12:00:00`).toLocaleDateString(loc(), {
               weekday: 'long',
               day: 'numeric',
               month: 'long',

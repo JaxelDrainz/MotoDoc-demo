@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { CheckCircleIcon } from '@phosphor-icons/react';
 
+import { loc } from './locale.js';
 const euro = (cents) =>
-  new Intl.NumberFormat('en-FI', { style: 'currency', currency: 'EUR' }).format(cents / 100);
+  new Intl.NumberFormat(loc(), { style: 'currency', currency: 'EUR' }).format(cents / 100);
 const iso = (value) => (value.includes('T') ? value : `${value.replace(' ', 'T')}Z`);
 const monthName = (value) =>
-  new Date(iso(value)).toLocaleDateString('en-FI', {
+  new Date(iso(value)).toLocaleDateString(loc(), {
     month: 'long',
     year: 'numeric',
     timeZone: 'Europe/Helsinki',
   });
 const day = (value) =>
-  new Date(iso(value)).toLocaleDateString('en-FI', {
+  new Date(iso(value)).toLocaleDateString(loc(), {
     day: 'numeric',
     month: 'short',
     timeZone: 'Europe/Helsinki',
@@ -89,7 +90,7 @@ export function HistoryPanel({ records, isGarage }) {
                     </div>
                     <p>{`${r.garage_name} · ${r.registration} · ${day(r.performed_at)}`}</p>
                     <p>{r.summary}</p>
-                    <small>{`${r.mileage.toLocaleString('en-FI')} km · From a completed booking`}</small>
+                    <small>{`${r.mileage.toLocaleString(loc())} km · From a completed booking`}</small>
                   </div>
                 </article>
               ))}

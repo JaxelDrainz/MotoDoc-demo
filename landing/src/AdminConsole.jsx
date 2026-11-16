@@ -30,6 +30,7 @@ import { AdminFuelDay } from './FuelDay.jsx';
 import './dashboard.css';
 import './admin-console.css';
 
+import { loc } from './locale.js';
 const ICONS = {
   overview: HouseIcon,
   users: UsersIcon,
@@ -46,10 +47,10 @@ const ICONS = {
   site: PaintBrushIcon,
 };
 const euro = (cents) =>
-  new Intl.NumberFormat('en-FI', { style: 'currency', currency: 'EUR' }).format(cents / 100);
+  new Intl.NumberFormat(loc(), { style: 'currency', currency: 'EUR' }).format(cents / 100);
 const when = (iso) =>
   iso
-    ? new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`).toLocaleString('en-FI', {
+    ? new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`).toLocaleString(loc(), {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
@@ -59,7 +60,7 @@ const when = (iso) =>
       })
     : '';
 const day = (iso) =>
-  new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso).toLocaleDateString('en-FI', {
+  new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso).toLocaleDateString(loc(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -746,8 +747,17 @@ export function AdminConsole() {
 
 function Settings({ data, me, onSaved }) {
   const [form, setForm] = useState(data),
-    [busy, setBusy] = useState(false);
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+    [busy, setBusy] = useState(false),
+    [confirming, setConfirming] = useState('');
+  const set = (k, v) => {
+    setConfirming('');
+    setForm((f) => ({ ...f, [k]: v }));
+  };
+  const MONEY = {
+    launch_bonus: 'launch bonus',
+    motodoc_share: 'MotoDoc share',
+    vat_rate: 'VAT rate',
+  };
   const num = (k, label, hint, step = 1) => (
     <label className="dash-field" key={k}>
       {label}
@@ -763,6 +773,14 @@ function Settings({ data, me, onSaved }) {
   );
   const save = async (e) => {
     e.preventDefault();
+    const changed = Object.keys(MONEY).filter((k) => String(form[k]) !== String(data[k]));
+    if (changed.length && !confirming) {
+      setConfirming(
+        `You’re changing the ${changed.map((k) => MONEY[k]).join(', ')}. This applies to every garage and driver on the live site straight away.`,
+      );
+      return;
+    }
+    setConfirming('');
     setBusy(true);
     try {
       const body = Object.fromEntries(
@@ -796,9 +814,25 @@ function Settings({ data, me, onSaved }) {
       {num('vat_rate', 'VAT rate (%)', 'General Finnish rate since 1 September 2024.', 0.1)}
       {num('reply_garage_hours', 'Reply reminder for garages (hours)')}
       {num('reply_driver_hours', 'Reply reminder for drivers (hours)')}
+      {confirming && (
+        <p role="alert" className="dash-confirm-step">
+          {confirming}
+        </p>
+      )}
       <div className="dash-form-actions">
+        {confirming && (
+          <button type="button" className="dash-secondary" onClick={() => setConfirming('')}>
+            Go back
+          </button>
+        )}
         <button className="button button-small" disabled={busy || !!me.demo}>
-          {me.demo ? 'Read-only in the demo' : busy ? 'Saving…' : 'Save settings'}
+          {me.demo
+            ? 'Read-only in the demo'
+            : busy
+              ? 'Saving…'
+              : confirming
+                ? 'Yes, save settings'
+                : 'Save settings'}
         </button>
       </div>
       {me.demo && (

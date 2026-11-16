@@ -15,14 +15,15 @@ import { COMMON_SERVICES } from './finland.js';
 import { MARKET_DURATIONS, URGENCY, durationLabel } from './marketplace.js';
 import './marketplace.css';
 
+import { loc } from './locale.js';
 const euro = (cents) =>
-  new Intl.NumberFormat('en-FI', {
+  new Intl.NumberFormat(loc(), {
     style: 'currency',
     currency: 'EUR',
     maximumFractionDigits: cents % 100 ? 2 : 0,
   }).format(cents / 100);
 const when = (iso) =>
-  new Date(iso).toLocaleString('en-FI', {
+  new Date(iso).toLocaleString(loc(), {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -31,7 +32,7 @@ const when = (iso) =>
     timeZone: 'Europe/Helsinki',
   });
 const dayText = (date) =>
-  new Date(`${date}T12:00:00Z`).toLocaleDateString('en-FI', {
+  new Date(`${date}T12:00:00Z`).toLocaleDateString(loc(), {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -81,7 +82,7 @@ function RequestFacts({ r, customer }) {
       {customer && <li>{r.driver_name}</li>}
       <li>
         <CarIcon size={15} />
-        {`${r.make} ${r.model} · ${r.registration}${r.mileage ? ` · ${r.mileage.toLocaleString('en-FI')} km` : ''}`}
+        {`${r.make} ${r.model} · ${r.registration}${r.mileage ? ` · ${r.mileage.toLocaleString(loc())} km` : ''}`}
       </li>
       <li>{`Preferred ${dayText(r.preferred_date)}`}</li>
       <li>

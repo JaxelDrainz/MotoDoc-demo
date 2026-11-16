@@ -15,6 +15,7 @@ import { playChime } from './Onboarding.jsx';
 import { toast } from './Toasts.jsx';
 import './extras.css';
 
+import { loc } from './locale.js';
 const kinds = {
   pending: ClockIcon,
   confirmed: CheckIcon,
@@ -89,7 +90,7 @@ export function ThemeToggle() {
 }
 
 const when = (value) =>
-  new Date(value).toLocaleString(undefined, {
+  new Date(value).toLocaleString(loc(), {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -238,7 +239,7 @@ export function SlotPicker({ garageId, name }) {
   }, [garageId, attempt]);
   const selected = days?.find((d) => d.date === day);
   const label = (date, options) =>
-    new Date(`${date}T12:00:00`).toLocaleDateString(undefined, options);
+    new Date(`${date}T12:00:00`).toLocaleDateString(loc(), options);
   return (
     <div className="dash-slots">
       <div className="dash-slot-days" aria-busy={!days && !availabilityError}>
@@ -268,7 +269,7 @@ export function SlotPicker({ garageId, name }) {
               aria-pressed={value === iso}
               onClick={() => setValue(iso)}
             >
-              {new Date(iso).toLocaleTimeString(undefined, {
+              {new Date(iso).toLocaleTimeString(loc(), {
                 hour: '2-digit',
                 minute: '2-digit',
                 timeZone: 'Europe/Helsinki',

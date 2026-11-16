@@ -14,21 +14,22 @@ import { toast } from './Toasts.jsx';
 import { BASIC_BENEFITS, FULL_EXTRAS, REFUND_REASONS, UPDATE_AUDIENCES } from './membership.js';
 import './memberships.css';
 
+import { loc } from './locale.js';
 const euro = (cents) =>
-  new Intl.NumberFormat('en-FI', {
+  new Intl.NumberFormat(loc(), {
     style: 'currency',
     currency: 'EUR',
     maximumFractionDigits: cents % 100 ? 2 : 0,
   }).format(cents / 100);
 const longDate = (iso) =>
-  new Date(iso).toLocaleDateString('en-FI', {
+  new Date(iso).toLocaleDateString(loc(), {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
     timeZone: 'Europe/Helsinki',
   });
 const monthYear = (iso) =>
-  new Date(iso).toLocaleDateString('en-FI', {
+  new Date(iso).toLocaleDateString(loc(), {
     month: 'long',
     year: 'numeric',
     timeZone: 'Europe/Helsinki',
@@ -458,6 +459,19 @@ export function GarageMemberships({ data, open, user }) {
         },
       ],
       submit: 'Change prices',
+      confirm: (d) => {
+        const changes = [
+          Number(d.price) * 100 !== plan.price_cents &&
+            `yearly price ${euro(plan.price_cents)} → ${euro(Number(d.price) * 100)}`,
+          Number(d.hourly_rate) !== Number(info.hourly_rate ?? '') &&
+            `standard rate → ${euro(Number(d.hourly_rate) * 100)}/h`,
+          Number(d.member_rate) !== Number(info.member_rate ?? '') &&
+            `member rate → ${euro(Number(d.member_rate) * 100)}/h`,
+        ].filter(Boolean);
+        return changes.length
+          ? `You’re changing the ${changes.join(', ')}. Drivers see the new prices straight away; current members keep the yearly price they paid until renewal.`
+          : '';
+      },
       save: async (d) => {
         await api('/garage/membership', {
           method: 'PUT',

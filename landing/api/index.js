@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   try {
     appPromise ||= createApp({
       production: true,
-      appOrigin: `https://${req.headers.host}`,
+      appOrigin: process.env.APP_ORIGIN || `https://${req.headers.host}`,
     }).then((result) => result.app);
     const app = await appPromise;
 

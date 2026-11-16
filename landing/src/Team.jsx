@@ -21,10 +21,14 @@ const inviteLink = (code) => `${location.origin}/auth?invite=${code}`;
 const SENSITIVE = ['wallet', 'team'];
 const areaOptions = AREAS.map(([value, label]) => ({ value, label }));
 
-async function copy(code) {
+async function copy(code, emailed = false) {
   try {
     await navigator.clipboard.writeText(inviteLink(code));
-    toast('Invite link copied. Share it with them by message or email.');
+    toast(
+      emailed
+        ? 'Invite emailed to them. The link is copied too.'
+        : 'Invite link copied. Share it with them by message or email.',
+    );
   } catch {
     window.prompt('Copy this invite link', inviteLink(code));
   }
@@ -64,7 +68,7 @@ export function TeamPanel({ open, user }) {
     open({
       silent: true,
       title: 'Invite a team member',
-      note: 'They get a link to set their own password. MotoDoc doesn’t email it yet, so copy the link and send it to them.',
+      note: 'They get a link to set their own password. If email is set up, we send it to them; the link is also copied for you.',
       values: { role: 'mechanic' },
       fields: [
         { name: 'name', label: 'Name', required: true, maxLength: 100 },
@@ -79,9 +83,9 @@ export function TeamPanel({ open, user }) {
       ],
       submit: 'Create invite',
       save: async (d) => {
-        const { code } = await api('/team/invites', { method: 'POST', body: d });
+        const { code, emailed } = await api('/team/invites', { method: 'POST', body: d });
         await load();
-        await copy(code);
+        await copy(code, emailed);
       },
     });
   const access = (m) => {
@@ -111,6 +115,19 @@ export function TeamPanel({ open, user }) {
           : []),
       ],
       submit: 'Save access',
+      confirm: (d) => {
+        const removed = m.permissions.filter((k) => !d.permissions.includes(k));
+        const added = d.permissions.filter((k) => !m.permissions.includes(k));
+        if (!removed.length && !added.length) return '';
+        const name = (k) => areaOptions.find((o) => o.value === k)?.label || k;
+        return [
+          added.length && `${m.name} gets ${added.map(name).join(', ')}.`,
+          removed.length && `${m.name} loses ${removed.map(name).join(', ')}.`,
+          'This takes effect straight away.',
+        ]
+          .filter(Boolean)
+          .join(' ');
+      },
       save: async (d) => {
         const adding = d.permissions.filter((k) => missing.includes(k));
         if (adding.length && !d.confirm?.includes('yes'))
@@ -139,6 +156,10 @@ export function TeamPanel({ open, user }) {
         },
       ],
       submit: 'Change role',
+      confirm: (d) =>
+        d.role === m.role
+          ? ''
+          : `${m.name} becomes ${roleName(d.role)} and their access is reset to that role’s areas straight away.`,
       save: (d) =>
         call(
           `/team/members/${m.id}`,
@@ -182,9 +203,12 @@ export function TeamPanel({ open, user }) {
     });
   const resend = async (i) => {
     try {
-      await api(`/team/invites/${i.code}/resend`, { method: 'POST', body: {} });
+      const { emailed } = await api(`/team/invites/${i.code}/resend`, {
+        method: 'POST',
+        body: {},
+      });
       await load();
-      await copy(i.code);
+      await copy(i.code, emailed);
     } catch (e) {
       toast(e.message, 'error');
     }
